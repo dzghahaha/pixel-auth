@@ -4,135 +4,512 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台密钥管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="../style.css">
     <style>
+        /* Modern SaaS Premium Design System */
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --primary-light: #eff6ff;
+            --primary-border: #bfdbfe;
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --success-text: #065f46;
+            --warning: #f59e0b;
+            --warning-bg: #fef3c7;
+            --warning-text: #92400e;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+            --danger-text: #991b1b;
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-300: #cbd5e1;
+            --slate-400: #94a3b8;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-900: #0f172a;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--slate-100);
+            color: var(--slate-900);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.5;
+        }
+
+        .app-container {
+            max-width: 1100px;
+            width: 100%;
+            margin: 32px auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation Bar */
         .admin-nav {
             display: flex;
-            gap: 8px;
-            justify-content: flex-start;
+            align-items: center;
+            gap: 6px;
+            background: #ffffff;
+            padding: 10px 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 24px;
+            border: 1px solid var(--slate-200);
             flex-wrap: wrap;
-            width: 100%;
-            margin-bottom: 8px;
         }
+
         .nav-item {
             text-decoration: none;
-            padding: 6px 12px;
-            font-size: 13px;
+            padding: 8px 16px;
+            font-size: 14px;
             font-weight: 600;
-            border-radius: 6px;
-            color: #4a5568;
-            background-color: #e2e8f0;
-            transition: all 0.2s;
+            border-radius: 8px;
+            color: var(--slate-600);
+            transition: all 0.2s ease;
         }
+
+        .nav-item:hover {
+            color: var(--slate-900);
+            background-color: var(--slate-100);
+        }
+
         .nav-item.active {
-            color: #ffffff;
-            background-color: #007aff;
+            color: var(--primary);
+            background-color: var(--primary-light);
         }
+
         .nav-item.logout {
-            color: #ffffff;
-            background-color: #ff3b30;
+            color: var(--danger);
+            background-color: var(--danger-bg);
             margin-left: auto;
         }
+
+        .nav-item.logout:hover {
+            background-color: #fee2e2;
+        }
+
+        /* Header Style */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 4px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--slate-900);
+            letter-spacing: -0.02em;
+        }
+
+        .diamond-icon {
+            width: 22px;
+            height: 22px;
+            display: inline-block;
+        }
+
+        /* Card Container */
+        .card {
+            background: #ffffff;
+            border: 1px solid var(--slate-200);
+            border-radius: 16px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        /* Search Panel */
         .search-combo {
             display: flex;
-            gap: 8px;
+            gap: 12px;
+            align-items: center;
+            padding: 16px;
             flex-wrap: wrap;
         }
+
         .search-input {
             flex: 1;
-            min-width: 180px;
-            padding: 10px;
-            border: 1px solid #cbd5e1;
+            min-width: 200px;
+            padding: 10px 16px;
+            border: 1px solid var(--slate-300);
             border-radius: 8px;
             outline: none;
-            font-size: 13px;
+            font-size: 14px;
+            transition: all 0.2s;
         }
+
+        .search-input:focus, .status-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
         .status-select {
-            padding: 10px;
-            border: 1px solid #cbd5e1;
+            padding: 10px 16px;
+            border: 1px solid var(--slate-300);
             border-radius: 8px;
             outline: none;
             background-color: #ffffff;
-            font-size: 13px;
+            font-size: 14px;
+            min-width: 150px;
+            transition: all 0.2s;
+            cursor: pointer;
         }
+
         .btn-search {
-            background-color: #007aff;
+            background-color: var(--primary);
             color: #ffffff;
             border: none;
-            padding: 10px 16px;
+            padding: 10px 24px;
             border-radius: 8px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .btn-search:hover {
+            background-color: var(--primary-hover);
+        }
+
+        /* Data Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .result-table th {
+            background-color: var(--slate-50);
+            color: var(--slate-600);
+            font-weight: 600;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--slate-200);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+        }
+
+        .result-table td {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--slate-200);
+            color: var(--slate-700);
+            vertical-align: middle;
+        }
+
+        .result-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .result-table tr:hover td {
+            background-color: var(--slate-50);
+        }
+
+        .time-td {
+            color: var(--slate-400);
             font-size: 13px;
         }
-        .btn-page {
-            background-color: #f1f2f5;
-            border: 1px solid #cbd5e1;
-            color: #333333;
-            padding: 6px 12px;
+
+        /* Badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 9999px;
+        }
+
+        .status-badge.success {
+            background-color: var(--success-bg);
+            color: var(--success-text);
+        }
+
+        .status-badge.failed {
+            background-color: var(--danger-bg);
+            color: var(--danger-text);
+        }
+
+        /* Buttons */
+        .btn-reset-key {
+            background-color: var(--danger-bg);
+            color: var(--danger-text);
+            border: 1px solid #fecaca;
+            padding: 6px 14px;
             border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .btn-page:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+
+        .btn-reset-key:hover {
+            background-color: var(--danger);
+            color: #ffffff;
+            border-color: var(--danger);
         }
+
+        /* Pagination */
         .pagination-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px;
-            font-size: 13px;
+            padding: 16px 20px;
+            background-color: var(--slate-50);
+            border-top: 1px solid var(--slate-200);
         }
-        /* Modal Style */
+
+        .btn-page {
+            background-color: #ffffff;
+            border: 1px solid var(--slate-300);
+            color: var(--slate-700);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .btn-page:hover:not(:disabled) {
+            background-color: var(--slate-100);
+            border-color: var(--slate-400);
+        }
+
+        .btn-page:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Modal Dialog Box */
         .modal {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(15, 23, 42, 0.3);
+            backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            transition: all 0.3s;
         }
+
+        .modal.hidden {
+            display: none !important;
+        }
+
         .modal-content {
             background-color: #ffffff;
-            width: 90%;
-            max-width: 400px;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            width: 95%;
+            max-width: 460px;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-lg);
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
+            border: 1px solid var(--slate-200);
+            animation: modalSlideUp 0.2s ease-out;
         }
+
+        @keyframes modalSlideUp {
+            from { transform: translateY(10px) scale(0.98); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
         .modal-header {
-            font-weight: bold;
-            font-size: 15px;
-            color: #1a1a1a;
-            border-bottom: 1px solid #edf2f7;
-            padding-bottom: 8px;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--slate-900);
+            border-bottom: 1px solid var(--slate-100);
+            padding-bottom: 12px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }
+
+        .modal-header .close-btn {
+            cursor: pointer;
+            font-size: 24px;
+            color: var(--slate-400);
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .modal-header .close-btn:hover {
+            color: var(--slate-900);
+        }
+
         .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-height: 70vh;
+            overflow-y: auto;
             font-size: 13px;
-            color: #2d3748;
-            line-height: 1.5;
-            word-break: break-all;
+            color: var(--slate-700);
+            line-height: 1.6;
         }
+
         .modal-footer {
             display: flex;
             justify-content: flex-end;
-            border-top: 1px solid #edf2f7;
+            gap: 8px;
+            border-top: 1px solid var(--slate-100);
             padding-top: 12px;
+        }
+
+        .btn-cancel {
+            background: #ffffff;
+            border: 1px solid var(--slate-300);
+            color: var(--slate-700);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background-color: var(--slate-100);
+        }
+
+        .btn-submit {
+            background-color: var(--primary);
+            color: #ffffff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-submit:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: var(--slate-900);
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            z-index: 2000;
+            transition: opacity 0.3s;
+        }
+        .toast.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Mobile Responsive & Auto-Scaling System */
+        @media (max-width: 768px) {
+            .app-container {
+                margin: 12px auto;
+                padding: 0 12px;
+            }
+            .admin-nav {
+                padding: 6px 12px;
+                gap: 4px;
+                border-radius: 8px;
+            }
+            .nav-item {
+                padding: 6px 10px;
+                font-size: 12px;
+                border-radius: 6px;
+            }
+            .header-title {
+                font-size: 18px;
+            }
+            .search-combo {
+                padding: 12px;
+                gap: 8px;
+            }
+            .search-input {
+                font-size: 13px;
+                padding: 8px 12px;
+            }
+            .status-select {
+                font-size: 13px;
+                padding: 8px 12px;
+                min-width: 110px;
+                flex: 1;
+            }
+            .btn-search {
+                padding: 8px 16px;
+                font-size: 13px;
+                width: 100%;
+            }
+            .result-table th, .result-table td {
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+            .btn-reset-key {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            .modal-content {
+                padding: 16px;
+                gap: 12px;
+                border-radius: 12px;
+            }
+            .modal-header {
+                font-size: 16px;
+                padding-bottom: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .pagination-container {
+                flex-direction: column;
+                gap: 12px;
+                align-items: center;
+                padding: 12px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="app-container" style="max-width: 900px; width: 100%;">
+    <div class="app-container">
         <!-- 导航菜单 -->
         <nav class="admin-nav">
             <a href="/admin/index.html" class="nav-item">订单管理</a>
@@ -146,31 +523,31 @@
         <header class="app-header">
             <div class="header-left">
                 <!-- 密钥图标 SVG -->
-                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px;">
-                    <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="#007aff"/>
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="#3b82f6"/>
                 </svg>
                 <span class="header-title">系统密钥管理中心</span>
             </div>
-            <div class="header-right" id="admin-user-display" style="font-size:12px; color:#666;">
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
                 管理员: -
             </div>
         </header>
 
         <!-- 搜索过滤卡片 -->
-        <div class="card search-card" style="padding: 16px;">
+        <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
-                <input type="text" id="search-query" class="search-input" placeholder="输入系统卡密 / 运营商卡密 / 原始卡密搜索">
+                <input type="text" id="search-query" class="search-input" placeholder="输入系统卡密 / 运营商卡密 / 原始卡密搜索...">
                 <select id="filter-status" class="status-select">
                     <option value="">所有状态</option>
                     <option value="active">生效中 (Active)</option>
                     <option value="inactive">已作废 (Inactive)</option>
                 </select>
-                <button type="button" id="btn-search" class="btn-search">搜索</button>
+                <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
             </div>
         </div>
 
         <!-- 数据表格卡片 -->
-        <div class="card table-card">
+        <div class="card">
             <div class="table-container">
                 <table class="result-table">
                     <thead>
@@ -187,7 +564,7 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 20px; color: #666;">正在加载密钥数据...</td>
+                            <td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载密钥数据...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -196,8 +573,8 @@
             <!-- 分页栏 -->
             <div class="pagination-container">
                 <button type="button" id="btn-prev-page" class="btn-page" disabled>上一页</button>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    第 <input type="number" id="input-page-num" min="1" value="1" style="width: 50px; text-align: center; padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:12px; outline:none;"> / <span id="total-pages-span">1</span> 页 (共 <span id="total-count-span">0</span> 条)
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--slate-600);">
+                    第 <input type="number" id="input-page-num" min="1" value="1" style="width: 52px; text-align: center; padding: 4px; border: 1px solid var(--slate-300); border-radius: 6px; font-size:13px; outline:none; font-weight: 600; color: var(--slate-900);"> / <span id="total-pages-span">1</span> 页 (共 <span id="total-count-span">0</span> 条)
                 </div>
                 <button type="button" id="btn-next-page" class="btn-page" disabled>下一页</button>
             </div>
@@ -209,13 +586,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <span>卡密重置成功</span>
-                <span id="close-result-modal" style="cursor: pointer; font-size: 20px; line-height: 1;">&times;</span>
+                <span id="close-result-modal" class="close-btn">&times;</span>
             </div>
             <div class="modal-body" id="result-modal-body">
-                <!-- 结果文本 -->
+                <!-- 结果文本由 JS 填充 -->
             </div>
             <div class="modal-footer">
-                <button type="button" id="btn-close-result" class="submit-btn" style="padding: 6px 16px; font-size:12px; width:auto; margin-top:0;">好的</button>
+                <button type="button" id="btn-close-result" class="btn-submit">确认好的</button>
             </div>
         </div>
     </div>
@@ -287,7 +664,7 @@
 
             // Fetch and render keys
             async function loadKeys() {
-                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">正在读取卡密数据...</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取卡密数据...</td></tr>';
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
 
@@ -308,7 +685,7 @@
                         btnNext.disabled = currentPage >= totalPages;
 
                         if (currentKeys.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">暂无符合条件的卡密记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
                             return;
                         }
 
@@ -322,20 +699,20 @@
                             if (k.status === 'active') {
                                 statusClass = 'success';
                                 statusText = '生效中';
-                                actionBtnHtml = `<button type="button" class="secondary-btn btn-reset-key" data-key="${k.system_key}" style="padding: 4px 8px; font-size:11px; background-color:#ff3b30; color:#fff; border-color:#ff3b30;">重置</button>`;
+                                actionBtnHtml = `<button type="button" class="btn-reset-key" data-key="${k.system_key}">重置</button>`;
                             } else if (k.status === 'inactive') {
                                 statusClass = 'failed';
                                 statusText = '已作废';
-                                actionBtnHtml = `<button type="button" class="secondary-btn" style="padding: 4px 8px; font-size:11px;" disabled>已作废</button>`;
+                                actionBtnHtml = `<button type="button" class="btn-page" style="padding: 4px 8px; font-size:11px;" disabled>已作废</button>`;
                             }
 
                             tr.innerHTML = `
                                 <td>${k.id}</td>
-                                <td style="font-family: monospace; font-weight: 500;">${k.system_key}</td>
-                                <td style="font-size:12px;">${k.vendor || '-'}</td>
-                                <td style="font-family: monospace; font-size: 11px;">${k.vendor_key}</td>
+                                <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${k.system_key}</td>
+                                <td style="font-size:13px; color: var(--slate-600);">${k.vendor || '-'}</td>
+                                <td style="font-family: monospace; font-size: 12px;">${k.vendor_key}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                <td style="font-family: monospace; font-size:11px;">${k.original_key || '-'}</td>
+                                <td style="font-family: monospace; font-size:12px; color: var(--slate-600);">${k.original_key || '-'}</td>
                                 <td class="time-td">${formatDate(k.created_at)}</td>
                                 <td>${actionBtnHtml}</td>
                             `;
@@ -380,10 +757,10 @@
                     if (res.ok && data.success) {
                         const newKey = data.new_keys ? data.new_keys[0] : '';
                         resultModalBody.innerHTML = `
-                            <p style="margin-bottom:8px;">原卡密已作废：</p>
-                            <div style="font-family:monospace; background:#f7f7f7; padding:8px; border-radius:4px; margin-bottom:12px; font-weight:bold; word-break:break-all;">${key}</div>
-                            <p style="margin-bottom:8px; color:green; font-weight:bold;">已成功为您生成新卡密：</p>
-                            <div style="font-family:monospace; background:#e6f9ed; padding:8px; border-radius:4px; font-weight:bold; color:green; word-break:break-all; font-size:14px;">${newKey}</div>
+                            <p style="margin-bottom: 8px; font-weight: 500;">原卡密已作废：</p>
+                            <div style="font-family: monospace; background: var(--slate-50); border: 1px solid var(--slate-200); padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-weight: 600; word-break: break-all; color: var(--slate-700);">${key}</div>
+                            <p style="margin-bottom: 8px; color: var(--success-text); font-weight: 600;">已成功为您生成新卡密：</p>
+                            <div style="font-family: monospace; background: var(--success-bg); border: 1px solid var(--primary-border); padding: 10px 14px; border-radius: 6px; font-weight: 700; color: var(--success-text); word-break: break-all; font-size: 14px;">${newKey}</div>
                         `;
                         resultModal.classList.remove('hidden');
                         loadKeys(); // reload keys list
@@ -406,7 +783,6 @@
             // Search events
             btnSearch.addEventListener('click', () => {
                 currentPage = 1;
-                loadOrders(); // wait, calling loadKeys()!
                 loadKeys();
             });
             searchInput.addEventListener('keypress', (e) => {
