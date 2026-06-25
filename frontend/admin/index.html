@@ -564,6 +564,90 @@
             opacity: 0;
             pointer-events: none;
         }
+
+        /* Mobile Responsive & Auto-Scaling System */
+        @media (max-width: 768px) {
+            .app-container {
+                margin: 12px auto;
+                padding: 0 12px;
+            }
+            .admin-nav {
+                padding: 6px 12px;
+                gap: 4px;
+                border-radius: 8px;
+            }
+            .nav-item {
+                padding: 6px 10px;
+                font-size: 12px;
+                border-radius: 6px;
+            }
+            .header-title {
+                font-size: 18px;
+            }
+            .search-combo {
+                padding: 12px;
+                gap: 8px;
+            }
+            .search-input {
+                font-size: 13px;
+                padding: 8px 12px;
+            }
+            .status-select {
+                font-size: 13px;
+                padding: 8px 12px;
+                min-width: 110px;
+                flex: 1;
+            }
+            .btn-search {
+                padding: 8px 16px;
+                font-size: 13px;
+                width: 100%;
+            }
+            .result-table th, .result-table td {
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+            .btn-detail {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            .modal-content {
+                padding: 16px;
+                gap: 12px;
+                border-radius: 12px;
+            }
+            .modal-header {
+                font-size: 16px;
+                padding-bottom: 8px;
+            }
+            .details-grid {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 12px;
+                gap: 8px;
+            }
+            .detail-cell {
+                gap: 2px;
+            }
+            .detail-value {
+                font-size: 12px;
+            }
+            .inner-table th, .inner-table td {
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+            .pagination-container {
+                flex-direction: column;
+                gap: 12px;
+                align-items: center;
+                padding: 12px;
+            }
+        }
     </style>
 </head>
 <body>

@@ -1530,7 +1530,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 				if len(req.Accounts) == 1 {
 					respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 						"success": false,
-						"message": "供应商提交接口网络错误: " + err.Error(),
+						"message": "提交接口网络错误: " + err.Error(),
 					})
 					return
 				}
@@ -1541,14 +1541,14 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 					ExtraEmail: acc.ExtraEmail,
 					TaskID:     "",
 					Status:     "failed",
-					Message:    "提交至供应商接口失败: " + err.Error(),
+					Message:    "提交接口失败: " + err.Error(),
 				})
 			} else if !res.Success {
 				log.Printf("Vendor submit API error for %s: %s\n", acc.Username, res.Message)
 				if len(req.Accounts) == 1 {
 					respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 						"success": false,
-						"message": "供应商提交失败: " + res.Message,
+						"message": "提交失败: " + res.Message,
 					})
 					return
 				}
@@ -1559,7 +1559,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 					ExtraEmail: acc.ExtraEmail,
 					TaskID:     "",
 					Status:     "failed",
-					Message:    "供应商提交失败: " + res.Message,
+					Message:    "提交失败: " + res.Message,
 				})
 			} else {
 				submitResults = append(submitResults, AccountSubmitResult{
@@ -1569,7 +1569,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 					ExtraEmail: acc.ExtraEmail,
 					TaskID:     res.TaskID,
 					Status:     "pending",
-					Message:    "已成功提交至供应商，等待处理",
+					Message:    "已成功提交，等待处理",
 				})
 			}
 		}
