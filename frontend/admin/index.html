@@ -742,6 +742,10 @@
                         <span id="detail-card" class="detail-value">-</span>
                     </div>
                     <div class="detail-cell">
+                        <span class="detail-label">供应商原始卡密</span>
+                        <span id="detail-vendor-key" class="detail-value" style="font-family: monospace;">-</span>
+                    </div>
+                    <div class="detail-cell">
                         <span class="detail-label">提交方式</span>
                         <span id="detail-mode" class="detail-value">-</span>
                     </div>
@@ -842,6 +846,7 @@
             const btnCloseModal = document.getElementById('btn-close-modal');
 
             const detailCard = document.getElementById('detail-card');
+            const detailVendorKey = document.getElementById('detail-vendor-key');
             const detailMode = document.getElementById('detail-mode');
             const detailVendor = document.getElementById('detail-vendor');
             const detailCreated = document.getElementById('detail-created');
@@ -978,6 +983,7 @@
 
                 activeOrderID = orderID;
                 detailCard.textContent = order.card_secret;
+                detailVendorKey.textContent = order.vendor_key || '暂无原始密钥';
                 detailMode.textContent = order.mode === 'single' ? '单账号提交' : '批量提交';
                 detailVendor.textContent = order.vendor || '自营渠道';
                 detailCreated.textContent = formatDate(order.created_at);

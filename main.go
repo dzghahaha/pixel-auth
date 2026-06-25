@@ -1046,8 +1046,9 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	dataQuery := fmt.Sprintf(`
 		SELECT o.id, o.card_secret, o.mode, COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
 		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
-		       o.created_at, o.updated_at, r.completed_at
+		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key
 		FROM orders o
+		LEFT JOIN system_keys sk ON o.card_secret = sk.system_key
 		LEFT JOIN (
 			SELECT r1.*
 			FROM account_records r1
@@ -1089,6 +1090,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		CreatedAt   time.Time  `json:"created_at"`
 		UpdatedAt   time.Time  `json:"updated_at"`
 		CompletedAt *time.Time `json:"completed_at,omitempty"`
+		VendorKey   string     `json:"vendor_key"`
 	}
 
 	var records []AdminOrderRow
@@ -1111,6 +1113,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 			&row.CreatedAt,
 			&row.UpdatedAt,
 			&completedAt,
+			&row.VendorKey,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning admin order row: %v\n", errScan)
