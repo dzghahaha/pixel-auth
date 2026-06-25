@@ -1225,6 +1225,79 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("expected success: true, got %v", keysResp)
 	}
 
+	// 6.c Test Admin Dashboard Stats API
+	// Query stats - unauthorized (no cookie)
+	reqStatsUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/dashboard/stats", nil)
+	rrStatsUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminDashboardStats)(rrStatsUnauth, reqStatsUnauth)
+	if rrStatsUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthorized dashboard stats query, got %d", rrStatsUnauth.Code)
+	}
+
+	// Query stats - authorized
+	reqStatsAuth := httptest.NewRequest(http.MethodGet, "/api/admin/dashboard/stats", nil)
+	reqStatsAuth.AddCookie(sessionCookie)
+	rrStatsAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminDashboardStats)(rrStatsAuth, reqStatsAuth)
+
+	if rrStatsAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 for dashboard stats query, got %d. Body: %s", rrStatsAuth.Code, rrStatsAuth.Body.String())
+	}
+
+	var statsResp map[string]interface{}
+	json.Unmarshal(rrStatsAuth.Body.Bytes(), &statsResp)
+	if statsResp["success"] != true {
+		t.Errorf("expected success: true for dashboard stats, got %v", statsResp)
+	}
+
+	todayData, ok := statsResp["today"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected today statistics data in response, got %v", statsResp)
+	}
+	if int(todayData["total"].(float64)) != 1 {
+		t.Errorf("expected today total orders to be 1, got %v", todayData["total"])
+	}
+	if int(todayData["success"].(float64)) != 1 {
+		t.Errorf("expected today success orders to be 1, got %v", todayData["success"])
+	}
+	if int(todayData["failed"].(float64)) != 0 {
+		t.Errorf("expected today failed orders to be 0, got %v", todayData["failed"])
+	}
+	if int(todayData["other"].(float64)) != 0 {
+		t.Errorf("expected today other orders to be 0, got %v", todayData["other"])
+	}
+	if todayData["success_rate"].(float64) != 100.0 {
+		t.Errorf("expected today success rate to be 100.0, got %v", todayData["success_rate"])
+	}
+
+	summary30d, ok := statsResp["summary_30d"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected summary_30d statistics data in response, got %v", statsResp)
+	}
+	if int(summary30d["total"].(float64)) != 1 {
+		t.Errorf("expected 30d total orders to be 1, got %v", summary30d["total"])
+	}
+	if int(summary30d["success"].(float64)) != 1 {
+		t.Errorf("expected 30d success orders to be 1, got %v", summary30d["success"])
+	}
+	if int(summary30d["failed"].(float64)) != 0 {
+		t.Errorf("expected 30d failed orders to be 0, got %v", summary30d["failed"])
+	}
+
+	trendData, ok := statsResp["trend"].([]interface{})
+	if !ok || len(trendData) != 30 {
+		t.Errorf("expected trend to be a slice of 30 days, got %v", statsResp["trend"])
+	} else {
+		// The last day in the trend should be today, and it should have count: 1
+		lastDay, ok := trendData[29].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected last trend item to be a map, got %v", trendData[29])
+		}
+		if int(lastDay["count"].(float64)) != 1 {
+			t.Errorf("expected count for today in trend to be 1, got %v", lastDay["count"])
+		}
+	}
+
 	// 7. Test Logout
 	reqLogout := httptest.NewRequest(http.MethodPost, "/api/admin/logout", nil)
 	reqLogout.AddCookie(sessionCookie)

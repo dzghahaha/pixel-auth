@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>后台数据仪表盘 - Pixel 订阅</title>
+    <style>
+        /* Modern SaaS Premium Design System */
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --primary-light: #eff6ff;
+            --primary-border: #bfdbfe;
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --success-text: #065f46;
+            --warning: #f59e0b;
+            --warning-bg: #fef3c7;
+            --warning-text: #92400e;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+            --danger-text: #991b1b;
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-300: #cbd5e1;
+            --slate-400: #94a3b8;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-900: #0f172a;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--slate-100);
+            color: var(--slate-900);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            line-height: 1.5;
+        }
+
+        .app-container {
+            max-width: 1100px;
+            width: 100%;
+            margin: 32px auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation Bar */
+        .admin-nav {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffffff;
+            padding: 10px 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 24px;
+            border: 1px solid var(--slate-200);
+            flex-wrap: wrap;
+        }
+
+        .nav-item {
+            text-decoration: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            color: var(--slate-600);
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover {
+            color: var(--slate-900);
+            background-color: var(--slate-100);
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+            background-color: var(--primary-light);
+        }
+
+        .nav-item.logout {
+            color: var(--danger);
+            background-color: var(--danger-bg);
+            margin-left: auto;
+        }
+
+        .nav-item.logout:hover {
+            background-color: #fee2e2;
+        }
+
+        /* Header Style */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 4px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--slate-900);
+            letter-spacing: -0.02em;
+        }
+
+        .diamond-icon {
+            width: 22px;
+            height: 22px;
+            display: inline-block;
+        }
+
+        /* Stats Grid System */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border: 1px solid var(--slate-200);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-card .card-icon-wrapper {
+            position: absolute;
+            right: 14px;
+            top: 16px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-card .card-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .stat-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--slate-600);
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--slate-900);
+            margin-top: 4px;
+        }
+
+        .stat-footer {
+            font-size: 11px;
+            color: var(--slate-400);
+            font-weight: 500;
+        }
+
+        /* Chart Card */
+        .chart-card {
+            background: #ffffff;
+            border: 1px solid var(--slate-200);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--slate-100);
+            padding-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .chart-summary-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background-color: var(--slate-100);
+            padding: 5px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--slate-200);
+            font-weight: 600;
+        }
+
+        .summary-item .label {
+            color: var(--slate-600);
+        }
+
+        .summary-item .value {
+            color: var(--slate-900);
+        }
+
+        .summary-item.success-item {
+            background-color: var(--success-bg);
+            border-color: var(--primary-border);
+        }
+        .summary-item.success-item .label, .summary-item.success-item .value {
+            color: var(--success-text);
+        }
+
+        .summary-item.danger-item {
+            background-color: var(--danger-bg);
+            border-color: #fecaca;
+        }
+        .summary-item.danger-item .label, .summary-item.danger-item .value {
+            color: var(--danger-text);
+        }
+
+        .chart-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .chart-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--slate-900);
+        }
+
+        .chart-subtitle {
+            font-size: 12px;
+            color: var(--slate-400);
+            font-weight: 500;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 340px;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: var(--slate-900);
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            z-index: 2000;
+            transition: opacity 0.3s;
+        }
+        .toast.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Mobile Responsive & Auto-Scaling System */
+        @media (max-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                margin: 12px auto;
+                padding: 0 12px;
+            }
+            .admin-nav {
+                padding: 6px 12px;
+                gap: 4px;
+                border-radius: 8px;
+            }
+            .nav-item {
+                padding: 6px 10px;
+                font-size: 12px;
+                border-radius: 6px;
+            }
+            .header-title {
+                font-size: 18px;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            .stat-card {
+                padding: 16px;
+            }
+            .stat-value {
+                font-size: 24px;
+            }
+            .chart-card {
+                padding: 16px;
+            }
+            .chart-container {
+                height: 260px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item active">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 仪表盘图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM19 19H5V5H19V19ZM11.99 13.5C12.82 13.5 13.5 12.83 13.5 12C13.5 11.17 12.82 10.5 11.99 10.5C11.16 10.5 10.49 11.17 10.49 12C10.49 12.83 11.16 13.5 11.99 13.5ZM12 8C9.5 8 7.4 9.6 7 12C7.4 14.4 9.5 16 12 16C14.5 16 16.6 14.4 17 12C16.6 9.6 14.5 8 12 8Z" fill="#3b82f6" />
+                </svg>
+                <span class="header-title">数据监控中心</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 今日统计模块 -->
+        <div class="stats-grid">
+            <!-- 总订单数 -->
+            <div class="stat-card" style="border-left: 4px solid var(--slate-600);">
+                <div class="card-icon-wrapper" style="background-color: var(--slate-100);">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 8H5c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-9c0-1.1-.9-2-2-2zm-6 8h-2v-2h2v2zm0-4h-2V7h2v5z" fill="var(--slate-600)" />
+                    </svg>
+                </div>
+                <span class="stat-title">今日总订单</span>
+                <span class="stat-value" id="stat-total">-</span>
+                <span class="stat-footer">今日提交卡密数</span>
+            </div>
+
+            <!-- 成功订单数 -->
+            <div class="stat-card" style="border-left: 4px solid var(--success);">
+                <div class="card-icon-wrapper" style="background-color: var(--success-bg);">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--success)" />
+                    </svg>
+                </div>
+                <span class="stat-title">成功订单数</span>
+                <span class="stat-value" id="stat-success" style="color: var(--success);">-</span>
+                <span class="stat-footer">已成功绑定订单</span>
+            </div>
+
+            <!-- 失败订单数 -->
+            <div class="stat-card" style="border-left: 4px solid var(--danger);">
+                <div class="card-icon-wrapper" style="background-color: var(--danger-bg);">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z" fill="var(--danger)" />
+                    </svg>
+                </div>
+                <span class="stat-title">失败订单数</span>
+                <span class="stat-value" id="stat-failed" style="color: var(--danger);">-</span>
+                <span class="stat-footer">校验或绑定失败订单</span>
+            </div>
+
+            <!-- 其他状态订单 -->
+            <div class="stat-card" style="border-left: 4px solid var(--warning);">
+                <div class="card-icon-wrapper" style="background-color: var(--warning-bg);">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="var(--warning)" />
+                    </svg>
+                </div>
+                <span class="stat-title">其他状态订单</span>
+                <span class="stat-value" id="stat-other" style="color: var(--warning);">-</span>
+                <span class="stat-footer">排队处理中订单</span>
+            </div>
+
+            <!-- 成功率 -->
+            <div class="stat-card" style="border-left: 4px solid var(--primary);">
+                <div class="card-icon-wrapper" style="background-color: var(--primary-light);">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5 4C5.57 4 4 5.57 4 7.5S5.57 11 7.5 11 11 9.43 11 7.5 9.43 4 7.5 4zm0 5C6.67 9 6 8.33 6 7.5S6.67 6 7.5 6 9 6.67 9 7.5 8.33 9 7.5 9zm9 4c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zm0 5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3.42-13.58L5.42 18.58l1.41 1.41L21.34 5.83l-1.42-1.41z" fill="var(--primary)" />
+                    </svg>
+                </div>
+                <span class="stat-title">今日成功率</span>
+                <span class="stat-value" id="stat-rate" style="color: var(--primary);">-</span>
+                <span class="stat-footer">成功订单 / 总订单</span>
+            </div>
+        </div>
+
+        <!-- 近30天订单趋势（趋势图） -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title-group">
+                    <span class="chart-title">近30天订单趋势</span>
+                    <span class="chart-subtitle">系统每日订单数量变化曲线</span>
+                </div>
+                <!-- 30天汇总 -->
+                <div class="chart-summary-group">
+                    <div class="summary-item">
+                        <span class="label">30天总订单</span>
+                        <span class="value" id="summary-30d-total">-</span>
+                    </div>
+                    <div class="summary-item success-item">
+                        <span class="label">成功</span>
+                        <span class="value" id="summary-30d-success">-</span>
+                    </div>
+                    <div class="summary-item danger-item">
+                        <span class="label">失败</span>
+                        <span class="value" id="summary-30d-failed">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        loadStats();
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Fetch statistics
+            async function loadStats() {
+                try {
+                    const res = await fetch('/api/admin/dashboard/stats');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        document.getElementById('stat-total').textContent = data.today.total;
+                        document.getElementById('stat-success').textContent = data.today.success;
+                        document.getElementById('stat-failed').textContent = data.today.failed;
+                        document.getElementById('stat-other').textContent = data.today.other;
+                        document.getElementById('stat-rate').textContent = data.today.success_rate + '%';
+                        
+                        document.getElementById('summary-30d-total').textContent = data.summary_30d.total;
+                        document.getElementById('summary-30d-success').textContent = data.summary_30d.success;
+                        document.getElementById('summary-30d-failed').textContent = data.summary_30d.failed;
+
+                        drawChart(data.trend);
+                    } else {
+                        showToast(data.message || '获取监控数据失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法加载监控数据');
+                }
+            }
+
+            // Render Chart.js
+            let trendChart = null;
+            function drawChart(trend) {
+                const ctx = document.getElementById('trendChart').getContext('2d');
+                
+                // Format YYYY-MM-DD to MM-DD for cleaner chart labels
+                const labels = trend.map(item => {
+                    const parts = item.date.split('-');
+                    return parts.length === 3 ? `${parts[1]}-${parts[2]}` : item.date;
+                });
+                const counts = trend.map(item => item.count);
+
+                if (trendChart) {
+                    trendChart.destroy();
+                }
+
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '订单数量',
+                            data: counts,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 2.5,
+                            tension: 0.35,
+                            fill: true,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1.5,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointHoverBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: '#0f172a',
+                                titleColor: '#ffffff',
+                                bodyColor: '#ffffff',
+                                titleFont: {
+                                    weight: 'bold'
+                                },
+                                padding: 12,
+                                cornerRadius: 10,
+                                displayColors: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#64748b',
+                                    font: {
+                                        family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
+                                        size: 11
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: '#e2e8f0',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#64748b',
+                                    stepSize: 1,
+                                    precision: 0,
+                                    font: {
+                                        family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
+                                        size: 11
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Init load
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

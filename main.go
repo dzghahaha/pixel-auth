@@ -798,7 +798,7 @@ func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("admin_session")
 			if err == nil && cookie.Value != "" {
 				if _, ok := checkAdminSession(cookie.Value); ok {
-					http.Redirect(w, r, "/admin/index.html", http.StatusFound)
+					http.Redirect(w, r, "/admin/dashboard.html", http.StatusFound)
 					return
 				}
 			}
@@ -1408,6 +1408,199 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminDashboardStats returns dashboard stats (today's order summary and 30-day trend)
+func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	now := time.Now()
+	// todayStart represents 00:00:00 local time
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	// thirtyDaysAgoStart represents 30 days ago at 00:00:00 local time
+	thirtyDaysAgoStart := todayStart.AddDate(0, 0, -29)
+
+	// Query today's status counts
+	rows, err := db.Query(`
+		SELECT COALESCE(r.status, 'pending') as status, COUNT(*) as count
+		FROM orders o
+		LEFT JOIN (
+			SELECT r1.order_id, r1.status
+			FROM account_records r1
+			INNER JOIN (
+				SELECT order_id, MAX(id) as max_id
+				FROM account_records
+				GROUP BY order_id
+			) r2 ON r1.id = r2.max_id
+		) r ON o.id = r.order_id
+		WHERE o.created_at >= ?
+		GROUP BY status
+	`, todayStart)
+	if err != nil {
+		log.Printf("Error querying today dashboard stats: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询今日统计失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	var todayTotal int
+	var todaySuccess int
+	var todayFailed int
+	var todayOther int
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			log.Printf("Error scanning today stats: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析今日统计失败",
+			})
+			return
+		}
+		switch status {
+		case "success":
+			todaySuccess += count
+		case "failed":
+			todayFailed += count
+		default:
+			todayOther += count
+		}
+		todayTotal += count
+	}
+
+	var todaySuccessRate float64
+	if todayTotal > 0 {
+		todaySuccessRate = float64(todaySuccess) / float64(todayTotal) * 100
+		// round to 2 decimal places
+		todaySuccessRate = float64(int(todaySuccessRate*100+0.5)) / 100
+	}
+
+	// Query 30 days trend (order count grouped by date)
+	trendRows, err := db.Query(`
+		SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date_str, COUNT(*) as count
+		FROM orders
+		WHERE created_at >= ?
+		GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+		ORDER BY date_str ASC
+	`, thirtyDaysAgoStart)
+	if err != nil {
+		log.Printf("Error querying 30-day trend: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询近30天趋势失败",
+		})
+		return
+	}
+	defer trendRows.Close()
+
+	trendMap := make(map[string]int)
+	for trendRows.Next() {
+		var dateStr string
+		var count int
+		if err := trendRows.Scan(&dateStr, &count); err != nil {
+			log.Printf("Error scanning trend row: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析趋势数据失败",
+			})
+			return
+		}
+		trendMap[dateStr] = count
+	}
+
+	// Generate complete 30-day list to guarantee no missing dates
+	type TrendItem struct {
+		Date  string `json:"date"`
+		Count int    `json:"count"`
+	}
+	trendList := make([]TrendItem, 0, 30)
+	for i := 0; i < 30; i++ {
+		d := thirtyDaysAgoStart.AddDate(0, 0, i)
+		dStr := d.Format("2006-01-02")
+		count := 0
+		if val, exists := trendMap[dStr]; exists {
+			count = val
+		}
+		trendList = append(trendList, TrendItem{
+			Date:  dStr,
+			Count: count,
+		})
+	}
+
+	// Query 30-day status counts for summary
+	thirtyDaysRows, err := db.Query(`
+		SELECT COALESCE(r.status, 'pending') as status, COUNT(*) as count
+		FROM orders o
+		LEFT JOIN (
+			SELECT r1.order_id, r1.status
+			FROM account_records r1
+			INNER JOIN (
+				SELECT order_id, MAX(id) as max_id
+				FROM account_records
+				GROUP BY order_id
+			) r2 ON r1.id = r2.max_id
+		) r ON o.id = r.order_id
+		WHERE o.created_at >= ?
+		GROUP BY status
+	`, thirtyDaysAgoStart)
+	if err != nil {
+		log.Printf("Error querying 30-day summary stats: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询30天统计失败",
+		})
+		return
+	}
+	defer thirtyDaysRows.Close()
+
+	var thirtyDaysTotal int
+	var thirtyDaysSuccess int
+	var thirtyDaysFailed int
+
+	for thirtyDaysRows.Next() {
+		var status string
+		var count int
+		if err := thirtyDaysRows.Scan(&status, &count); err != nil {
+			log.Printf("Error scanning 30-day stats: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析30天统计失败",
+			})
+			return
+		}
+		switch status {
+		case "success":
+			thirtyDaysSuccess += count
+		case "failed":
+			thirtyDaysFailed += count
+		}
+		thirtyDaysTotal += count
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"today": map[string]interface{}{
+			"total":        todayTotal,
+			"success":      todaySuccess,
+			"failed":       todayFailed,
+			"other":        todayOther,
+			"success_rate": todaySuccessRate,
+		},
+		"summary_30d": map[string]interface{}{
+			"total":   thirtyDaysTotal,
+			"success": thirtyDaysSuccess,
+			"failed":  thirtyDaysFailed,
+		},
+		"trend": trendList,
+	})
+}
+
 func main() {
 	// 1. Initialize database connection
 	initDB()
@@ -1440,6 +1633,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders/update", requireAdmin(handleAdminOrdersUpdate))
 	http.HandleFunc("/api/admin/orders/history", requireAdmin(handleAdminOrderHistory))
 	http.HandleFunc("/api/admin/keys", requireAdmin(handleAdminKeys))
+	http.HandleFunc("/api/admin/dashboard/stats", requireAdmin(handleAdminDashboardStats))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>后台密钥管理 - Pixel 订阅</title>
+    <title>后台订单管理 - Pixel 订阅</title>
     <style>
         /* Modern SaaS Premium Design System */
         :root {
@@ -228,6 +228,11 @@
             background-color: var(--slate-50);
         }
 
+        .account-td {
+            font-weight: 500;
+            color: var(--slate-900);
+        }
+
         .time-td {
             color: var(--slate-400);
             font-size: 13px;
@@ -248,16 +253,21 @@
             color: var(--success-text);
         }
 
+        .status-badge.pending {
+            background-color: var(--warning-bg);
+            color: var(--warning-text);
+        }
+
         .status-badge.failed {
             background-color: var(--danger-bg);
             color: var(--danger-text);
         }
 
         /* Buttons */
-        .btn-reset-key {
-            background-color: var(--danger-bg);
-            color: var(--danger-text);
-            border: 1px solid #fecaca;
+        .btn-detail {
+            background-color: var(--primary-light);
+            color: var(--primary-hover);
+            border: 1px solid var(--primary-border);
             padding: 6px 14px;
             border-radius: 6px;
             font-size: 13px;
@@ -266,10 +276,10 @@
             transition: all 0.2s;
         }
 
-        .btn-reset-key:hover {
-            background-color: var(--danger);
+        .btn-detail:hover {
+            background-color: var(--primary);
             color: #ffffff;
-            border-color: var(--danger);
+            border-color: var(--primary);
         }
 
         /* Pagination */
@@ -327,7 +337,7 @@
         .modal-content {
             background-color: #ffffff;
             width: 95%;
-            max-width: 460px;
+            max-width: 750px;
             border-radius: 16px;
             padding: 24px;
             box-shadow: var(--shadow-lg);
@@ -373,25 +383,139 @@
             max-height: 70vh;
             overflow-y: auto;
             font-size: 13px;
-            color: var(--slate-700);
-            line-height: 1.6;
         }
 
-        .modal-footer {
+        /* Details Grid System */
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            background: var(--slate-50);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--slate-200);
+        }
+
+        .detail-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-label {
+            color: var(--slate-400);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .detail-value {
+            color: var(--slate-900);
+            font-weight: 600;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        /* History Listing Inside Modal */
+        .inner-table-container {
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            overflow: hidden;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .inner-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .inner-table th {
+            background-color: var(--slate-50);
+            color: var(--slate-600);
+            font-weight: 600;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--slate-200);
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.05em;
+        }
+
+        .inner-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--slate-200);
+            color: var(--slate-700);
+            vertical-align: middle;
+        }
+
+        .inner-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Edit Sub-Record Panel */
+        .edit-record-panel {
+            background: #ffffff;
+            border: 2px solid var(--primary-border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .edit-panel-header {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary-hover);
+            border-bottom: 1px solid var(--slate-100);
+            padding-bottom: 6px;
+            margin-bottom: 4px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--slate-700);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--slate-300);
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            background: #ffffff;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+        }
+
+        .edit-panel-footer {
             display: flex;
             justify-content: flex-end;
             gap: 8px;
-            border-top: 1px solid var(--slate-100);
-            padding-top: 12px;
+            margin-top: 4px;
         }
 
         .btn-cancel {
             background: #ffffff;
             border: 1px solid var(--slate-300);
             color: var(--slate-700);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
@@ -405,9 +529,9 @@
             background-color: var(--primary);
             color: #ffffff;
             border: none;
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-size: 13px;
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: background-color 0.2s;
@@ -483,7 +607,7 @@
                 padding: 10px 12px;
                 font-size: 12px;
             }
-            .btn-reset-key {
+            .btn-detail {
                 padding: 4px 8px;
                 font-size: 11px;
             }
@@ -496,9 +620,27 @@
                 font-size: 16px;
                 padding-bottom: 8px;
             }
+            .details-grid {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 12px;
+                gap: 8px;
+            }
+            .detail-cell {
+                gap: 2px;
+            }
+            .detail-value {
+                font-size: 12px;
+            }
+            .inner-table th, .inner-table td {
+                padding: 8px 10px;
+                font-size: 11px;
+            }
         }
 
         @media (max-width: 480px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
             .pagination-container {
                 flex-direction: column;
                 gap: 12px;
@@ -513,8 +655,8 @@
         <!-- 导航菜单 -->
         <nav class="admin-nav">
             <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
-            <a href="/admin/orders.html" class="nav-item">订单管理</a>
-            <a href="/admin/keys.html" class="nav-item active">密钥管理</a>
+            <a href="/admin/orders.html" class="nav-item active">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
             <a href="/admin/convert.html" class="nav-item">密钥转换</a>
             <a href="/admin/reset.html" class="nav-item">卡密重置</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -523,11 +665,14 @@
         <!-- 头部区域 -->
         <header class="app-header">
             <div class="header-left">
-                <!-- 密钥图标 SVG -->
+                <!-- 管理图标 SVG -->
                 <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="#3b82f6"/>
+                    <rect x="3" y="3" width="7" height="7" rx="2" fill="#3b82f6" />
+                    <rect x="3" y="14" width="7" height="7" rx="2" fill="#3b82f6" />
+                    <rect x="14" y="3" width="7" height="7" rx="2" fill="#3b82f6" />
+                    <rect x="14" y="14" width="7" height="7" rx="2" fill="#3b82f6" />
                 </svg>
-                <span class="header-title">系统密钥管理中心</span>
+                <span class="header-title">订单数据管理中心</span>
             </div>
             <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
                 管理员: -
@@ -537,11 +682,12 @@
         <!-- 搜索过滤卡片 -->
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
-                <input type="text" id="search-query" class="search-input" placeholder="输入系统卡密 / 运营商卡密 / 原始卡密搜索...">
+                <input type="text" id="search-query" class="search-input" placeholder="按系统卡密 / 账号 / 任务 ID 搜索...">
                 <select id="filter-status" class="status-select">
                     <option value="">所有状态</option>
-                    <option value="active">生效中 (Active)</option>
-                    <option value="inactive">已作废 (Inactive)</option>
+                    <option value="pending">排队中 (Pending)</option>
+                    <option value="success">成功 (Success)</option>
+                    <option value="failed">失败 (Failed)</option>
                 </select>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
             </div>
@@ -555,17 +701,17 @@
                         <tr>
                             <th>ID</th>
                             <th>系统卡密</th>
-                            <th>运营商</th>
-                            <th>运营商密钥 (vendor_key)</th>
-                            <th>当前状态</th>
-                            <th>关联的原始密钥</th>
-                            <th>生成时间</th>
+                            <th>提交方式</th>
+                            <th>最新账号</th>
+                            <th>最新状态</th>
+                            <th>供应商 / Task ID</th>
+                            <th>首次提交时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载密钥数据...</td>
+                            <td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载订单列表数据...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -582,18 +728,95 @@
         </div>
     </div>
 
-    <!-- 重置结果弹窗 -->
-    <div id="result-modal" class="modal hidden">
+    <!-- 详情和编辑历史弹窗 -->
+    <div id="detail-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <span>卡密重置成功</span>
-                <span id="close-result-modal" class="close-btn">&times;</span>
+                <span>卡密提交详情记录</span>
+                <span id="close-modal" class="close-btn">&times;</span>
             </div>
-            <div class="modal-body" id="result-modal-body">
-                <!-- 结果文本由 JS 填充 -->
+            <div class="modal-body">
+                <!-- 卡密基础信息网络栅格 -->
+                <div class="details-grid">
+                    <div class="detail-cell">
+                        <span class="detail-label">系统卡密</span>
+                        <span id="detail-card" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-cell">
+                        <span class="detail-label">供应商原始卡密</span>
+                        <span id="detail-vendor-key" class="detail-value" style="font-family: monospace;">-</span>
+                    </div>
+                    <div class="detail-cell">
+                        <span class="detail-label">提交方式</span>
+                        <span id="detail-mode" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-cell">
+                        <span class="detail-label">卡密供应商</span>
+                        <span id="detail-vendor" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-cell">
+                        <span class="detail-label">首次提交时间</span>
+                        <span id="detail-created" class="detail-value">-</span>
+                    </div>
+                </div>
+
+                <!-- 历史提交尝试列表 -->
+                <div id="history-section" style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
+                    <h4 style="font-size: 13px; font-weight: 700; color: var(--slate-900); padding-left: 2px;">尝试提交历史记录</h4>
+                    <div class="inner-table-container">
+                        <table class="inner-table">
+                            <thead>
+                                <tr>
+                                    <th>账号明细</th>
+                                    <th>状态</th>
+                                    <th>备注/优惠链接</th>
+                                    <th>提交时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <!-- 动态插入 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 单个记录修改面板 (隐藏) -->
+                <div id="edit-section" class="edit-record-panel hidden">
+                    <div class="edit-panel-header">更新账号处理状态 (ID: <span id="edit-rec-id">-</span>)</div>
+                    
+                    <div class="info-item" style="display:flex; justify-content:space-between; font-size:12px; margin-bottom: 4px;">
+                        <span style="color:var(--slate-400); font-weight:500;">账号用户名:</span>
+                        <span id="edit-rec-user" style="font-weight:600; color:var(--slate-900);">-</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-status">更新状态</label>
+                        <select id="input-status" class="form-input" style="cursor: pointer;">
+                            <option value="pending">排队中 (pending)</option>
+                            <option value="success">成功 (success)</option>
+                            <option value="failed">失败 (failed)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-message">处理结果备注</label>
+                        <input type="text" id="input-message" class="form-input" placeholder="如：充值成功，或者报错原因...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-discount">优惠 Claimant 链接 (若有)</label>
+                        <input type="text" id="input-discount" class="form-input" placeholder="以 https:// 开头的兑换/优惠链接">
+                    </div>
+
+                    <div class="edit-panel-footer">
+                        <button type="button" id="btn-close-edit" class="btn-cancel">返回列表</button>
+                        <button type="button" id="btn-save-record" class="btn-submit">保存更新</button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" id="btn-close-result" class="btn-submit">确认好的</button>
+                <button type="button" id="btn-close-modal" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">关闭详情</button>
             </div>
         </div>
     </div>
@@ -619,15 +842,33 @@
             const toast = document.getElementById('toast');
 
             // Modal elements
-            const resultModal = document.getElementById('result-modal');
-            const closeResultModal = document.getElementById('close-result-modal');
-            const btnCloseResult = document.getElementById('btn-close-result');
-            const resultModalBody = document.getElementById('result-modal-body');
+            const detailModal = document.getElementById('detail-modal');
+            const closeModal = document.getElementById('close-modal');
+            const btnCloseModal = document.getElementById('btn-close-modal');
+
+            const detailCard = document.getElementById('detail-card');
+            const detailVendorKey = document.getElementById('detail-vendor-key');
+            const detailMode = document.getElementById('detail-mode');
+            const detailVendor = document.getElementById('detail-vendor');
+            const detailCreated = document.getElementById('detail-created');
+            const historyTableBody = document.getElementById('history-table-body');
+
+            // Edit section elements
+            const editSection = document.getElementById('edit-section');
+            const editRecId = document.getElementById('edit-rec-id');
+            const editRecUser = document.getElementById('edit-rec-user');
+            const inputStatus = document.getElementById('input-status');
+            const inputMessage = document.getElementById('input-message');
+            const inputDiscount = document.getElementById('input-discount');
+            const btnCloseEdit = document.getElementById('btn-close-edit');
+            const btnSaveRecord = document.getElementById('btn-save-record');
 
             let currentPage = 1;
             let totalPages = 1;
             const pageSize = 15;
-            let currentKeys = [];
+            let currentOrders = [];
+            let activeOrderID = null;
+            let activeHistoryRecords = [];
 
             // Toast helper
             function showToast(message, duration = 2000) {
@@ -645,7 +886,7 @@
                     const data = await res.json();
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
-                        loadKeys();
+                        loadOrders();
                     } else {
                         window.location.href = '/admin/login.html';
                     }
@@ -663,19 +904,19 @@
                 return d.toLocaleString('zh-CN', { hour12: false });
             }
 
-            // Fetch and render keys
-            async function loadKeys() {
-                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取卡密数据...</td></tr>';
+            // Fetch and render unique orders
+            async function loadOrders() {
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取数据...</td></tr>';
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
 
                 try {
-                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}`;
+                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
                     if (res.ok && data.success) {
-                        currentKeys = data.records || [];
+                        currentOrders = data.records || [];
                         const total = data.total || 0;
                         totalPages = Math.ceil(total / pageSize) || 1;
 
@@ -685,111 +926,221 @@
                         btnPrev.disabled = currentPage <= 1;
                         btnNext.disabled = currentPage >= totalPages;
 
-                        if (currentKeys.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
+                        if (currentOrders.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密订单记录</td></tr>';
                             return;
                         }
 
                         tableBody.innerHTML = '';
-                        currentKeys.forEach(k => {
+                        currentOrders.forEach(o => {
                             const tr = document.createElement('tr');
                             
                             let statusClass = 'pending';
-                            let statusText = '生效中';
-                            let actionBtnHtml = '';
-                            if (k.status === 'active') {
+                            let statusText = '排队中';
+                            if (o.status === 'success') {
                                 statusClass = 'success';
-                                statusText = '生效中';
-                                actionBtnHtml = `<button type="button" class="btn-reset-key" data-key="${k.system_key}">重置</button>`;
-                            } else if (k.status === 'inactive') {
+                                statusText = '成功';
+                            } else if (o.status === 'failed') {
                                 statusClass = 'failed';
-                                statusText = '已作废';
-                                actionBtnHtml = `<button type="button" class="btn-page" style="padding: 4px 8px; font-size:11px;" disabled>已作废</button>`;
+                                statusText = '失败';
                             }
 
+                            const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:var(--slate-400);">${o.task_id || '-'}</span>` : '-';
+
                             tr.innerHTML = `
-                                <td>${k.id}</td>
-                                <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${k.system_key}</td>
-                                <td style="font-size:13px; color: var(--slate-600);">${k.vendor || '-'}</td>
-                                <td style="font-family: monospace; font-size: 12px;">${k.vendor_key}</td>
+                                <td>${o.id}</td>
+                                <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${o.card_secret}</td>
+                                <td style="font-size:13px; color: var(--slate-600);">${o.mode === 'single' ? '单账号' : '批量'}</td>
+                                <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                <td style="font-family: monospace; font-size:12px; color: var(--slate-600);">${k.original_key || '-'}</td>
-                                <td class="time-td">${formatDate(k.created_at)}</td>
-                                <td>${actionBtnHtml}</td>
+                                <td style="font-size:13px;">${vendorTask}</td>
+                                <td class="time-td">${formatDate(o.created_at)}</td>
+                                <td><button type="button" class="btn-detail" data-id="${o.id}">详情</button></td>
                             `;
                             tableBody.appendChild(tr);
                         });
 
-                        // Bind reset event
-                        document.querySelectorAll('.btn-reset-key').forEach(btn => {
+                        // Attach event listeners to detail buttons
+                        document.querySelectorAll('.btn-detail').forEach(btn => {
                             btn.addEventListener('click', (e) => {
-                                const key = e.target.getAttribute('data-key');
-                                resetKeyConfirm(key);
+                                const id = parseInt(e.target.getAttribute('data-id'), 10);
+                                openDetailModal(id);
                             });
                         });
 
                     } else {
-                        showToast(data.message || '获取卡密数据失败');
+                        showToast(data.message || '获取数据失败');
                     }
                 } catch (e) {
                     console.error(e);
-                    showToast('网络错误，无法加载卡密数据');
+                    showToast('网络错误，无法加载数据');
                 }
             }
 
-            // Reset system key
-            async function resetKeyConfirm(key) {
-                if (!confirm(`确认要重置卡密 ${key} 吗？这会立即作废该卡密，并生成对应的全新系统卡密，原卡密的所有待处理订单将自动迁移到新卡密上。`)) {
-                    return;
+            // Open Details Modal and fetch history
+            async function openDetailModal(orderID) {
+                const order = currentOrders.find(o => o.id === orderID);
+                if (!order) return;
+
+                activeOrderID = orderID;
+                detailCard.textContent = order.card_secret;
+                detailVendorKey.textContent = order.vendor_key || '暂无原始密钥';
+                detailMode.textContent = order.mode === 'single' ? '单账号提交' : '批量提交';
+                detailVendor.textContent = order.vendor || '自营渠道';
+                detailCreated.textContent = formatDate(order.created_at);
+
+                editSection.classList.add('hidden'); // Ensure edit section is closed initially
+                historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载历史记录...</td></tr>';
+                detailModal.classList.remove('hidden');
+
+                await loadOrderHistory();
+            }
+
+            // Load Order History records
+            async function loadOrderHistory() {
+                try {
+                    const res = await fetch(`/api/admin/orders/history?order_id=${activeOrderID}`);
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        activeHistoryRecords = data.records || [];
+                        if (activeHistoryRecords.length === 0) {
+                            historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
+                            return;
+                        }
+
+                        historyTableBody.innerHTML = '';
+                        activeHistoryRecords.forEach(r => {
+                            const tr = document.createElement('tr');
+                            
+                            let statusClass = 'pending';
+                            let statusText = '排队中';
+                            if (r.status === 'success') {
+                                statusClass = 'success';
+                                statusText = '成功';
+                            } else if (r.status === 'failed') {
+                                statusClass = 'failed';
+                                statusText = '失败';
+                            }
+
+                            const detailsInfo = `
+                                <div style="font-weight: 600; color: var(--slate-900);">${r.username}</div>
+                                <div style="color:var(--slate-400); font-size:10px; margin-top:2px;">
+                                    PWD: ${r.password} | 2FA: ${r.two_factor}
+                                    ${r.extra_email ? ' | 辅邮: ' + r.extra_email : ''}
+                                </div>
+                            `;
+
+                            const commentInfo = `
+                                <div style="font-weight:500;">${r.message || '-'}</div>
+                                ${r.discount_url ? `<div style="margin-top:2px;"><a href="${r.discount_url}" target="_blank" style="font-size:10px; color:var(--primary); text-decoration:none; word-break:break-all;">${r.discount_url}</a></div>` : ''}
+                            `;
+
+                            tr.innerHTML = `
+                                <td style="padding:10px 14px; line-height:1.4;">${detailsInfo}</td>
+                                <td style="padding:10px 14px;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td style="padding:10px 14px; line-height:1.3;">${commentInfo}</td>
+                                <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${formatDate(r.created_at)}</td>
+                                <td style="padding:10px 14px;"><button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button></td>
+                            `;
+                            historyTableBody.appendChild(tr);
+                        });
+
+                        // Bind edit events for historical records
+                        document.querySelectorAll('.btn-edit-rec').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const recID = parseInt(e.target.getAttribute('data-rec-id'), 10);
+                                openRecordEdit(recID);
+                            });
+                        });
+                    } else {
+                        historyTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
                 }
+            }
+
+            // Open sub-record editor
+            function openRecordEdit(recID) {
+                const rec = activeHistoryRecords.find(r => r.id === recID);
+                if (!rec) return;
+
+                editRecId.textContent = rec.id;
+                editRecUser.textContent = rec.username;
+                inputStatus.value = rec.status;
+                inputMessage.value = rec.message || '';
+                inputDiscount.value = rec.discount_url || '';
+
+                editSection.classList.remove('hidden');
+                editSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            // Close sub-record editor
+            btnCloseEdit.addEventListener('click', () => {
+                editSection.classList.add('hidden');
+            });
+
+            // Save Sub-record Edit
+            btnSaveRecord.addEventListener('click', async () => {
+                const id = parseInt(editRecId.textContent, 10);
+                const status = inputStatus.value;
+                const message = inputMessage.value.trim();
+                const discount = inputDiscount.value.trim();
+
+                btnSaveRecord.disabled = true;
+                btnSaveRecord.innerText = '保存中...';
 
                 try {
-                    const res = await fetch('/api/reset_keys', {
+                    const res = await fetch('/api/admin/orders/update', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            old_keys: [key]
+                            record_id: id,
+                            status: status,
+                            message: message,
+                            discount_url: discount
                         })
                     });
 
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        const newKey = data.new_keys ? data.new_keys[0] : '';
-                        resultModalBody.innerHTML = `
-                            <p style="margin-bottom: 8px; font-weight: 500;">原卡密已作废：</p>
-                            <div style="font-family: monospace; background: var(--slate-50); border: 1px solid var(--slate-200); padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-weight: 600; word-break: break-all; color: var(--slate-700);">${key}</div>
-                            <p style="margin-bottom: 8px; color: var(--success-text); font-weight: 600;">已成功为您生成新卡密：</p>
-                            <div style="font-family: monospace; background: var(--success-bg); border: 1px solid var(--primary-border); padding: 10px 14px; border-radius: 6px; font-weight: 700; color: var(--success-text); word-break: break-all; font-size: 14px;">${newKey}</div>
-                        `;
-                        resultModal.classList.remove('hidden');
-                        loadKeys(); // reload keys list
+                        showToast('历史记录修改成功！');
+                        editSection.classList.add('hidden');
+                        await loadOrderHistory(); // Refresh history table
+                        loadOrders(); // Refresh main table to show latest state
                     } else {
-                        alert(data.message || '重置失败，请检查该卡密是否有正在执行的后台同步任务。');
+                        showToast(data.message || '保存失败');
                     }
                 } catch (e) {
                     console.error(e);
-                    showToast('网络错误，重置密钥失败');
+                    showToast('网络错误，修改失败');
+                } finally {
+                    btnSaveRecord.disabled = false;
+                    btnSaveRecord.innerText = '保存修改';
                 }
-            }
+            });
 
-            // Close result modal
-            function closeResult() {
-                resultModal.classList.add('hidden');
+            // Close modal actions
+            function closeModalAction() {
+                detailModal.classList.add('hidden');
+                activeOrderID = null;
+                activeHistoryRecords = [];
             }
-            closeResultModal.addEventListener('click', closeResult);
-            btnCloseResult.addEventListener('click', closeResult);
+            closeModal.addEventListener('click', closeModalAction);
+            btnCloseModal.addEventListener('click', closeModalAction);
 
             // Search events
             btnSearch.addEventListener('click', () => {
                 currentPage = 1;
-                loadKeys();
+                loadOrders();
             });
             searchInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     currentPage = 1;
-                    loadKeys();
+                    loadOrders();
                 }
             });
 
@@ -803,7 +1154,7 @@
                     val = totalPages;
                 }
                 currentPage = val;
-                loadKeys();
+                loadOrders();
             });
 
             inputPageNum.addEventListener('keypress', (e) => {
@@ -815,14 +1166,14 @@
             btnPrev.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;
-                    loadKeys();
+                    loadOrders();
                 }
             });
 
             btnNext.addEventListener('click', () => {
                 if (currentPage < totalPages) {
                     currentPage++;
-                    loadKeys();
+                    loadOrders();
                 }
             });
 

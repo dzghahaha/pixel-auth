@@ -47,6 +47,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
 
+    // Format backup codes if they are multiple space/dash-separated 8-digit codes
+    function formatBackupCodes(twoFactor) {
+        if (!twoFactor) return '';
+        // Replace dashes and multiple spaces with a single space
+        const clean = twoFactor.replace(/[-\s]+/g, ' ').trim();
+        const parts = clean.split(' ');
+        
+        // If all parts are exactly 4 digits, and we have an even number of parts > 1
+        const isFourDigitParts = parts.every(p => /^\d{4}$/.test(p));
+        if (parts.length > 1 && isFourDigitParts && parts.length % 2 === 0) {
+            const formatted = [];
+            for (let i = 0; i < parts.length; i += 2) {
+                formatted.push(parts[i] + parts[i+1]);
+            }
+            return formatted.join(',');
+        }
+        
+        // If all parts are exactly 8 digits, and we have multiple parts
+        const isEightDigitParts = parts.every(p => /^\d{8}$/.test(p));
+        if (parts.length > 1 && isEightDigitParts) {
+            return parts.join(',');
+        }
+
+        return twoFactor;
+    }
+
     // Parse batch line
     function parseBatchLine(line) {
         line = line.trim();
@@ -82,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return {
                 username: parts[0],
                 password: parts[1],
-                two_factor: parts[2]
+                two_factor: formatBackupCodes(parts[2])
             };
         }
 
@@ -91,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
             username: parts[0],
             password: parts[1],
             extra_email: parts[2],
-            two_factor: parts[3]
+            two_factor: formatBackupCodes(parts[3])
         };
     }
 
@@ -108,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMode === 'single') {
             const username = usernameInput.value.trim();
             const password = passwordInput.value.trim();
-            const twoFactor = twoFactorInput.value.trim();
+            const twoFactor = formatBackupCodes(twoFactorInput.value.trim());
 
             if (!username || !password || !twoFactor) {
                 showToast('请填写所有必填项');
