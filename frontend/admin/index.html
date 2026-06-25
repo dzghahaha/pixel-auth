@@ -80,8 +80,8 @@
         }
         .modal-content {
             background-color: #ffffff;
-            width: 90%;
-            max-width: 440px;
+            width: 95%;
+            max-width: 600px;
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
@@ -102,7 +102,7 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            max-height: 70vh;
+            max-height: 75vh;
             overflow-y: auto;
             font-size: 12px;
         }
@@ -152,7 +152,7 @@
     </style>
 </head>
 <body>
-    <div class="app-container" style="max-width: 800px; width: 100%;">
+    <div class="app-container" style="max-width: 900px; width: 100%;">
         <!-- 导航菜单 -->
         <nav class="admin-nav">
             <a href="/admin/index.html" class="nav-item active">订单管理</a>
@@ -200,16 +200,17 @@
                         <tr>
                             <th>ID</th>
                             <th>系统卡密</th>
-                            <th>提交账号</th>
-                            <th>处理状态</th>
-                            <th>供应商 / TaskID</th>
-                            <th>提交时间</th>
+                            <th>提交方式</th>
+                            <th>最新账号</th>
+                            <th>最新状态</th>
+                            <th>供应商 / Task ID</th>
+                            <th>首次提交时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="7" style="text-align: center; padding: 20px; color: #666;">正在加载数据...</td>
+                            <td colspan="8" style="text-align: center; padding: 20px; color: #666;">正在加载数据...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -218,24 +219,23 @@
             <!-- 分页栏 -->
             <div class="pagination-container">
                 <button type="button" id="btn-prev-page" class="btn-page" disabled>上一页</button>
-                <span id="page-indicator">第 1 / 1 页</span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    第 <input type="number" id="input-page-num" min="1" value="1" style="width: 50px; text-align: center; padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:12px; outline:none;"> / <span id="total-pages-span">1</span> 页 (共 <span id="total-count-span">0</span> 条)
+                </div>
                 <button type="button" id="btn-next-page" class="btn-page" disabled>下一页</button>
             </div>
         </div>
     </div>
 
-    <!-- 编辑模态弹窗 -->
-    <div id="edit-modal" class="modal hidden">
+    <!-- 详情和编辑历史弹窗 -->
+    <div id="detail-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <span>更新订单处理状态</span>
+                <span>卡密提交详情</span>
                 <span id="close-modal" style="cursor: pointer; font-size: 20px; line-height: 1;">&times;</span>
             </div>
             <div class="modal-body">
-                <div class="info-item">
-                    <span class="info-label">记录 ID:</span>
-                    <span id="detail-id" class="info-val">-</span>
-                </div>
+                <!-- 卡密基础信息 -->
                 <div class="info-item">
                     <span class="info-label">系统卡密:</span>
                     <span id="detail-card" class="info-val">-</span>
@@ -245,53 +245,70 @@
                     <span id="detail-mode" class="info-val">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">账号用户名:</span>
-                    <span id="detail-user" class="info-val">-</span>
+                    <span class="info-label">卡密生成供应商:</span>
+                    <span id="detail-vendor" class="info-val">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">账号密码:</span>
-                    <span id="detail-pass" class="info-val">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">2FA / 密钥:</span>
-                    <span id="detail-2fa" class="info-val">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">辅助邮箱:</span>
-                    <span id="detail-email" class="info-val">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">供应商 / 任务ID:</span>
-                    <span id="detail-vendor-task" class="info-val">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">提交时间:</span>
+                    <span class="info-label">订单创建时间:</span>
                     <span id="detail-created" class="info-val">-</span>
                 </div>
 
-                <!-- 可编辑项 -->
-                <div class="form-group required" style="margin-top: 10px;">
-                    <label for="input-status" style="font-size:12px; margin-bottom:4px; font-weight:600;">修改状态</label>
-                    <select id="input-status" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none; background:white;">
-                        <option value="pending">排队中 (pending)</option>
-                        <option value="success">成功 (success)</option>
-                        <option value="failed">失败 (failed)</option>
-                    </select>
+                <!-- 历史提交尝试列表 -->
+                <div id="history-section" style="margin-top: 10px;">
+                    <h4 style="font-size: 13px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #edf2f7; padding-bottom: 4px; color: #1a1a1a;">提交历史记录</h4>
+                    <div class="table-container" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <table class="result-table" style="min-width: 100%; font-size: 11px;">
+                            <thead>
+                                <tr>
+                                    <th>账号明细</th>
+                                    <th>状态</th>
+                                    <th>备注/链接</th>
+                                    <th>提交时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <!-- 动态填入 -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="input-message" style="font-size:12px; margin-bottom:4px; font-weight:600;">处理结果备注</label>
-                    <input type="text" id="input-message" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none;">
-                </div>
+                <!-- 单个记录修改面板 (隐藏) -->
+                <div id="edit-section" class="hidden" style="margin-top: 12px; border-top: 2px solid #edf2f7; padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <h4 style="font-size: 13px; font-weight: bold; color: #007aff;">修改历史记录 (ID: <span id="edit-rec-id">-</span>)</h4>
+                    <div class="info-item" style="border-bottom:none; padding: 2px 0;">
+                        <span class="info-label">对应账号:</span>
+                        <span id="edit-rec-user" class="info-val" style="font-weight:bold;">-</span>
+                    </div>
 
-                <div class="form-group">
-                    <label for="input-discount" style="font-size:12px; margin-bottom:4px; font-weight:600;">优惠 claimant 链接 (若有)</label>
-                    <input type="text" id="input-discount" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none;" placeholder="以 https:// 开头">
+                    <div class="form-group required">
+                        <label for="input-status" style="font-size:11px; margin-bottom:2px; font-weight:600; display:block;">修改状态</label>
+                        <select id="input-status" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:12px; outline:none; background:white;">
+                            <option value="pending">排队中 (pending)</option>
+                            <option value="success">成功 (success)</option>
+                            <option value="failed">失败 (failed)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-message" style="font-size:11px; margin-bottom:2px; font-weight:600; display:block;">处理结果备注</label>
+                        <input type="text" id="input-message" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:12px; outline:none;">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-discount" style="font-size:11px; margin-bottom:2px; font-weight:600; display:block;">优惠链接 (若有)</label>
+                        <input type="text" id="input-discount" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:12px; outline:none;" placeholder="https://...">
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                        <button type="button" id="btn-close-edit" class="secondary-btn" style="padding: 4px 8px; font-size:11px;">返回列表</button>
+                        <button type="button" id="btn-save-record" class="submit-btn" style="padding: 4px 12px; font-size:11px; width:auto; margin-top:0;">保存修改</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" id="btn-cancel-edit" class="secondary-btn" style="padding: 6px 12px; font-size:12px;">取消</button>
-                <button type="button" id="btn-save-edit" class="submit-btn" style="padding: 6px 16px; font-size:12px; width:auto; margin-top:0;">保存更新</button>
+                <button type="button" id="btn-close-modal" class="secondary-btn" style="padding: 6px 12px; font-size:12px;">关闭</button>
             </div>
         </div>
     </div>
@@ -308,36 +325,41 @@
 
             const btnPrev = document.getElementById('btn-prev-page');
             const btnNext = document.getElementById('btn-next-page');
-            const pageIndicator = document.getElementById('page-indicator');
+            const inputPageNum = document.getElementById('input-page-num');
+            const totalPagesSpan = document.getElementById('total-pages-span');
+            const totalCountSpan = document.getElementById('total-count-span');
 
             const adminUserDisplay = document.getElementById('admin-user-display');
             const btnLogout = document.getElementById('btn-logout');
             const toast = document.getElementById('toast');
 
             // Modal elements
-            const editModal = document.getElementById('edit-modal');
+            const detailModal = document.getElementById('detail-modal');
             const closeModal = document.getElementById('close-modal');
-            const btnCancelEdit = document.getElementById('btn-cancel-edit');
-            const btnSaveEdit = document.getElementById('btn-save-edit');
+            const btnCloseModal = document.getElementById('btn-close-modal');
 
-            const detailId = document.getElementById('detail-id');
             const detailCard = document.getElementById('detail-card');
             const detailMode = document.getElementById('detail-mode');
-            const detailUser = document.getElementById('detail-user');
-            const detailPass = document.getElementById('detail-pass');
-            const detail2fa = document.getElementById('detail-2fa');
-            const detailEmail = document.getElementById('detail-email');
-            const detailVendorTask = document.getElementById('detail-vendor-task');
+            const detailVendor = document.getElementById('detail-vendor');
             const detailCreated = document.getElementById('detail-created');
+            const historyTableBody = document.getElementById('history-table-body');
 
+            // Edit section elements
+            const editSection = document.getElementById('edit-section');
+            const editRecId = document.getElementById('edit-rec-id');
+            const editRecUser = document.getElementById('edit-rec-user');
             const inputStatus = document.getElementById('input-status');
             const inputMessage = document.getElementById('input-message');
             const inputDiscount = document.getElementById('input-discount');
+            const btnCloseEdit = document.getElementById('btn-close-edit');
+            const btnSaveRecord = document.getElementById('btn-save-record');
 
             let currentPage = 1;
             let totalPages = 1;
             const pageSize = 15;
-            let currentRecords = [];
+            let currentOrders = [];
+            let activeOrderID = null;
+            let activeHistoryRecords = [];
 
             // Toast helper
             function showToast(message, duration = 2000) {
@@ -373,9 +395,9 @@
                 return d.toLocaleString('zh-CN', { hour12: false });
             }
 
-            // Fetch and render orders
+            // Fetch and render unique orders
             async function loadOrders() {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #666;">正在读取订单数据...</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">正在读取订单数据...</td></tr>';
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
 
@@ -385,52 +407,55 @@
                     const data = await res.json();
 
                     if (res.ok && data.success) {
-                        currentRecords = data.records || [];
+                        currentOrders = data.records || [];
                         const total = data.total || 0;
                         totalPages = Math.ceil(total / pageSize) || 1;
 
-                        pageIndicator.textContent = `第 ${currentPage} / ${totalPages} 页 (共 ${total} 条)`;
+                        inputPageNum.value = currentPage;
+                        totalPagesSpan.textContent = totalPages;
+                        totalCountSpan.textContent = total;
                         btnPrev.disabled = currentPage <= 1;
                         btnNext.disabled = currentPage >= totalPages;
 
-                        if (currentRecords.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #666;">暂无符合条件的订单记录</td></tr>';
+                        if (currentOrders.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #666;">暂无符合条件的卡密订单记录</td></tr>';
                             return;
                         }
 
                         tableBody.innerHTML = '';
-                        currentRecords.forEach(r => {
+                        currentOrders.forEach(o => {
                             const tr = document.createElement('tr');
                             
                             let statusClass = 'pending';
                             let statusText = '排队中';
-                            if (r.status === 'success') {
+                            if (o.status === 'success') {
                                 statusClass = 'success';
                                 statusText = '成功';
-                            } else if (r.status === 'failed') {
+                            } else if (o.status === 'failed') {
                                 statusClass = 'failed';
                                 statusText = '失败';
                             }
 
-                            const vendorTask = r.vendor ? `${r.vendor}<br><span style="font-size:11px;color:#888;">${r.task_id || '-'}</span>` : '-';
+                            const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:#888;">${o.task_id || '-'}</span>` : '-';
 
                             tr.innerHTML = `
-                                <td>${r.id}</td>
-                                <td style="font-family: monospace; font-weight: 500;">${r.card_secret}</td>
-                                <td class="account-td" style="font-size: 12px;">${r.username}</td>
+                                <td>${o.id}</td>
+                                <td style="font-family: monospace; font-weight: 500;">${o.card_secret}</td>
+                                <td style="font-size:12px;">${o.mode === 'single' ? '单账号' : '批量提价'}</td>
+                                <td class="account-td" style="font-size: 12px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td style="font-size:12px;">${vendorTask}</td>
-                                <td class="time-td">${formatDate(r.created_at)}</td>
-                                <td><button type="button" class="secondary-btn btn-edit" data-id="${r.id}" style="padding: 4px 8px; font-size:11px;">编辑</button></td>
+                                <td class="time-td">${formatDate(o.created_at)}</td>
+                                <td><button type="button" class="secondary-btn btn-detail" data-id="${o.id}" style="padding: 4px 8px; font-size:11px;">详情</button></td>
                             `;
                             tableBody.appendChild(tr);
                         });
 
-                        // Attach event listeners to edit buttons
-                        document.querySelectorAll('.btn-edit').forEach(btn => {
+                        // Attach event listeners to detail buttons
+                        document.querySelectorAll('.btn-detail').forEach(btn => {
                             btn.addEventListener('click', (e) => {
                                 const id = parseInt(e.target.getAttribute('data-id'), 10);
-                                openEditModal(id);
+                                openDetailModal(id);
                             });
                         });
 
@@ -443,41 +468,120 @@
                 }
             }
 
-            // Edit Modal actions
-            function openEditModal(recordId) {
-                const record = currentRecords.find(r => r.id === recordId);
-                if (!record) return;
+            // Open Details Modal and fetch history
+            async function openDetailModal(orderID) {
+                const order = currentOrders.find(o => o.id === orderID);
+                if (!order) return;
 
-                detailId.textContent = record.id;
-                detailCard.textContent = record.card_secret;
-                detailMode.textContent = record.mode === 'single' ? '单账号提交' : '批量提价';
-                detailUser.textContent = record.username;
-                detailPass.textContent = record.password;
-                detail2fa.textContent = record.two_factor;
-                detailEmail.textContent = record.extra_email || '-';
-                detailVendorTask.textContent = record.vendor ? `${record.vendor} (${record.task_id})` : '无';
-                detailCreated.textContent = formatDate(record.created_at);
+                activeOrderID = orderID;
+                detailCard.textContent = order.card_secret;
+                detailMode.textContent = order.mode === 'single' ? '单账号提交' : '批量提价';
+                detailVendor.textContent = order.vendor || '默认自营';
+                detailCreated.textContent = formatDate(order.created_at);
 
-                inputStatus.value = record.status;
-                inputMessage.value = record.message || '';
-                inputDiscount.value = record.discount_url || '';
+                editSection.classList.add('hidden'); // Ensure edit section is closed initially
+                historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px; color:#888;">正在加载历史记录...</td></tr>';
+                detailModal.classList.remove('hidden');
 
-                editModal.classList.remove('hidden');
+                await loadOrderHistory();
             }
 
-            function closeEditModal() {
-                editModal.classList.add('hidden');
+            // Load Order History records
+            async function loadOrderHistory() {
+                try {
+                    const res = await fetch(`/api/admin/orders/history?order_id=${activeOrderID}`);
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        activeHistoryRecords = data.records || [];
+                        if (activeHistoryRecords.length === 0) {
+                            historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px; color:#888;">无历史提交记录</td></tr>';
+                            return;
+                        }
+
+                        historyTableBody.innerHTML = '';
+                        activeHistoryRecords.forEach(r => {
+                            const tr = document.createElement('tr');
+                            
+                            let statusClass = 'pending';
+                            let statusText = '排队中';
+                            if (r.status === 'success') {
+                                statusClass = 'success';
+                                statusText = '成功';
+                            } else if (r.status === 'failed') {
+                                statusClass = 'failed';
+                                statusText = '失败';
+                            }
+
+                            const detailsInfo = `
+                                <strong>账号:</strong> ${r.username}<br>
+                                <span style="color:#666; font-size:10px;">
+                                    密码: ${r.password} | 2FA: ${r.two_factor}
+                                    ${r.extra_email ? ' | 辅邮: ' + r.extra_email : ''}
+                                </span>
+                            `;
+
+                            const commentInfo = `
+                                <span>${r.message || '-'}</span>
+                                ${r.discount_url ? `<br><a href="${r.discount_url}" target="_blank" style="font-size:10px; color:#007aff; word-break:break-all;">${r.discount_url}</a>` : ''}
+                            `;
+
+                            const vendorInfo = r.task_id ? `<span style="font-family:monospace;">${r.task_id}</span>` : '无';
+
+                            tr.innerHTML = `
+                                <td style="font-size:11px; padding:8px; line-height:1.4;">${detailsInfo}</td>
+                                <td style="padding:8px;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td style="font-size:11px; padding:8px;">${commentInfo}</td>
+                                <td style="font-size:10px; padding:8px; color:#888;">${formatDate(r.created_at)}</td>
+                                <td style="padding:8px;"><button type="button" class="secondary-btn btn-edit-rec" data-rec-id="${r.id}" style="padding: 2px 6px; font-size:10px;">编辑</button></td>
+                            `;
+                            historyTableBody.appendChild(tr);
+                        });
+
+                        // Bind edit events for historical records
+                        document.querySelectorAll('.btn-edit-rec').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const recID = parseInt(e.target.getAttribute('data-rec-id'), 10);
+                                openRecordEdit(recID);
+                            });
+                        });
+                    } else {
+                        historyTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:10px; color:red;">${data.message || '加载历史失败'}</td></tr>`;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px; color:red;">网络错误，无法加载历史记录</td></tr>';
+                }
             }
 
-            // Save Edit
-            btnSaveEdit.addEventListener('click', async () => {
-                const id = parseInt(detailId.textContent, 10);
+            // Open sub-record editor
+            function openRecordEdit(recID) {
+                const rec = activeHistoryRecords.find(r => r.id === recID);
+                if (!rec) return;
+
+                editRecId.textContent = rec.id;
+                editRecUser.textContent = rec.username;
+                inputStatus.value = rec.status;
+                inputMessage.value = rec.message || '';
+                inputDiscount.value = rec.discount_url || '';
+
+                editSection.classList.remove('hidden');
+                editSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            // Close sub-record editor
+            btnCloseEdit.addEventListener('click', () => {
+                editSection.classList.add('hidden');
+            });
+
+            // Save Sub-record Edit
+            btnSaveRecord.addEventListener('click', async () => {
+                const id = parseInt(editRecId.textContent, 10);
                 const status = inputStatus.value;
                 const message = inputMessage.value.trim();
                 const discount = inputDiscount.value.trim();
 
-                btnSaveEdit.disabled = true;
-                btnSaveEdit.innerText = '保存中...';
+                btnSaveRecord.disabled = true;
+                btnSaveRecord.innerText = '保存中...';
 
                 try {
                     const res = await fetch('/api/admin/orders/update', {
@@ -495,24 +599,30 @@
 
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        showToast('状态更新成功！');
-                        closeEditModal();
-                        loadOrders();
+                        showToast('历史记录修改成功！');
+                        editSection.classList.add('hidden');
+                        await loadOrderHistory(); // Refresh history table
+                        loadOrders(); // Refresh main table to show latest state
                     } else {
                         showToast(data.message || '保存失败');
                     }
                 } catch (e) {
                     console.error(e);
-                    showToast('网络错误，保存更新失败');
+                    showToast('网络错误，修改失败');
                 } finally {
-                    btnSaveEdit.disabled = false;
-                    btnSaveEdit.innerText = '保存更新';
+                    btnSaveRecord.disabled = false;
+                    btnSaveRecord.innerText = '保存修改';
                 }
             });
 
-            // Modal event binding
-            closeModal.addEventListener('click', closeEditModal);
-            btnCancelEdit.addEventListener('click', closeEditModal);
+            // Close modal actions
+            function closeModalAction() {
+                detailModal.classList.add('hidden');
+                activeOrderID = null;
+                activeHistoryRecords = [];
+            }
+            closeModal.addEventListener('click', closeModalAction);
+            btnCloseModal.addEventListener('click', closeModalAction);
 
             // Search events
             btnSearch.addEventListener('click', () => {
@@ -527,6 +637,24 @@
             });
 
             // Pagination events
+            inputPageNum.addEventListener('change', () => {
+                let val = parseInt(inputPageNum.value, 10);
+                if (isNaN(val) || val < 1) {
+                    val = 1;
+                }
+                if (val > totalPages) {
+                    val = totalPages;
+                }
+                currentPage = val;
+                loadOrders();
+            });
+
+            inputPageNum.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    inputPageNum.blur();
+                }
+            });
+
             btnPrev.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;

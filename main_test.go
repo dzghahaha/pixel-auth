@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1148,6 +1149,35 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("expected 1 order record in result, got %v", ordersResp)
 	}
 
+	// 5.b Test Order History API
+	// Query order history - unauthorized (no cookie)
+	reqHistoryUnauth := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/orders/history?order_id=%d", orderID), nil)
+	rrHistoryUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminOrderHistory)(rrHistoryUnauth, reqHistoryUnauth)
+	if rrHistoryUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthorized order history query, got %d", rrHistoryUnauth.Code)
+	}
+
+	// Query order history - authorized
+	reqHistoryAuth := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/orders/history?order_id=%d", orderID), nil)
+	reqHistoryAuth.AddCookie(sessionCookie)
+	rrHistoryAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminOrderHistory)(rrHistoryAuth, reqHistoryAuth)
+
+	if rrHistoryAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 for order history query, got %d. Body: %s", rrHistoryAuth.Code, rrHistoryAuth.Body.String())
+	}
+
+	var historyResp map[string]interface{}
+	json.Unmarshal(rrHistoryAuth.Body.Bytes(), &historyResp)
+	if historyResp["success"] != true {
+		t.Errorf("expected success: true, got %v", historyResp)
+	}
+	historyRecords, ok := historyResp["records"].([]interface{})
+	if !ok || len(historyRecords) != 1 {
+		t.Errorf("expected 1 history record, got %d", len(historyRecords))
+	}
+
 	// 6. Test Orders Update API
 	updatePayload := fmt.Sprintf(`{"record_id": %d, "status": "success", "message": "已绑定优惠", "discount_url": "https://pixel.sub/offer"}`, recordID)
 	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/orders/update", strings.NewReader(updatePayload))
@@ -1188,5 +1218,27 @@ func TestAdminBackendFlow(t *testing.T) {
 	}
 	if sessionCount != 0 {
 		t.Errorf("expected session token to be deleted from database, but it still exists")
+	}
+
+	// 8. Test static server blocking /convert.html
+	staticFS, err := fs.Sub(embedFS, "frontend")
+	if err != nil {
+		t.Fatalf("failed to get embed fs: %v", err)
+	}
+	srv := &adminStaticServer{fileServer: http.FileServer(http.FS(staticFS))}
+
+	reqStaticConvert := httptest.NewRequest(http.MethodGet, "/convert.html", nil)
+	rrStaticConvert := httptest.NewRecorder()
+	srv.ServeHTTP(rrStaticConvert, reqStaticConvert)
+	if rrStaticConvert.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for /convert.html, got %d", rrStaticConvert.Code)
+	}
+
+	// Test static server redirecting unauthenticated /admin/ index
+	reqStaticAdmin := httptest.NewRequest(http.MethodGet, "/admin/index.html", nil)
+	rrStaticAdmin := httptest.NewRecorder()
+	srv.ServeHTTP(rrStaticAdmin, reqStaticAdmin)
+	if rrStaticAdmin.Code != http.StatusFound {
+		t.Errorf("expected 302 Found redirect for unauthenticated /admin/, got %d", rrStaticAdmin.Code)
 	}
 }

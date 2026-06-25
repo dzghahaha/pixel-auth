@@ -784,6 +784,10 @@ type adminStaticServer struct {
 
 func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if path == "/convert.html" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if path == "/admin" || strings.HasPrefix(path, "/admin/") {
 		if path == "/admin" {
 			http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
@@ -1017,8 +1021,16 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	var totalCount int
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*) 
-		FROM account_records r
-		JOIN orders o ON r.order_id = o.id
+		FROM orders o
+		LEFT JOIN (
+			SELECT r1.*
+			FROM account_records r1
+			INNER JOIN (
+				SELECT order_id, MAX(id) as max_id
+				FROM account_records
+				GROUP BY order_id
+			) r2 ON r1.id = r2.max_id
+		) r ON o.id = r.order_id
 		WHERE %s`, whereSQL)
 
 	errCount := db.QueryRow(countQuery, args...).Scan(&totalCount)
@@ -1032,13 +1044,21 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT r.id, o.card_secret, o.mode, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), 
-		       r.status, r.message, COALESCE(r.discount_url, ''), o.vendor, r.task_id, 
-		       r.created_at, r.updated_at, r.completed_at
-		FROM account_records r
-		JOIN orders o ON r.order_id = o.id
+		SELECT o.id, o.card_secret, o.mode, COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
+		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
+		       o.created_at, o.updated_at, r.completed_at
+		FROM orders o
+		LEFT JOIN (
+			SELECT r1.*
+			FROM account_records r1
+			INNER JOIN (
+				SELECT order_id, MAX(id) as max_id
+				FROM account_records
+				GROUP BY order_id
+			) r2 ON r1.id = r2.max_id
+		) r ON o.id = r.order_id
 		WHERE %s
-		ORDER BY r.id DESC
+		ORDER BY o.id DESC
 		LIMIT ? OFFSET ?`, whereSQL)
 
 	dataArgs := append(args, pageSize, offset)
@@ -1185,6 +1205,91 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "参数 order_id 不能为空",
+		})
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT id, username, password, two_factor, COALESCE(extra_email, ''), 
+		       status, message, COALESCE(discount_url, ''), task_id, 
+		       created_at, updated_at, completed_at
+		FROM account_records
+		WHERE order_id = ?
+		ORDER BY id DESC`, orderID)
+	if err != nil {
+		log.Printf("Query error for order history %s: %v\n", orderID, err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询数据库错误",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type OrderHistoryRecord struct {
+		ID          int64      `json:"id"`
+		Username    string     `json:"username"`
+		Password    string     `json:"password"`
+		TwoFactor   string     `json:"two_factor"`
+		ExtraEmail  string     `json:"extra_email"`
+		Status      string     `json:"status"`
+		Message     string     `json:"message"`
+		DiscountURL string     `json:"discount_url"`
+		TaskID      string     `json:"task_id"`
+		CreatedAt   time.Time  `json:"created_at"`
+		UpdatedAt   time.Time  `json:"updated_at"`
+		CompletedAt *time.Time `json:"completed_at,omitempty"`
+	}
+
+	var records []OrderHistoryRecord
+	for rows.Next() {
+		var rec OrderHistoryRecord
+		var completedAt sql.NullTime
+		errScan := rows.Scan(
+			&rec.ID,
+			&rec.Username,
+			&rec.Password,
+			&rec.TwoFactor,
+			&rec.ExtraEmail,
+			&rec.Status,
+			&rec.Message,
+			&rec.DiscountURL,
+			&rec.TaskID,
+			&rec.CreatedAt,
+			&rec.UpdatedAt,
+			&completedAt,
+		)
+		if errScan != nil {
+			log.Printf("Error scanning history row: %v\n", errScan)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "读取数据失败",
+			})
+			return
+		}
+		if completedAt.Valid {
+			rec.CompletedAt = &completedAt.Time
+		}
+		records = append(records, rec)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"records": records,
+	})
+}
+
 func main() {
 	// 1. Initialize database connection
 	initDB()
@@ -1215,6 +1320,7 @@ func main() {
 	http.HandleFunc("/api/admin/check", handleAdminCheck)
 	http.HandleFunc("/api/admin/orders", requireAdmin(handleAdminOrders))
 	http.HandleFunc("/api/admin/orders/update", requireAdmin(handleAdminOrdersUpdate))
+	http.HandleFunc("/api/admin/orders/history", requireAdmin(handleAdminOrderHistory))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)
