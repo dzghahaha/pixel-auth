@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>后台订单管理 - Pixel 订阅</title>
+    <link rel="stylesheet" href="../style.css">
+    <style>
+        .admin-nav {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+        .nav-item {
+            text-decoration: none;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            color: #4a5568;
+            background-color: #e2e8f0;
+            transition: all 0.2s;
+        }
+        .nav-item.active {
+            color: #ffffff;
+            background-color: #007aff;
+        }
+        .nav-item.logout {
+            color: #ffffff;
+            background-color: #ff3b30;
+            margin-left: auto;
+        }
+        .search-combo {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 180px;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            outline: none;
+            font-size: 13px;
+        }
+        .status-select {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            outline: none;
+            background-color: #ffffff;
+            font-size: 13px;
+        }
+        .btn-search {
+            background-color: #007aff;
+            color: #ffffff;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        /* Modal Style */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            width: 90%;
+            max-width: 440px;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .modal-header {
+            font-weight: bold;
+            font-size: 16px;
+            color: #1a1a1a;
+            border-bottom: 1px solid #edf2f7;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #f0f0f0;
+            padding: 4px 0;
+        }
+        .info-label {
+            color: #718096;
+            font-weight: 500;
+        }
+        .info-val {
+            color: #2d3748;
+            font-weight: 600;
+            word-break: break-all;
+            text-align: right;
+            max-width: 70%;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid #edf2f7;
+            padding-top: 12px;
+        }
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            font-size: 13px;
+        }
+        .btn-page {
+            background-color: #f1f2f5;
+            border: 1px solid #cbd5e1;
+            color: #333333;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn-page:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" style="max-width: 800px; width: 100%;">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/index.html" class="nav-item active">订单管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 管理图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px;">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#007aff" />
+                </svg>
+                <span class="header-title">订单数据管理中心</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:12px; color:#666;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 搜索过滤卡片 -->
+        <div class="card search-card" style="padding: 16px;">
+            <div class="search-combo">
+                <input type="text" id="search-query" class="search-input" placeholder="输入卡密 / 账号 / 任务 ID 搜索">
+                <select id="filter-status" class="status-select">
+                    <option value="">所有状态</option>
+                    <option value="pending">排队中 (Pending)</option>
+                    <option value="success">成功 (Success)</option>
+                    <option value="failed">失败 (Failed)</option>
+                </select>
+                <button type="button" id="btn-search" class="btn-search">搜索</button>
+            </div>
+        </div>
+
+        <!-- 数据表格卡片 -->
+        <div class="card table-card">
+            <div class="table-container">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>系统卡密</th>
+                            <th>提交账号</th>
+                            <th>处理状态</th>
+                            <th>供应商 / TaskID</th>
+                            <th>提交时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 20px; color: #666;">正在加载数据...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页栏 -->
+            <div class="pagination-container">
+                <button type="button" id="btn-prev-page" class="btn-page" disabled>上一页</button>
+                <span id="page-indicator">第 1 / 1 页</span>
+                <button type="button" id="btn-next-page" class="btn-page" disabled>下一页</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑模态弹窗 -->
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>更新订单处理状态</span>
+                <span id="close-modal" style="cursor: pointer; font-size: 20px; line-height: 1;">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="info-item">
+                    <span class="info-label">记录 ID:</span>
+                    <span id="detail-id" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">系统卡密:</span>
+                    <span id="detail-card" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">提交方式:</span>
+                    <span id="detail-mode" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">账号用户名:</span>
+                    <span id="detail-user" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">账号密码:</span>
+                    <span id="detail-pass" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">2FA / 密钥:</span>
+                    <span id="detail-2fa" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">辅助邮箱:</span>
+                    <span id="detail-email" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">供应商 / 任务ID:</span>
+                    <span id="detail-vendor-task" class="info-val">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">提交时间:</span>
+                    <span id="detail-created" class="info-val">-</span>
+                </div>
+
+                <!-- 可编辑项 -->
+                <div class="form-group required" style="margin-top: 10px;">
+                    <label for="input-status" style="font-size:12px; margin-bottom:4px; font-weight:600;">修改状态</label>
+                    <select id="input-status" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none; background:white;">
+                        <option value="pending">排队中 (pending)</option>
+                        <option value="success">成功 (success)</option>
+                        <option value="failed">失败 (failed)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-message" style="font-size:12px; margin-bottom:4px; font-weight:600;">处理结果备注</label>
+                    <input type="text" id="input-message" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none;">
+                </div>
+
+                <div class="form-group">
+                    <label for="input-discount" style="font-size:12px; margin-bottom:4px; font-weight:600;">优惠 claimant 链接 (若有)</label>
+                    <input type="text" id="input-discount" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size:13px; outline:none;" placeholder="以 https:// 开头">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-cancel-edit" class="secondary-btn" style="padding: 6px 12px; font-size:12px;">取消</button>
+                <button type="button" id="btn-save-edit" class="submit-btn" style="padding: 6px 16px; font-size:12px; width:auto; margin-top:0;">保存更新</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tableBody = document.getElementById('table-body');
+            const searchInput = document.getElementById('search-query');
+            const statusSelect = document.getElementById('filter-status');
+            const btnSearch = document.getElementById('btn-search');
+
+            const btnPrev = document.getElementById('btn-prev-page');
+            const btnNext = document.getElementById('btn-next-page');
+            const pageIndicator = document.getElementById('page-indicator');
+
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+
+            // Modal elements
+            const editModal = document.getElementById('edit-modal');
+            const closeModal = document.getElementById('close-modal');
+            const btnCancelEdit = document.getElementById('btn-cancel-edit');
+            const btnSaveEdit = document.getElementById('btn-save-edit');
+
+            const detailId = document.getElementById('detail-id');
+            const detailCard = document.getElementById('detail-card');
+            const detailMode = document.getElementById('detail-mode');
+            const detailUser = document.getElementById('detail-user');
+            const detailPass = document.getElementById('detail-pass');
+            const detail2fa = document.getElementById('detail-2fa');
+            const detailEmail = document.getElementById('detail-email');
+            const detailVendorTask = document.getElementById('detail-vendor-task');
+            const detailCreated = document.getElementById('detail-created');
+
+            const inputStatus = document.getElementById('input-status');
+            const inputMessage = document.getElementById('input-message');
+            const inputDiscount = document.getElementById('input-discount');
+
+            let currentPage = 1;
+            let totalPages = 1;
+            const pageSize = 15;
+            let currentRecords = [];
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        loadOrders();
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Format date
+            function formatDate(dateStr) {
+                if (!dateStr) return '-';
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return dateStr;
+                return d.toLocaleString('zh-CN', { hour12: false });
+            }
+
+            // Fetch and render orders
+            async function loadOrders() {
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #666;">正在读取订单数据...</td></tr>';
+                const queryVal = searchInput.value.trim();
+                const statusVal = statusSelect.value;
+
+                try {
+                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        currentRecords = data.records || [];
+                        const total = data.total || 0;
+                        totalPages = Math.ceil(total / pageSize) || 1;
+
+                        pageIndicator.textContent = `第 ${currentPage} / ${totalPages} 页 (共 ${total} 条)`;
+                        btnPrev.disabled = currentPage <= 1;
+                        btnNext.disabled = currentPage >= totalPages;
+
+                        if (currentRecords.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #666;">暂无符合条件的订单记录</td></tr>';
+                            return;
+                        }
+
+                        tableBody.innerHTML = '';
+                        currentRecords.forEach(r => {
+                            const tr = document.createElement('tr');
+                            
+                            let statusClass = 'pending';
+                            let statusText = '排队中';
+                            if (r.status === 'success') {
+                                statusClass = 'success';
+                                statusText = '成功';
+                            } else if (r.status === 'failed') {
+                                statusClass = 'failed';
+                                statusText = '失败';
+                            }
+
+                            const vendorTask = r.vendor ? `${r.vendor}<br><span style="font-size:11px;color:#888;">${r.task_id || '-'}</span>` : '-';
+
+                            tr.innerHTML = `
+                                <td>${r.id}</td>
+                                <td style="font-family: monospace; font-weight: 500;">${r.card_secret}</td>
+                                <td class="account-td" style="font-size: 12px;">${r.username}</td>
+                                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td style="font-size:12px;">${vendorTask}</td>
+                                <td class="time-td">${formatDate(r.created_at)}</td>
+                                <td><button type="button" class="secondary-btn btn-edit" data-id="${r.id}" style="padding: 4px 8px; font-size:11px;">编辑</button></td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+
+                        // Attach event listeners to edit buttons
+                        document.querySelectorAll('.btn-edit').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const id = parseInt(e.target.getAttribute('data-id'), 10);
+                                openEditModal(id);
+                            });
+                        });
+
+                    } else {
+                        showToast(data.message || '获取数据失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法加载数据');
+                }
+            }
+
+            // Edit Modal actions
+            function openEditModal(recordId) {
+                const record = currentRecords.find(r => r.id === recordId);
+                if (!record) return;
+
+                detailId.textContent = record.id;
+                detailCard.textContent = record.card_secret;
+                detailMode.textContent = record.mode === 'single' ? '单账号提交' : '批量提价';
+                detailUser.textContent = record.username;
+                detailPass.textContent = record.password;
+                detail2fa.textContent = record.two_factor;
+                detailEmail.textContent = record.extra_email || '-';
+                detailVendorTask.textContent = record.vendor ? `${record.vendor} (${record.task_id})` : '无';
+                detailCreated.textContent = formatDate(record.created_at);
+
+                inputStatus.value = record.status;
+                inputMessage.value = record.message || '';
+                inputDiscount.value = record.discount_url || '';
+
+                editModal.classList.remove('hidden');
+            }
+
+            function closeEditModal() {
+                editModal.classList.add('hidden');
+            }
+
+            // Save Edit
+            btnSaveEdit.addEventListener('click', async () => {
+                const id = parseInt(detailId.textContent, 10);
+                const status = inputStatus.value;
+                const message = inputMessage.value.trim();
+                const discount = inputDiscount.value.trim();
+
+                btnSaveEdit.disabled = true;
+                btnSaveEdit.innerText = '保存中...';
+
+                try {
+                    const res = await fetch('/api/admin/orders/update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            record_id: id,
+                            status: status,
+                            message: message,
+                            discount_url: discount
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('状态更新成功！');
+                        closeEditModal();
+                        loadOrders();
+                    } else {
+                        showToast(data.message || '保存失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，保存更新失败');
+                } finally {
+                    btnSaveEdit.disabled = false;
+                    btnSaveEdit.innerText = '保存更新';
+                }
+            });
+
+            // Modal event binding
+            closeModal.addEventListener('click', closeEditModal);
+            btnCancelEdit.addEventListener('click', closeEditModal);
+
+            // Search events
+            btnSearch.addEventListener('click', () => {
+                currentPage = 1;
+                loadOrders();
+            });
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    currentPage = 1;
+                    loadOrders();
+                }
+            });
+
+            // Pagination events
+            btnPrev.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadOrders();
+                }
+            });
+
+            btnNext.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadOrders();
+                }
+            });
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Init load
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

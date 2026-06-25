@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 )
 
 //go:embed frontend/*
@@ -114,6 +116,9 @@ func initDB() {
 
 	// 3. Create tables
 	createTables()
+
+	// 4. Ensure default admin exists
+	ensureDefaultAdmin()
 }
 
 func createTables() {
@@ -162,7 +167,27 @@ func createTables() {
 		KEY idx_original_key (original_key)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
-	log.Println("Ensuring database tables 'orders', 'account_records', and 'system_keys' exist...")
+	adminsDDL := `
+	CREATE TABLE IF NOT EXISTS admins (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		username VARCHAR(128) NOT NULL UNIQUE,
+		password_hash VARCHAR(255) NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
+	adminSessionsDDL := `
+	CREATE TABLE IF NOT EXISTS admin_sessions (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		token VARCHAR(64) NOT NULL UNIQUE,
+		admin_id BIGINT UNSIGNED NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		CONSTRAINT fk_admin_id FOREIGN KEY (admin_id) REFERENCES admins (id) ON DELETE CASCADE,
+		KEY idx_expires_at (expires_at)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
+	log.Println("Ensuring database tables 'orders', 'account_records', 'system_keys', 'admins', and 'admin_sessions' exist...")
 	if _, err := db.Exec(ordersDDL); err != nil {
 		log.Fatalf("Error creating orders table: %v", err)
 	}
@@ -173,6 +198,14 @@ func createTables() {
 
 	if _, err := db.Exec(systemKeysDDL); err != nil {
 		log.Fatalf("Error creating system_keys table: %v", err)
+	}
+
+	if _, err := db.Exec(adminsDDL); err != nil {
+		log.Fatalf("Error creating admins table: %v", err)
+	}
+
+	if _, err := db.Exec(adminSessionsDDL); err != nil {
+		log.Fatalf("Error creating admin_sessions table: %v", err)
 	}
 	log.Println("Tables verified/created successfully.")
 
@@ -230,6 +263,46 @@ func createTables() {
 	// Always ensure existing keys with empty original_key are backfilled with their own system_key
 	if _, err := db.Exec("UPDATE system_keys SET original_key = system_key WHERE original_key = ''"); err != nil {
 		log.Printf("Warning: failed to populate original_key for existing keys: %v\n", err)
+	}
+}
+
+func ensureDefaultAdmin() {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM admins").Scan(&count)
+	if err != nil {
+		log.Fatalf("Error checking admins count: %v", err)
+	}
+
+	if count == 0 {
+		// Generate 16-char random password
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatalf("Failed to generate random password: %v", err)
+		}
+		for i := range b {
+			b[i] = charset[b[i]%byte(len(charset))]
+		}
+		password := string(b)
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Fatalf("Failed to bcrypt admin password: %v", err)
+		}
+
+		now := time.Now()
+		_, errInsert := db.Exec("INSERT INTO admins (username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)",
+			"admin", string(hashedPassword), now, now)
+		if errInsert != nil {
+			log.Fatalf("Failed to insert default admin: %v", errInsert)
+		}
+
+		log.Println("========================================================================")
+		log.Println("[ADMIN INIT] 已成功初始化默认管理员账号：")
+		log.Printf("用户名: admin\n")
+		log.Printf("初始密码: %s\n", password)
+		log.Println("请妥善保管该密码。若需修改密码，请直接修改 admins 表。")
+		log.Println("========================================================================")
 	}
 }
 
@@ -661,6 +734,457 @@ type SubmitRequest struct {
 	} `json:"accounts"`
 }
 
+// checkAdminSession checks if token is valid and not expired, returning admin_id if valid
+func checkAdminSession(token string) (int64, bool) {
+	var adminID int64
+	var expiresAt time.Time
+	err := db.QueryRow("SELECT admin_id, expires_at FROM admin_sessions WHERE token = ?", token).Scan(&adminID, &expiresAt)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.Printf("Error querying session token: %v\n", err)
+		}
+		return 0, false
+	}
+	if time.Now().After(expiresAt) {
+		// Clean up expired session
+		_, errDel := db.Exec("DELETE FROM admin_sessions WHERE token = ?", token)
+		if errDel != nil {
+			log.Printf("Error deleting expired session: %v\n", errDel)
+		}
+		return 0, false
+	}
+	return adminID, true
+}
+
+func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("admin_session")
+		if err != nil || cookie.Value == "" {
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+				"success": false,
+				"message": "请登录后操作",
+			})
+			return
+		}
+		_, ok := checkAdminSession(cookie.Value)
+		if !ok {
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+				"success": false,
+				"message": "登录已过期或无效，请重新登录",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+type adminStaticServer struct {
+	fileServer http.Handler
+}
+
+func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if path == "/admin" || strings.HasPrefix(path, "/admin/") {
+		if path == "/admin" {
+			http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+			return
+		}
+
+		if path == "/admin/login.html" {
+			cookie, err := r.Cookie("admin_session")
+			if err == nil && cookie.Value != "" {
+				if _, ok := checkAdminSession(cookie.Value); ok {
+					http.Redirect(w, r, "/admin/index.html", http.StatusFound)
+					return
+				}
+			}
+			h.fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		cookie, err := r.Cookie("admin_session")
+		if err != nil || cookie.Value == "" {
+			http.Redirect(w, r, "/admin/login.html", http.StatusFound)
+			return
+		}
+		if _, ok := checkAdminSession(cookie.Value); !ok {
+			http.SetCookie(w, &http.Cookie{
+				Name:     "admin_session",
+				Value:    "",
+				Path:     "/",
+				MaxAge:   -1,
+				HttpOnly: true,
+			})
+			http.Redirect(w, r, "/admin/login.html", http.StatusFound)
+			return
+		}
+	}
+	h.fileServer.ServeHTTP(w, r)
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式数据",
+		})
+		return
+	}
+
+	var adminID int64
+	var pwdHash string
+	err := db.QueryRow("SELECT id, password_hash FROM admins WHERE username = ?", req.Username).Scan(&adminID, &pwdHash)
+	if err == sql.ErrNoRows {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "用户名或密码错误",
+		})
+		return
+	} else if err != nil {
+		log.Printf("Error querying admin: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库服务故障，请稍后重试",
+		})
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(pwdHash), []byte(req.Password))
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "用户名或密码错误",
+		})
+		return
+	}
+
+	// Generate token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "生成Session Token失败",
+		})
+		return
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	// Store in database with 24 hours expiry
+	expiresAt := time.Now().Add(24 * time.Hour)
+	now := time.Now()
+	_, errInsert := db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		token, adminID, expiresAt, now)
+	if errInsert != nil {
+		log.Printf("Error saving admin session: %v\n", errInsert)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "保存Session失败",
+		})
+		return
+	}
+
+	// Set cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "admin_session",
+		Value:    token,
+		Path:     "/",
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "登录成功",
+	})
+}
+
+func handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cookie, err := r.Cookie("admin_session")
+	if err == nil && cookie.Value != "" {
+		_, errDel := db.Exec("DELETE FROM admin_sessions WHERE token = ?", cookie.Value)
+		if errDel != nil {
+			log.Printf("Error deleting session on logout: %v\n", errDel)
+		}
+	}
+
+	// Clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "admin_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "退出登录成功",
+	})
+}
+
+func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("admin_session")
+	if err != nil || cookie.Value == "" {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+		})
+		return
+	}
+	adminID, ok := checkAdminSession(cookie.Value)
+	if !ok {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+		})
+		return
+	}
+
+	var username string
+	errQuery := db.QueryRow("SELECT username FROM admins WHERE id = ?", adminID).Scan(&username)
+	if errQuery != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"username": username,
+	})
+}
+
+func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	page := 1
+	pageSize := 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		fmt.Sscanf(p, "%d", &page)
+	}
+	if ps := r.URL.Query().Get("page_size"); ps != "" {
+		fmt.Sscanf(ps, "%d", &pageSize)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+	searchTerm := r.URL.Query().Get("query")
+	statusFilter := r.URL.Query().Get("status")
+
+	whereClauses := []string{"1=1"}
+	var args []interface{}
+
+	if searchTerm != "" {
+		whereClauses = append(whereClauses, "(r.username LIKE ? OR o.card_secret LIKE ? OR r.task_id LIKE ?)")
+		likeArg := "%" + searchTerm + "%"
+		args = append(args, likeArg, likeArg, likeArg)
+	}
+
+	if statusFilter != "" {
+		whereClauses = append(whereClauses, "r.status = ?")
+		args = append(args, statusFilter)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var totalCount int
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*) 
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		WHERE %s`, whereSQL)
+
+	errCount := db.QueryRow(countQuery, args...).Scan(&totalCount)
+	if errCount != nil {
+		log.Printf("Error counting admin orders: %v\n", errCount)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询总数失败",
+		})
+		return
+	}
+
+	dataQuery := fmt.Sprintf(`
+		SELECT r.id, o.card_secret, o.mode, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), 
+		       r.status, r.message, COALESCE(r.discount_url, ''), o.vendor, r.task_id, 
+		       r.created_at, r.updated_at, r.completed_at
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		WHERE %s
+		ORDER BY r.id DESC
+		LIMIT ? OFFSET ?`, whereSQL)
+
+	dataArgs := append(args, pageSize, offset)
+	rows, errRows := db.Query(dataQuery, dataArgs...)
+	if errRows != nil {
+		log.Printf("Error querying admin orders: %v\n", errRows)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询订单列表失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type AdminOrderRow struct {
+		ID          int64      `json:"id"`
+		CardSecret  string     `json:"card_secret"`
+		Mode        string     `json:"mode"`
+		Username    string     `json:"username"`
+		Password    string     `json:"password"`
+		TwoFactor   string     `json:"two_factor"`
+		ExtraEmail  string     `json:"extra_email"`
+		Status      string     `json:"status"`
+		Message     string     `json:"message"`
+		DiscountURL string     `json:"discount_url"`
+		Vendor      string     `json:"vendor"`
+		TaskID      string     `json:"task_id"`
+		CreatedAt   time.Time  `json:"created_at"`
+		UpdatedAt   time.Time  `json:"updated_at"`
+		CompletedAt *time.Time `json:"completed_at,omitempty"`
+	}
+
+	var records []AdminOrderRow
+	for rows.Next() {
+		var row AdminOrderRow
+		var completedAt sql.NullTime
+		errScan := rows.Scan(
+			&row.ID,
+			&row.CardSecret,
+			&row.Mode,
+			&row.Username,
+			&row.Password,
+			&row.TwoFactor,
+			&row.ExtraEmail,
+			&row.Status,
+			&row.Message,
+			&row.DiscountURL,
+			&row.Vendor,
+			&row.TaskID,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+			&completedAt,
+		)
+		if errScan != nil {
+			log.Printf("Error scanning admin order row: %v\n", errScan)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析数据失败",
+			})
+			return
+		}
+		if completedAt.Valid {
+			row.CompletedAt = &completedAt.Time
+		}
+		records = append(records, row)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"total":     totalCount,
+		"page":      page,
+		"page_size": pageSize,
+		"records":   records,
+	})
+}
+
+type UpdateOrderRequest struct {
+	RecordID    int64  `json:"record_id"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+	DiscountURL string `json:"discount_url"`
+}
+
+func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式数据",
+		})
+		return
+	}
+
+	if req.RecordID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "记录ID无效",
+		})
+		return
+	}
+
+	status := strings.ToLower(req.Status)
+	if status != "pending" && status != "success" && status != "failed" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的状态值",
+		})
+		return
+	}
+
+	now := time.Now()
+	var errUpdate error
+	if status == "success" || status == "failed" {
+		_, errUpdate = db.Exec(`
+			UPDATE account_records 
+			SET status = ?, message = ?, discount_url = ?, completed_at = ?, updated_at = ? 
+			WHERE id = ?`,
+			status, req.Message, req.DiscountURL, now, now, req.RecordID)
+	} else {
+		_, errUpdate = db.Exec(`
+			UPDATE account_records 
+			SET status = ?, message = ?, discount_url = ?, completed_at = NULL, updated_at = ? 
+			WHERE id = ?`,
+			status, req.Message, req.DiscountURL, now, req.RecordID)
+	}
+
+	if errUpdate != nil {
+		log.Printf("Error updating account record %d: %v\n", req.RecordID, errUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新数据库记录失败",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "更新成功",
+	})
+}
+
 func main() {
 	// 1. Initialize database connection
 	initDB()
@@ -670,7 +1194,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error accessing embedded frontend files: %v", err)
 	}
-	http.Handle("/", http.FileServer(http.FS(staticFS)))
+	fileServer := http.FileServer(http.FS(staticFS))
+	http.Handle("/", &adminStaticServer{fileServer: fileServer})
 
 	// 3. API - Submit card secret and accounts
 	http.HandleFunc("/api/submit", handleSubmit)
@@ -678,11 +1203,18 @@ func main() {
 	// 4. API - Query status of a card secret
 	http.HandleFunc("/api/query", handleQuery)
 
-	// API - Batch convert third party keys
-	http.HandleFunc("/api/convert_keys", handleConvertKeys)
+	// API - Batch convert third party keys (Admin protected)
+	http.HandleFunc("/api/convert_keys", requireAdmin(handleConvertKeys))
 
-	// API - Reset existing system keys and link to new ones
+	// API - Reset existing system keys and link to new ones (Whitelisted)
 	http.HandleFunc("/api/reset_keys", handleResetKeys)
+
+	// Admin APIs
+	http.HandleFunc("/api/admin/login", handleAdminLogin)
+	http.HandleFunc("/api/admin/logout", handleAdminLogout)
+	http.HandleFunc("/api/admin/check", handleAdminCheck)
+	http.HandleFunc("/api/admin/orders", requireAdmin(handleAdminOrders))
+	http.HandleFunc("/api/admin/orders/update", requireAdmin(handleAdminOrdersUpdate))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)

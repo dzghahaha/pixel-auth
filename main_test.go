@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func initTestDB(t *testing.T) {
@@ -1009,5 +1011,182 @@ func TestOriginalKeyFlow(t *testing.T) {
 	records2, _ := queryResp2["records"].([]interface{})
 	if len(records2) != 0 {
 		t.Errorf("expected 0 records when querying with sysKey2, got %d", len(records2))
+	}
+}
+
+func TestAdminBackendFlow(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// Clear admin tables
+	_, _ = db.Exec("DELETE FROM admin_sessions")
+	_, _ = db.Exec("DELETE FROM admins")
+
+	// Insert test admin
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("testpwd123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+
+	now := time.Now()
+	_, err = db.Exec("INSERT INTO admins (username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)",
+		"testadmin", string(hashedPassword), now, now)
+	if err != nil {
+		t.Fatalf("failed to insert admin: %v", err)
+	}
+
+	// 1. Test Login - Failed attempt
+	loginReqPayload := `{"username": "testadmin", "password": "wrongpassword"}`
+	reqLoginFail := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginReqPayload))
+	rrLoginFail := httptest.NewRecorder()
+	handleAdminLogin(rrLoginFail, reqLoginFail)
+
+	if rrLoginFail.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for failed login, got %d", rrLoginFail.Code)
+	}
+
+	// 2. Test Login - Successful attempt
+	loginReqPayload = `{"username": "testadmin", "password": "testpwd123"}`
+	reqLoginOK := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginReqPayload))
+	rrLoginOK := httptest.NewRecorder()
+	handleAdminLogin(rrLoginOK, reqLoginOK)
+
+	if rrLoginOK.Code != http.StatusOK {
+		t.Fatalf("expected 200 for successful login, got %d. Body: %s", rrLoginOK.Code, rrLoginOK.Body.String())
+	}
+
+	var loginResp map[string]interface{}
+	json.Unmarshal(rrLoginOK.Body.Bytes(), &loginResp)
+	if loginResp["success"] != true {
+		t.Errorf("expected success: true, got %v", loginResp["success"])
+	}
+
+	// Get cookie
+	cookies := rrLoginOK.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "admin_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatalf("session cookie not found in response")
+	}
+
+	// 3. Test Check Session - Authenticated
+	reqCheckOK := httptest.NewRequest(http.MethodGet, "/api/admin/check", nil)
+	reqCheckOK.AddCookie(sessionCookie)
+	rrCheckOK := httptest.NewRecorder()
+	handleAdminCheck(rrCheckOK, reqCheckOK)
+
+	if rrCheckOK.Code != http.StatusOK {
+		t.Errorf("expected 200 for check session, got %d", rrCheckOK.Code)
+	}
+
+	var checkResp map[string]interface{}
+	json.Unmarshal(rrCheckOK.Body.Bytes(), &checkResp)
+	if checkResp["success"] != true || checkResp["username"] != "testadmin" {
+		t.Errorf("expected success: true, username: testadmin, got %v", checkResp)
+	}
+
+	// 4. Test Check Session - Unauthenticated (no cookie)
+	reqCheckFail := httptest.NewRequest(http.MethodGet, "/api/admin/check", nil)
+	rrCheckFail := httptest.NewRecorder()
+	handleAdminCheck(rrCheckFail, reqCheckFail)
+
+	var checkFailResp map[string]interface{}
+	json.Unmarshal(rrCheckFail.Body.Bytes(), &checkFailResp)
+	if checkFailResp["success"] == true {
+		t.Errorf("expected success: false for unauthenticated check session")
+	}
+
+	// 5. Test Orders Listing API
+	// First let's insert a mock order and record
+	res, err := db.Exec("INSERT INTO orders (card_secret, mode, created_at, updated_at) VALUES (?, ?, ?, ?)",
+		"SYS-CARD-777", "single", now, now)
+	if err != nil {
+		t.Fatalf("failed to insert mock order: %v", err)
+	}
+	orderID, _ := res.LastInsertId()
+
+	_, err = db.Exec("INSERT INTO account_records (order_id, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "orderuser@gmail.com", "pass123", "2FA", "pending", "排队中", now, now)
+	if err != nil {
+		t.Fatalf("failed to insert mock record: %v", err)
+	}
+	var recordID int64
+	err = db.QueryRow("SELECT id FROM account_records WHERE order_id = ?", orderID).Scan(&recordID)
+	if err != nil {
+		t.Fatalf("failed to query mock record id: %v", err)
+	}
+
+	// Query orders - unauthorized (no cookie)
+	reqOrdersUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/orders", nil)
+	rrOrdersUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminOrders)(rrOrdersUnauth, reqOrdersUnauth)
+	if rrOrdersUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthorized orders query, got %d", rrOrdersUnauth.Code)
+	}
+
+	// Query orders - authorized
+	reqOrdersAuth := httptest.NewRequest(http.MethodGet, "/api/admin/orders?query=orderuser", nil)
+	reqOrdersAuth.AddCookie(sessionCookie)
+	rrOrdersAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminOrders)(rrOrdersAuth, reqOrdersAuth)
+
+	if rrOrdersAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 for orders query, got %d. Body: %s", rrOrdersAuth.Code, rrOrdersAuth.Body.String())
+	}
+
+	var ordersResp map[string]interface{}
+	json.Unmarshal(rrOrdersAuth.Body.Bytes(), &ordersResp)
+	if ordersResp["success"] != true || int(ordersResp["total"].(float64)) != 1 {
+		t.Errorf("expected 1 order record in result, got %v", ordersResp)
+	}
+
+	// 6. Test Orders Update API
+	updatePayload := fmt.Sprintf(`{"record_id": %d, "status": "success", "message": "已绑定优惠", "discount_url": "https://pixel.sub/offer"}`, recordID)
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/orders/update", strings.NewReader(updatePayload))
+	reqUpdate.AddCookie(sessionCookie)
+	rrUpdate := httptest.NewRecorder()
+	requireAdmin(handleAdminOrdersUpdate)(rrUpdate, reqUpdate)
+
+	if rrUpdate.Code != http.StatusOK {
+		t.Fatalf("expected 200 for orders update, got %d. Body: %s", rrUpdate.Code, rrUpdate.Body.String())
+	}
+
+	// Verify updated fields in DB
+	var dbStatus, dbMessage, dbDiscount string
+	err = db.QueryRow("SELECT status, message, discount_url FROM account_records WHERE id = ?", recordID).
+		Scan(&dbStatus, &dbMessage, &dbDiscount)
+	if err != nil {
+		t.Fatalf("failed to query updated record: %v", err)
+	}
+	if dbStatus != "success" || dbMessage != "已绑定优惠" || dbDiscount != "https://pixel.sub/offer" {
+		t.Errorf("record fields not updated correctly in database: status=%s, message=%s, discount=%s", dbStatus, dbMessage, dbDiscount)
+	}
+
+	// 7. Test Logout
+	reqLogout := httptest.NewRequest(http.MethodPost, "/api/admin/logout", nil)
+	reqLogout.AddCookie(sessionCookie)
+	rrLogout := httptest.NewRecorder()
+	handleAdminLogout(rrLogout, reqLogout)
+
+	if rrLogout.Code != http.StatusOK {
+		t.Errorf("expected 200 for logout, got %d", rrLogout.Code)
+	}
+
+	// Check session is deleted from DB
+	var sessionCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM admin_sessions WHERE token = ?", sessionCookie.Value).Scan(&sessionCount)
+	if err != nil {
+		t.Fatalf("failed to query sessions table: %v", err)
+	}
+	if sessionCount != 0 {
+		t.Errorf("expected session token to be deleted from database, but it still exists")
 	}
 }
