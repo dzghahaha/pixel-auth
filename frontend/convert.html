@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>密钥转换管理 - Pixel 订阅</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .convert-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .textarea-box {
+            font-family: monospace;
+            font-size: 13px;
+            min-height: 150px;
+        }
+        .readonly-box {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+            color: #334155;
+            cursor: default;
+        }
+        .summary-actions {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 管理后台 SVG 图标 -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#007aff" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#007aff" />
+                </svg>
+                <span class="header-title">密钥转换管理</span>
+            </div>
+            <div class="header-right" style="display: flex; gap: 8px;">
+                <a href="/" class="back-link-btn" style="padding: 5px 10px; font-size:12px;">提交订单</a>
+                <a href="/query.html" class="back-link-btn" style="padding: 5px 10px; font-size:12px;">订单查询</a>
+            </div>
+        </header>
+
+        <!-- 主转换表单卡片 -->
+        <div class="card convert-container">
+            <div class="card-header">
+                <svg class="cart-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM12 6C13.66 6 15 7.34 15 9C15 10.66 13.66 12 12 12C10.34 12 9 10.66 9 9C9 7.34 10.34 6 12 6ZM18 18H6V17C6 15 10 13.9 12 13.9C14 13.9 18 15 18 17V18Z" fill="#007aff"/>
+                </svg>
+                <div class="card-title-group">
+                    <span class="card-title">密钥转换配置</span>
+                    <span class="card-subtitle">录入第三方密钥生成系统内部一对多卡密</span>
+                </div>
+            </div>
+
+            <!-- 供应商选择 -->
+            <div class="form-group required">
+                <label for="select-vendor">选择供应商</label>
+                <select id="select-vendor" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; background-color: white;">
+                    <option value="pass.aisale.one">pass.aisale.one</option>
+                </select>
+            </div>
+
+            <!-- 一对多转换乘数 -->
+            <div class="form-group required">
+                <label for="input-multiplier">生成乘数（每个第三方密钥生成的系统密钥个数）</label>
+                <input type="number" id="input-multiplier" min="1" value="1" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none;">
+            </div>
+
+            <!-- 第三方运营商密钥输入区 -->
+            <div class="form-group required">
+                <label for="textarea-vendor-keys">第三方原始密钥列表（每行一个）</label>
+                <textarea id="textarea-vendor-keys" class="textarea-box" placeholder="请输入第三方密钥，每行一个..."></textarea>
+            </div>
+
+            <!-- 转换按钮 -->
+            <button type="button" id="btn-convert" class="submit-btn">
+                <!-- 闪电 SVG -->
+                <svg class="star-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M7 2v11h3v9l7-12h-4l4-8H7z" fill="currentColor"/>
+                </svg>
+                开始生成转换
+            </button>
+        </div>
+
+        <!-- 输出展示卡片 -->
+        <div class="card convert-container">
+            <div class="card-header">
+                <div class="card-title-group">
+                    <span class="card-title">生成的系统内部密钥</span>
+                    <span class="card-subtitle">用户需使用以下生成的系统内部密钥提交订单</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <textarea id="textarea-system-keys" class="textarea-box readonly-box" placeholder="点击转换后，生成的系统卡密将在此处显示，每行一个..." readonly></textarea>
+            </div>
+
+            <div class="summary-actions">
+                <button type="button" id="btn-copy-sys" class="secondary-btn" style="width: 100%; justify-content: center; padding: 12px;">
+                    复制系统密钥列表
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const selectVendor = document.getElementById('select-vendor');
+            const inputMultiplier = document.getElementById('input-multiplier');
+            const txtVendorKeys = document.getElementById('textarea-vendor-keys');
+            const txtSystemKeys = document.getElementById('textarea-system-keys');
+            const btnConvert = document.getElementById('btn-convert');
+            const btnCopy = document.getElementById('btn-copy-sys');
+            const toast = document.getElementById('toast');
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Copy helper
+            btnCopy.addEventListener('click', () => {
+                const text = txtSystemKeys.value.trim();
+                if (!text) {
+                    showToast('没有可复制的密钥');
+                    return;
+                }
+
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('复制成功！');
+                    }).catch(err => {
+                        fallbackCopy(text);
+                    });
+                } else {
+                    fallbackCopy(text);
+                }
+            });
+
+            function fallbackCopy(text) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('复制成功！');
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // Convert handler
+            btnConvert.addEventListener('click', async () => {
+                const vendor = selectVendor.value;
+                const multiplier = parseInt(inputMultiplier.value, 10);
+                const vendorKeysRaw = txtVendorKeys.value.trim();
+
+                if (!vendorKeysRaw) {
+                    showToast('请输入第三方原始密钥');
+                    return;
+                }
+
+                if (isNaN(multiplier) || multiplier <= 0) {
+                    showToast('请输入有效的生成乘数');
+                    return;
+                }
+
+                const vendorKeys = vendorKeysRaw
+                    .split('\n')
+                    .map(k => k.trim())
+                    .filter(k => k.length > 0);
+
+                if (vendorKeys.length === 0) {
+                    showToast('没有有效的原始密钥');
+                    return;
+                }
+
+                btnConvert.disabled = true;
+                const originalText = btnConvert.innerHTML;
+                btnConvert.innerText = '正在生成并入库中...';
+
+                try {
+                    const response = await fetch('/api/convert_keys', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            vendor: vendor,
+                            vendor_keys: vendorKeys,
+                            multiplier: multiplier
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (response.ok && result.success) {
+                        const sysKeys = result.system_keys || [];
+                        txtSystemKeys.value = sysKeys.join('\n');
+                        showToast(`成功生成并录入 ${sysKeys.length} 个系统卡密！`);
+                    } else {
+                        showToast(result.message || '转换密钥失败');
+                    }
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    showToast('网络错误，无法连接至服务器');
+                } finally {
+                    btnConvert.disabled = false;
+                    btnConvert.innerHTML = originalText;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

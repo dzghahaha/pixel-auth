@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>订单查询 - Pixel 订阅</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container query-page-container">
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 菱形图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 12L12 22L22 12L12 2Z" fill="#007aff" stroke="#007aff" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                <span class="header-title">订单查询</span>
+            </div>
+            <div class="header-right">
+                <a href="/" class="back-link-btn">返回提交</a>
+            </div>
+        </header>
+
+        <!-- 二次查询输入卡片 -->
+        <div class="card query-card">
+            <div class="query-combo">
+                <input type="text" id="query-card-secret" placeholder="输入卡密查询状态">
+                <button type="button" id="btn-query" class="query-btn">查询</button>
+            </div>
+        </div>
+
+        <!-- 卡密展示和刷新卡片 -->
+        <div class="card info-summary-card">
+            <div class="info-summary-row">
+                <span class="summary-label">当前查询卡密：</span>
+                <span id="display-card-secret" class="summary-value">-</span>
+            </div>
+            <div class="summary-actions">
+                <button type="button" id="btn-refresh-query" class="secondary-btn">
+                    <!-- 刷新图标 SVG -->
+                    <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="#007aff"/>
+                    </svg>
+                    刷新状态
+                </button>
+            </div>
+        </div>
+
+        <!-- 提示消耗规则提示条 -->
+        <div class="info-row" style="background-color: #fffbeb; border: 1px solid #ffe8a3;">
+            <!-- 提示图标 SVG -->
+            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px; margin-top:0;">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="#b7791f"/>
+            </svg>
+            <span class="info-text" style="color: #b7791f;">温馨提示：任务失败不会消耗卡密，可以多次提交。</span>
+        </div>
+
+        <!-- 详细数据列表卡片 -->
+        <div class="card table-card">
+            <div class="table-container">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>账号</th>
+                            <th>状态</th>
+                            <th>结果</th>
+                            <th>提交时间</th>
+                            <th>完成时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- 数据行由 JS 动态插入 -->
+                        <tr>
+                            <td colspan="6" class="loading-td">正在查询订单数据，请稍候...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 通栏提示条 -->
+        <div class="info-bar">
+            <!-- 放大镜图标 SVG -->
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="8" stroke="#007aff" stroke-width="2"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#007aff" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="info-bar-text">如果显示“排队中”，系统会在后台持续为您处理，请稍后刷新</span>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const displayCard = document.getElementById('display-card-secret');
+            const tableBody = document.getElementById('table-body');
+            const btnRefresh = document.getElementById('btn-refresh-query');
+            const toast = document.getElementById('toast');
+
+            const queryInput = document.getElementById('query-card-secret');
+            const btnQuery = document.getElementById('btn-query');
+
+            // Get card_secret from query parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const cardSecret = urlParams.get('card_secret');
+
+            if (!cardSecret) {
+                displayCard.textContent = '未指定卡密';
+                tableBody.innerHTML = '<tr><td colspan="6" class="error-td">请提供有效的卡密参数进行查询</td></tr>';
+                return;
+            }
+
+            displayCard.textContent = cardSecret;
+            queryInput.value = cardSecret; // Autofill query field
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Copy to clipboard helper
+            window.copyToClipboard = (text) => {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('优惠链接复制成功');
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                        fallbackCopy(text);
+                    });
+                } else {
+                    fallbackCopy(text);
+                }
+            };
+
+            function fallbackCopy(text) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('优惠链接复制成功');
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // Generic copy text helper for cells
+            window.copyText = (event, text) => {
+                if (text === '-' || !text) return;
+                if (event) event.stopPropagation();
+
+                const showSuccess = () => {
+                    let dispText = text;
+                    if (dispText.length > 20) {
+                        dispText = dispText.substring(0, 17) + '...';
+                    }
+                    showToast(`"${dispText}" 复制成功`);
+                };
+
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showSuccess();
+                    }).catch(err => {
+                        fallbackCopyImpl(text);
+                    });
+                } else {
+                    fallbackCopyImpl(text);
+                }
+
+                function fallbackCopyImpl(t) {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = t;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        showSuccess();
+                    } catch (err) {
+                        showToast('复制失败，请手动选择复制');
+                    }
+                    document.body.removeChild(textArea);
+                }
+            };
+
+            // Helper to detect 2FA key submission
+            function is2FAKey(twoFactor) {
+                if (!twoFactor) return false;
+                const clean = twoFactor.replace(/[\s-]/g, '');
+                // One-time codes (6 digits) or backup codes (8 digits) are not 2FA keys
+                if (/^\d{6}$/.test(clean) || /^\d{8}$/.test(clean)) {
+                    return false;
+                }
+                // Standard 2FA keys are typically longer base32 strings
+                return clean.length >= 10 || /[a-zA-Z]/.test(clean);
+            }
+
+            // Query API
+            async function fetchOrderDetails() {
+                try {
+                    const response = await fetch(`/api/query?card_secret=${encodeURIComponent(cardSecret)}`);
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        const records = result.records || [];
+                        if (records.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="6" class="empty-td">未查询到该卡密的任何提交记录</td></tr>';
+                            return;
+                        }
+
+                        tableBody.innerHTML = '';
+                        records.forEach(rec => {
+                            const tr = document.createElement('tr');
+
+                            // Status Tag
+                            let statusClass = 'status-pending';
+                            let statusLabel = '排队中';
+                            if (rec.status === 'success') {
+                                statusClass = 'status-success';
+                                statusLabel = '成功';
+                            } else if (rec.status === 'failed') {
+                                statusClass = 'status-failed';
+                                statusLabel = '失败';
+                            }
+                            const statusTag = `<span class="result-status ${statusClass}">${statusLabel}</span>`;
+
+                            // Dates
+                            const submitTime = rec.created_at ? new Date(rec.created_at).toLocaleString() : '-';
+                            const finishTime = rec.completed_at ? new Date(rec.completed_at).toLocaleString() : '等待中';
+
+                            tr.innerHTML = `
+                                <td class="account-td"><span class="clickable-copy" onclick="copyText(event, '${escapeHtml(rec.username)}')" style="max-width: 120px;">${escapeHtml(rec.username)}</span></td>
+                                <td>${statusTag}</td>
+                                <td class="message-td"><span class="clickable-copy" onclick="copyText(event, '${escapeHtml(rec.message || '-')}')" style="max-width: 180px;">${escapeHtml(rec.message || '-')}</span></td>
+                                <td class="time-td">${submitTime}</td>
+                                <td class="time-td">${finishTime}</td>
+                            `;
+
+                            // Operations cell (resubmit button for failed 2FA key submissions)
+                            const actionTd = document.createElement('td');
+                            if (rec.status === 'failed' && is2FAKey(rec.two_factor)) {
+                                const btn = document.createElement('button');
+                                btn.type = 'button';
+                                btn.className = 'action-btn';
+                                btn.textContent = '重新提交';
+                                btn.onclick = async (e) => {
+                                    e.stopPropagation();
+                                    if (btn.disabled) return;
+                                    btn.disabled = true;
+                                    btn.textContent = '提交中...';
+                                    try {
+                                        const response = await fetch('/api/submit', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                card_secret: cardSecret,
+                                                mode: 'single',
+                                                accounts: [{
+                                                    username: rec.username,
+                                                    password: rec.password,
+                                                    two_factor: rec.two_factor
+                                                }]
+                                            })
+                                        });
+                                        const result = await response.json();
+                                        if (response.ok && result.success) {
+                                            showToast('重新提交成功！已加入处理队列。');
+                                            setTimeout(() => {
+                                                fetchOrderDetails();
+                                            }, 1000);
+                                        } else {
+                                            showToast(result.message || '重新提交失败，请重试');
+                                            btn.disabled = false;
+                                            btn.textContent = '重新提交';
+                                        }
+                                    } catch (err) {
+                                        console.error('Resubmit error:', err);
+                                        showToast('网络错误，无法重新提交');
+                                        btn.disabled = false;
+                                        btn.textContent = '重新提交';
+                                    }
+                                };
+                                actionTd.appendChild(btn);
+                            } else {
+                                actionTd.innerHTML = '<span class="no-action">-</span>';
+                            }
+                            tr.appendChild(actionTd);
+
+                            tableBody.appendChild(tr);
+                        });
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="6" class="error-td">${escapeHtml(result.message || '查询订单详情失败')}</td></tr>`;
+                    }
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    tableBody.innerHTML = '<tr><td colspan="6" class="error-td">网络错误，无法连接至服务器</td></tr>';
+                }
+            }
+
+            // Initial fetch
+            fetchOrderDetails();
+
+            // Refresh handler
+            btnRefresh.addEventListener('click', () => {
+                showToast('正在刷新订单状态...');
+                fetchOrderDetails();
+            });
+
+            // Secondary Query handler
+            btnQuery.addEventListener('click', () => {
+                const newCardSecret = queryInput.value.trim();
+                if (!newCardSecret) {
+                    showToast('请输入卡密查询状态');
+                    return;
+                }
+                window.location.search = `?card_secret=${encodeURIComponent(newCardSecret)}`;
+            });
+
+            // Prevent XSS
+            function escapeHtml(str) {
+                if (!str) return '';
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+        });
+    </script>
+</body>
+</html>
