@@ -1290,6 +1290,121 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	page := 1
+	pageSize := 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		fmt.Sscanf(p, "%d", &page)
+	}
+	if ps := r.URL.Query().Get("page_size"); ps != "" {
+		fmt.Sscanf(ps, "%d", &pageSize)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+	searchTerm := r.URL.Query().Get("query")
+	statusFilter := r.URL.Query().Get("status")
+
+	whereClauses := []string{"1=1"}
+	var args []interface{}
+
+	if searchTerm != "" {
+		whereClauses = append(whereClauses, "(system_key LIKE ? OR vendor_key LIKE ? OR original_key LIKE ?)")
+		likeArg := "%" + searchTerm + "%"
+		args = append(args, likeArg, likeArg, likeArg)
+	}
+
+	if statusFilter != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, statusFilter)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var totalCount int
+	errCount := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM system_keys WHERE %s", whereSQL), args...).Scan(&totalCount)
+	if errCount != nil {
+		log.Printf("Error counting system keys: %v\n", errCount)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询总数失败",
+		})
+		return
+	}
+
+	dataQuery := fmt.Sprintf(`
+		SELECT id, system_key, vendor, vendor_key, status, original_key, created_at, updated_at
+		FROM system_keys
+		WHERE %s
+		ORDER BY id DESC
+		LIMIT ? OFFSET ?`, whereSQL)
+
+	dataArgs := append(args, pageSize, offset)
+	rows, errRows := db.Query(dataQuery, dataArgs...)
+	if errRows != nil {
+		log.Printf("Error querying system keys: %v\n", errRows)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询卡密列表失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type SystemKeyRow struct {
+		ID          int64     `json:"id"`
+		SystemKey   string    `json:"system_key"`
+		Vendor      string    `json:"vendor"`
+		VendorKey   string    `json:"vendor_key"`
+		Status      string    `json:"status"`
+		OriginalKey string    `json:"original_key"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+	}
+
+	var records []SystemKeyRow
+	for rows.Next() {
+		var row SystemKeyRow
+		errScan := rows.Scan(
+			&row.ID,
+			&row.SystemKey,
+			&row.Vendor,
+			&row.VendorKey,
+			&row.Status,
+			&row.OriginalKey,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+		)
+		if errScan != nil {
+			log.Printf("Error scanning system key row: %v\n", errScan)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析数据失败",
+			})
+			return
+		}
+		records = append(records, row)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"total":     totalCount,
+		"page":      page,
+		"page_size": pageSize,
+		"records":   records,
+	})
+}
+
 func main() {
 	// 1. Initialize database connection
 	initDB()
@@ -1321,6 +1436,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders", requireAdmin(handleAdminOrders))
 	http.HandleFunc("/api/admin/orders/update", requireAdmin(handleAdminOrdersUpdate))
 	http.HandleFunc("/api/admin/orders/history", requireAdmin(handleAdminOrderHistory))
+	http.HandleFunc("/api/admin/keys", requireAdmin(handleAdminKeys))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)

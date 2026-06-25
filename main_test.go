@@ -1200,6 +1200,31 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("record fields not updated correctly in database: status=%s, message=%s, discount=%s", dbStatus, dbMessage, dbDiscount)
 	}
 
+	// 6.b Test Admin Keys Listing API
+	// Query keys - unauthorized (no cookie)
+	reqKeysUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/keys", nil)
+	rrKeysUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminKeys)(rrKeysUnauth, reqKeysUnauth)
+	if rrKeysUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthorized keys query, got %d", rrKeysUnauth.Code)
+	}
+
+	// Query keys - authorized
+	reqKeysAuth := httptest.NewRequest(http.MethodGet, "/api/admin/keys", nil)
+	reqKeysAuth.AddCookie(sessionCookie)
+	rrKeysAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminKeys)(rrKeysAuth, reqKeysAuth)
+
+	if rrKeysAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 for keys query, got %d. Body: %s", rrKeysAuth.Code, rrKeysAuth.Body.String())
+	}
+
+	var keysResp map[string]interface{}
+	json.Unmarshal(rrKeysAuth.Body.Bytes(), &keysResp)
+	if keysResp["success"] != true {
+		t.Errorf("expected success: true, got %v", keysResp)
+	}
+
 	// 7. Test Logout
 	reqLogout := httptest.NewRequest(http.MethodPost, "/api/admin/logout", nil)
 	reqLogout.AddCookie(sessionCookie)
