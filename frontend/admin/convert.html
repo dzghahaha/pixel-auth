@@ -99,17 +99,18 @@
                 <label for="select-vendor">选择供应商</label>
                 <select id="select-vendor" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; background-color: white;">
                     <option value="pass.aisale.one">pass.aisale.one</option>
+                    <option value="ai.deard.fun">ai.deard.fun</option>
                 </select>
             </div>
 
             <!-- 一对多转换乘数 -->
             <div class="form-group required">
-                <label for="input-multiplier">生成乘数（每个第三方密钥生成的系统密钥个数）</label>
+                <label id="label-multiplier" for="input-multiplier">生成乘数（每个第三方密钥生成的系统密钥个数）</label>
                 <input type="number" id="input-multiplier" min="1" value="1" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none;">
             </div>
 
             <!-- 第三方运营商密钥输入区 -->
-            <div class="form-group required">
+            <div id="group-vendor-keys" class="form-group required">
                 <label for="textarea-vendor-keys">第三方原始密钥列表（每行一个）</label>
                 <textarea id="textarea-vendor-keys" class="textarea-box" placeholder="请输入第三方密钥，每行一个..."></textarea>
             </div>
@@ -137,9 +138,12 @@
                 <textarea id="textarea-system-keys" class="textarea-box readonly-box" placeholder="点击转换后，生成的系统卡密将在此处显示，每行一个..." readonly></textarea>
             </div>
 
-            <div class="summary-actions">
-                <button type="button" id="btn-copy-sys" class="secondary-btn" style="width: 100%; justify-content: center; padding: 12px;">
-                    复制系统密钥列表
+            <div class="summary-actions" style="display: flex; gap: 12px; width: 100%;">
+                <button type="button" id="btn-copy-sys" class="secondary-btn" style="flex: 1; justify-content: center; padding: 12px;">
+                    复制系统密钥
+                </button>
+                <button type="button" id="btn-export-sys" class="secondary-btn" style="flex: 1; justify-content: center; padding: 12px;">
+                    导出格式
                 </button>
             </div>
         </div>
@@ -198,6 +202,24 @@
                 }
             });
 
+            // Toggle form fields based on selected vendor
+            function updateFormVisibility() {
+                const vendor = selectVendor.value;
+                const groupVendorKeys = document.getElementById('group-vendor-keys');
+                const labelMultiplier = document.getElementById('label-multiplier');
+
+                if (vendor === 'ai.deard.fun') {
+                    groupVendorKeys.style.display = 'none';
+                    labelMultiplier.textContent = '生成数量';
+                } else {
+                    groupVendorKeys.style.display = 'block';
+                    labelMultiplier.textContent = '生成乘数（每个第三方密钥生成的系统密钥个数）';
+                }
+            }
+
+            selectVendor.addEventListener('change', updateFormVisibility);
+            updateFormVisibility();
+
             // Copy helper
             btnCopy.addEventListener('click', () => {
                 const text = txtSystemKeys.value.trim();
@@ -231,30 +253,61 @@
                 document.body.removeChild(textArea);
             }
 
+            // Export helper
+            const btnExport = document.getElementById('btn-export-sys');
+            btnExport.addEventListener('click', () => {
+                const text = txtSystemKeys.value.trim();
+                if (!text) {
+                    showToast('没有可导出的密钥');
+                    return;
+                }
+                const lines = text.split('\n').filter(l => l.trim().length > 0);
+                const count = lines.length;
+                
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const filename = `${year}-${month}-${day}-${count}.txt`;
+
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('导出成功！');
+            });
+
             // Convert handler
             btnConvert.addEventListener('click', async () => {
                 const vendor = selectVendor.value;
                 const multiplier = parseInt(inputMultiplier.value, 10);
-                const vendorKeysRaw = txtVendorKeys.value.trim();
-
-                if (!vendorKeysRaw) {
-                    showToast('请输入第三方原始密钥');
-                    return;
-                }
 
                 if (isNaN(multiplier) || multiplier <= 0) {
-                    showToast('请输入有效的生成乘数');
+                    showToast(vendor === 'ai.deard.fun' ? '请输入有效的生成数量' : '请输入有效的生成乘数');
                     return;
                 }
 
-                const vendorKeys = vendorKeysRaw
-                    .split('\n')
-                    .map(k => k.trim())
-                    .filter(k => k.length > 0);
+                let vendorKeys = [];
+                if (vendor !== 'ai.deard.fun') {
+                    const vendorKeysRaw = txtVendorKeys.value.trim();
+                    if (!vendorKeysRaw) {
+                        showToast('请输入第三方原始密钥');
+                        return;
+                    }
+                    vendorKeys = vendorKeysRaw
+                        .split('\n')
+                        .map(k => k.trim())
+                        .filter(k => k.length > 0);
 
-                if (vendorKeys.length === 0) {
-                    showToast('没有有效的原始密钥');
-                    return;
+                    if (vendorKeys.length === 0) {
+                        showToast('没有有效的原始密钥');
+                        return;
+                    }
                 }
 
                 btnConvert.disabled = true;

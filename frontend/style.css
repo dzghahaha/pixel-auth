@@ -416,6 +416,11 @@ textarea {
     color: #718096;
 }
 
+.status-running {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+}
+
 .status-success {
     background-color: #def7ec;
     color: #03543f;

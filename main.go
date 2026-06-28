@@ -30,7 +30,7 @@ type AccountRecord struct {
 	Password    string     `json:"password"`
 	TwoFactor   string     `json:"two_factor"`
 	ExtraEmail  string     `json:"extra_email,omitempty"`
-	Status      string     `json:"status"` // "pending", "success", "failed"
+	Status      string     `json:"status"` // "pending", "running", "success", "failed"
 	Message     string     `json:"message"`
 	DiscountURL string     `json:"discount_url"`
 	Vendor      string     `json:"vendor"`
@@ -470,7 +470,7 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.VendorKeys) == 0 {
+	if req.Vendor != "ai.deard.fun" && len(req.VendorKeys) == 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "第三方密钥列表不能为空",
@@ -497,12 +497,7 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 	var generatedKeys []string
 	var originalKeys []string
 
-	for _, vKey := range req.VendorKeys {
-		vKey = strings.TrimSpace(vKey)
-		if vKey == "" {
-			continue
-		}
-
+	if req.Vendor == "ai.deard.fun" {
 		for i := 0; i < req.Multiplier; i++ {
 			var sysKey string
 			for {
@@ -525,7 +520,7 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 			}
 
 			_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				sysKey, req.Vendor, vKey, "active", originalKey, now, now)
+				sysKey, req.Vendor, "", "active", originalKey, now, now)
 			if errInsert != nil {
 				log.Printf("Error inserting system key: %v\n", errInsert)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -536,6 +531,48 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 			}
 			generatedKeys = append(generatedKeys, sysKey)
 			originalKeys = append(originalKeys, originalKey)
+		}
+	} else {
+		for _, vKey := range req.VendorKeys {
+			vKey = strings.TrimSpace(vKey)
+			if vKey == "" {
+				continue
+			}
+
+			for i := 0; i < req.Multiplier; i++ {
+				var sysKey string
+				for {
+					sysKey = generateSystemKey()
+					var count int
+					err := tx.QueryRow("SELECT COUNT(*) FROM system_keys WHERE system_key = ?", sysKey).Scan(&count)
+					if err == nil && count == 0 {
+						break
+					}
+				}
+
+				var originalKey string
+				for {
+					originalKey = generateSystemKey()
+					var count int
+					err := tx.QueryRow("SELECT COUNT(*) FROM system_keys WHERE original_key = ?", originalKey).Scan(&count)
+					if err == nil && count == 0 {
+						break
+					}
+				}
+
+				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+					sysKey, req.Vendor, vKey, "active", originalKey, now, now)
+				if errInsert != nil {
+					log.Printf("Error inserting system key: %v\n", errInsert)
+					respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+						"success": false,
+						"message": "存储密钥映射失败",
+					})
+					return
+				}
+				generatedKeys = append(generatedKeys, sysKey)
+				originalKeys = append(originalKeys, originalKey)
+			}
 		}
 	}
 
@@ -1169,7 +1206,7 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := strings.ToLower(req.Status)
-	if status != "pending" && status != "success" && status != "failed" {
+	if status != "pending" && status != "running" && status != "success" && status != "failed" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "无效的状态值",
@@ -1868,7 +1905,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Proactive Feature: Mock background processing daemon with MySQL updates
-	if vendor != "pass.aisale.one" {
+	if vendor != "pass.aisale.one" && vendor != "ai.deard.fun" {
 		go func(cSecret string, oID int64, targets []string) {
 			time.Sleep(5 * time.Second)
 
@@ -2051,7 +2088,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 					localStatus = "failed"
 					completedAt = &now
 				case "running":
-					localStatus = "pending"
+					localStatus = "running"
 				case "pending":
 					localStatus = "pending"
 				default:
@@ -2236,7 +2273,7 @@ func syncPendingAndInvalidate() {
 					localStatus = "failed"
 					completedAt = &now
 				case "running":
-					localStatus = "pending"
+					localStatus = "running"
 				case "pending":
 					localStatus = "pending"
 				default:
