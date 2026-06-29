@@ -1745,6 +1745,30 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if there is an existing order for this card key that is still queuing or executing
+	var activeCount int
+	errCheckActive := db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM account_records r 
+		JOIN orders o ON r.order_id = o.id 
+		WHERE o.card_secret = ? AND r.status IN ('pending', 'running')`,
+		req.CardSecret).Scan(&activeCount)
+	if errCheckActive != nil {
+		log.Printf("Database error checking active orders: %v\n", errCheckActive)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库服务故障，请稍后重试",
+		})
+		return
+	}
+	if activeCount > 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该卡密对应的订单已经在排队或执行中，请勿重复提交",
+		})
+		return
+	}
+
 	type AccountSubmitResult struct {
 		Username   string
 		Password   string

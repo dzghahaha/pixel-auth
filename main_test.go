@@ -270,6 +270,76 @@ func TestInvalidSubmitRequests(t *testing.T) {
 	}
 }
 
+func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Create system key mapping
+	sysKey := "DUP-TEST-KEY"
+	_, errDbInsert := db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		sysKey, "mock", "MOCK-VENDOR-KEY", "active", sysKey, time.Now(), time.Now())
+	if errDbInsert != nil {
+		t.Fatalf("failed to insert mock system key: %v", errDbInsert)
+	}
+
+	// 2. First submit (sets status to pending)
+	subReq := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "user1@example.com",
+		Password:  "password",
+		TwoFactor: "2FASECRET",
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusOK {
+		t.Errorf("expected first submit status 200, got %d", rrSubmit.Code)
+	}
+
+	// 3. Second submit (should fail since first submission is still pending)
+	subReq2 := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq2.Accounts = append(subReq2.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "user2@example.com",
+		Password:  "password",
+		TwoFactor: "2FASECRET",
+	})
+
+	bodyBytes2, _ := json.Marshal(subReq2)
+	reqSubmit2 := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes2))
+	rrSubmit2 := httptest.NewRecorder()
+	handleSubmit(rrSubmit2, reqSubmit2)
+
+	if rrSubmit2.Code != http.StatusBadRequest {
+		t.Errorf("expected second submit status 400, got %d", rrSubmit2.Code)
+	}
+
+	if !strings.Contains(rrSubmit2.Body.String(), "该卡密对应的订单已经在排队或执行中") {
+		t.Errorf("expected error message about active orders, got %s", rrSubmit2.Body.String())
+	}
+}
+
 func TestVendorIntegration(t *testing.T) {
 	initTestDB(t)
 	if db == nil {
