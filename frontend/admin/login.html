@@ -6,51 +6,77 @@
     <title>管理员登录 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css">
     <style>
-        .login-card {
-            max-width: 450px;
-            margin: 12vh auto 0 auto;
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .login-wrapper {
+            width: 100%;
+            max-width: 380px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .login-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        .login-brand-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+        .login-brand-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <!-- 头部区域 -->
-        <header class="app-header">
-            <div class="header-left">
-                <!-- 锁 SVG 图标 -->
-                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span class="header-title">管理后台登录</span>
+    <div class="login-wrapper">
+        <!-- 品牌标识 -->
+        <div class="login-brand">
+            <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 40px; height: 40px;">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            <div style="display: flex; flex-direction: column; gap: 4px; text-align: center;">
+                <span class="login-brand-title">Pixel 订阅系统</span>
+                <span class="login-brand-subtitle">管理控制台</span>
             </div>
-        </header>
+        </div>
 
         <!-- 登录表单卡片 -->
-        <div class="card login-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <span class="card-title">安全验证</span>
-                    <span class="card-subtitle">请输入管理员账号和密码以继续</span>
-                </div>
-            </div>
-
+        <div class="card login-card" style="margin: 0; padding: 28px;">
             <!-- 用户名输入 -->
-            <div class="form-group required">
+            <div class="form-group required" style="margin-bottom: 20px;">
                 <label for="username">账号</label>
-                <input type="text" id="username" placeholder="请输入管理员用户名">
+                <input type="text" id="username" placeholder="请输入管理员用户名" autocomplete="username">
             </div>
 
             <!-- 密码输入 -->
-            <div class="form-group required">
+            <div class="form-group required" style="margin-bottom: 24px;">
                 <label for="password">密码</label>
-                <input type="password" id="password" placeholder="请输入密码">
+                <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
             </div>
 
             <!-- 登录按钮 -->
-            <button type="button" id="btn-login" class="submit-btn" style="width: 100%; margin-top: 8px;">
-                登录后台
+            <button type="button" id="btn-login" class="submit-btn" style="width: 100%;">
+                验证登录
             </button>
+        </div>
+
+        <!-- 返回链接 -->
+        <div style="text-align: center;">
+            <a href="/" style="font-size: 12px; color: var(--text-secondary); text-decoration: none; font-weight: 500; transition: color 0.15s;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-secondary)'">← 返回前台提交页</a>
         </div>
     </div>
 
