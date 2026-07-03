@@ -160,6 +160,7 @@ func createTables() {
 		vendor_key VARCHAR(128) NOT NULL,
 		status VARCHAR(32) NOT NULL DEFAULT 'active',
 		original_key VARCHAR(128) NOT NULL DEFAULT '',
+		note VARCHAR(255) NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		UNIQUE KEY idx_system_key (system_key),
@@ -257,6 +258,21 @@ func createTables() {
 			if _, err := db.Exec("ALTER TABLE system_keys ADD KEY idx_original_key (original_key)"); err != nil {
 				log.Printf("Warning: failed to add idx_original_key: %v\n", err)
 			}
+		}
+	}
+
+	var hasNote bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'system_keys' 
+		  AND COLUMN_NAME = 'note'
+	`).Scan(&hasNote)
+	if errCheck == nil && !hasNote {
+		log.Println("Adding 'note' column to 'system_keys' table...")
+		if _, err := db.Exec("ALTER TABLE system_keys ADD COLUMN note VARCHAR(255) NOT NULL DEFAULT ''"); err != nil {
+			log.Printf("Warning: failed to add note column: %v\n", err)
 		}
 	}
 
@@ -416,6 +432,7 @@ type ConvertKeysRequest struct {
 	Vendor     string   `json:"vendor"`
 	VendorKeys []string `json:"vendor_keys"`
 	Multiplier int      `json:"multiplier"`
+	Note       string   `json:"note"`
 }
 
 type ConvertKeysResponse struct {
@@ -509,18 +526,10 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			var originalKey string
-			for {
-				originalKey = generateSystemKey()
-				var count int
-				err := tx.QueryRow("SELECT COUNT(*) FROM system_keys WHERE original_key = ?", originalKey).Scan(&count)
-				if err == nil && count == 0 {
-					break
-				}
-			}
+			originalKey := sysKey
 
-			_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				sysKey, req.Vendor, "", "active", originalKey, now, now)
+			_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				sysKey, req.Vendor, "", "active", originalKey, now, now, req.Note)
 			if errInsert != nil {
 				log.Printf("Error inserting system key: %v\n", errInsert)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -550,18 +559,10 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				var originalKey string
-				for {
-					originalKey = generateSystemKey()
-					var count int
-					err := tx.QueryRow("SELECT COUNT(*) FROM system_keys WHERE original_key = ?", originalKey).Scan(&count)
-					if err == nil && count == 0 {
-						break
-					}
-				}
+				originalKey := sysKey
 
-				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					sysKey, req.Vendor, vKey, "active", originalKey, now, now)
+				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					sysKey, req.Vendor, vKey, "active", originalKey, now, now, req.Note)
 				if errInsert != nil {
 					log.Printf("Error inserting system key: %v\n", errInsert)
 					respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -661,8 +662,9 @@ func handleResetKeys(w http.ResponseWriter, r *http.Request) {
 		var vendorKey string
 		var status string
 		var originalKey string
-		errQuery := tx.QueryRow("SELECT vendor, vendor_key, status, original_key FROM system_keys WHERE system_key = ?", oldKey).
-			Scan(&vendor, &vendorKey, &status, &originalKey)
+		var note string
+		errQuery := tx.QueryRow("SELECT vendor, vendor_key, status, original_key, note FROM system_keys WHERE system_key = ?", oldKey).
+			Scan(&vendor, &vendorKey, &status, &originalKey, &note)
 
 		if errQuery == sql.ErrNoRows {
 			continue
@@ -727,8 +729,8 @@ func handleResetKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			newKey, vendor, vendorKey, "active", originalKey, now, now)
+		_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			newKey, vendor, vendorKey, "active", originalKey, now, now, note)
 		if errInsert != nil {
 			log.Printf("Error inserting new system key: %v\n", errInsert)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1038,19 +1040,31 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * pageSize
 	searchTerm := r.URL.Query().Get("query")
 	statusFilter := r.URL.Query().Get("status")
+	originalKeyFilter := r.URL.Query().Get("original_key")
+	noteFilter := r.URL.Query().Get("note")
 
 	whereClauses := []string{"1=1"}
 	var args []interface{}
 
 	if searchTerm != "" {
-		whereClauses = append(whereClauses, "(r.username LIKE ? OR o.card_secret LIKE ? OR r.task_id LIKE ?)")
+		whereClauses = append(whereClauses, "(r.username LIKE ? OR o.card_secret LIKE ? OR r.task_id LIKE ? OR sk.note LIKE ? OR sk.original_key LIKE ? OR sk.vendor_key LIKE ?)")
 		likeArg := "%" + searchTerm + "%"
-		args = append(args, likeArg, likeArg, likeArg)
+		args = append(args, likeArg, likeArg, likeArg, likeArg, likeArg, likeArg)
 	}
 
 	if statusFilter != "" {
 		whereClauses = append(whereClauses, "r.status = ?")
 		args = append(args, statusFilter)
+	}
+
+	if originalKeyFilter != "" {
+		whereClauses = append(whereClauses, "(sk.original_key = ? OR sk.vendor_key = ?)")
+		args = append(args, originalKeyFilter, originalKeyFilter)
+	}
+
+	if noteFilter != "" {
+		whereClauses = append(whereClauses, "sk.note LIKE ?")
+		args = append(args, "%"+noteFilter+"%")
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")
@@ -1059,6 +1073,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*) 
 		FROM orders o
+		LEFT JOIN system_keys sk ON o.card_secret = sk.system_key
 		LEFT JOIN (
 			SELECT r1.*
 			FROM account_records r1
@@ -1083,7 +1098,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	dataQuery := fmt.Sprintf(`
 		SELECT o.id, o.card_secret, o.mode, COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
 		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
-		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key
+		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key
 		FROM orders o
 		LEFT JOIN system_keys sk ON o.card_secret = sk.system_key
 		LEFT JOIN (
@@ -1128,6 +1143,8 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt   time.Time  `json:"updated_at"`
 		CompletedAt *time.Time `json:"completed_at,omitempty"`
 		VendorKey   string     `json:"vendor_key"`
+		Note        string     `json:"note"`
+		OriginalKey string     `json:"original_key"`
 	}
 
 	var records []AdminOrderRow
@@ -1151,6 +1168,8 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 			&row.UpdatedAt,
 			&completedAt,
 			&row.VendorKey,
+			&row.Note,
+			&row.OriginalKey,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning admin order row: %v\n", errScan)
@@ -1359,9 +1378,9 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 
 	if searchTerm != "" {
-		whereClauses = append(whereClauses, "(system_key LIKE ? OR vendor_key LIKE ? OR original_key LIKE ?)")
+		whereClauses = append(whereClauses, "(system_key LIKE ? OR vendor_key LIKE ? OR original_key LIKE ? OR note LIKE ?)")
 		likeArg := "%" + searchTerm + "%"
-		args = append(args, likeArg, likeArg, likeArg)
+		args = append(args, likeArg, likeArg, likeArg, likeArg)
 	}
 
 	if statusFilter != "" {
@@ -1383,7 +1402,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT id, system_key, vendor, vendor_key, status, original_key, created_at, updated_at
+		SELECT id, system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note
 		FROM system_keys
 		WHERE %s
 		ORDER BY id DESC
@@ -1410,6 +1429,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		OriginalKey string    `json:"original_key"`
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
+		Note        string    `json:"note"`
 	}
 
 	var records []SystemKeyRow
@@ -1424,6 +1444,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 			&row.OriginalKey,
 			&row.CreatedAt,
 			&row.UpdatedAt,
+			&row.Note,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning system key row: %v\n", errScan)

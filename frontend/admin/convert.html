@@ -115,6 +115,12 @@
                 <textarea id="textarea-vendor-keys" class="textarea-box" placeholder="请输入第三方密钥，每行一个..."></textarea>
             </div>
 
+            <!-- 备注 -->
+            <div class="form-group">
+                <label for="input-note">备注（可选）</label>
+                <input type="text" id="input-note" placeholder="可输入卡密备注，如来源、渠道、批次等..." style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;">
+            </div>
+
             <!-- 转换按钮 -->
             <button type="button" id="btn-convert" class="submit-btn">
                 <!-- 闪电 SVG -->
@@ -282,10 +288,13 @@
                 showToast('导出成功！');
             });
 
+            const inputNote = document.getElementById('input-note');
+
             // Convert handler
             btnConvert.addEventListener('click', async () => {
                 const vendor = selectVendor.value;
                 const multiplier = parseInt(inputMultiplier.value, 10);
+                const note = inputNote.value.trim();
 
                 if (isNaN(multiplier) || multiplier <= 0) {
                     showToast(vendor === 'ai.deard.fun' ? '请输入有效的生成数量' : '请输入有效的生成乘数');
@@ -323,7 +332,8 @@
                         body: JSON.stringify({
                             vendor: vendor,
                             vendor_keys: vendorKeys,
-                            multiplier: multiplier
+                            multiplier: multiplier,
+                            note: note
                         })
                     });
 

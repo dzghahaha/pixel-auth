@@ -493,6 +493,7 @@ func TestConvertKeys(t *testing.T) {
 		Vendor:     "pass.aisale.one",
 		VendorKeys: []string{"real-key-a", "real-key-b"},
 		Multiplier: 2,
+		Note:       "test-note-123",
 	}
 
 	bodyBytes, _ := json.Marshal(convReq)
@@ -525,6 +526,15 @@ func TestConvertKeys(t *testing.T) {
 	}
 	if count != 4 {
 		t.Errorf("expected 4 rows in DB, got %d", count)
+	}
+
+	var noteCount int
+	errNote := db.QueryRow("SELECT COUNT(*) FROM system_keys WHERE vendor = ? AND note = ?", "pass.aisale.one", "test-note-123").Scan(&noteCount)
+	if errNote != nil {
+		t.Fatalf("failed to query count with note: %v", errNote)
+	}
+	if noteCount != 4 {
+		t.Errorf("expected 4 rows in DB with note = 'test-note-123', got %d", noteCount)
 	}
 }
 

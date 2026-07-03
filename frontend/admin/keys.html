@@ -537,7 +537,7 @@
         <!-- 搜索过滤卡片 -->
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
-                <input type="text" id="search-query" class="search-input" placeholder="输入系统卡密 / 运营商卡密 / 原始卡密搜索...">
+                <input type="text" id="search-query" class="search-input" placeholder="输入系统卡密 / 运营商卡密 / 原始卡密 / 备注 搜索...">
                 <select id="filter-status" class="status-select">
                     <option value="">所有状态</option>
                     <option value="active">生效中 (Active)</option>
@@ -559,13 +559,14 @@
                             <th>运营商密钥 (vendor_key)</th>
                             <th>当前状态</th>
                             <th>关联的原始密钥</th>
+                            <th>备注</th>
                             <th>生成时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载密钥数据...</td>
+                            <td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载密钥数据...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -665,7 +666,7 @@
 
             // Fetch and render keys
             async function loadKeys() {
-                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取卡密数据...</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取卡密数据...</td></tr>';
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
 
@@ -686,7 +687,7 @@
                         btnNext.disabled = currentPage >= totalPages;
 
                         if (currentKeys.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
                             return;
                         }
 
@@ -714,6 +715,7 @@
                                 <td style="font-family: monospace; font-size: 12px;">${k.vendor_key}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td style="font-family: monospace; font-size:12px; color: var(--slate-600);">${k.original_key || '-'}</td>
+                                <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${k.note || ''}">${k.note || '-'}</td>
                                 <td class="time-td">${formatDate(k.created_at)}</td>
                                 <td>${actionBtnHtml}</td>
                             `;
