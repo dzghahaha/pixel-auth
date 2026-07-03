@@ -12,8 +12,11 @@
         <header class="app-header">
             <div class="header-left">
                 <!-- 菱形图标 SVG -->
-                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 12L12 22L22 12L12 2Z" fill="#007aff" stroke="#007aff" stroke-width="2" stroke-linejoin="round"/>
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
                 <span class="header-title">订单查询</span>
             </div>
@@ -39,8 +42,9 @@
             <div class="summary-actions">
                 <button type="button" id="btn-refresh-query" class="secondary-btn">
                     <!-- 刷新图标 SVG -->
-                    <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="#007aff"/>
+                    <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
                     </svg>
                     刷新状态
                 </button>
@@ -48,12 +52,14 @@
         </div>
 
         <!-- 提示消耗规则提示条 -->
-        <div class="info-row" style="background-color: #fffbeb; border: 1px solid #ffe8a3;">
+        <div class="info-row" style="background-color: var(--warning-bg); border: 1px solid var(--warning-text);">
             <!-- 提示图标 SVG -->
-            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px; margin-top:0;">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="#b7791f"/>
+            <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; margin-top:0; color: var(--warning-text);">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span class="info-text" style="color: #b7791f;">温馨提示：任务失败不会消耗卡密，可以多次提交。</span>
+            <span class="info-text" style="color: var(--warning-text);">温馨提示：任务失败不会消耗卡密，可以多次提交。</span>
         </div>
 
         <!-- 详细数据列表卡片 -->
@@ -83,9 +89,9 @@
         <!-- 通栏提示条 -->
         <div class="info-bar">
             <!-- 放大镜图标 SVG -->
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="11" cy="11" r="8" stroke="#007aff" stroke-width="2"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#007aff" stroke-width="2" stroke-linecap="round"/>
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <span class="info-bar-text">如果显示“排队中”，系统会在后台持续为您处理，请稍后刷新</span>
         </div>
