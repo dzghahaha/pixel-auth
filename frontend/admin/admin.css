@@ -56,7 +56,7 @@ body {
 }
 
 .app-container {
-    max-width: 1100px;
+    max-width: 1440px;
     width: 100%;
     margin: 32px auto;
     padding: 0 24px;
@@ -352,6 +352,7 @@ textarea:focus {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .result-table td {
@@ -359,6 +360,7 @@ textarea:focus {
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .result-table tr:hover td {
