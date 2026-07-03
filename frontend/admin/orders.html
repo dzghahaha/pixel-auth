@@ -35,159 +35,6 @@
             font-size: 12px;
         }
 
-        /* Modal Dialog Box */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(26, 26, 26, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal.hidden {
-            display: none !important;
-        }
-
-        .modal-content {
-            background-color: var(--bg-card);
-            width: 95%;
-            max-width: 750px;
-            border: 1px solid var(--border-strong);
-            padding: 24px;
-            box-shadow: 4px 4px 0px var(--border-strong);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .modal-header {
-            font-family: Georgia, serif;
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--text-primary);
-            border-bottom: 1px solid var(--border-strong);
-            padding-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header .close-btn {
-            cursor: pointer;
-            font-size: 24px;
-            color: var(--text-secondary);
-            line-height: 1;
-        }
-
-        .modal-header .close-btn:hover {
-            color: var(--text-primary);
-        }
-
-        .modal-body {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            max-height: 70vh;
-            overflow-y: auto;
-            font-size: 13px;
-        }
-
-        /* Details Grid System */
-        .details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            background: var(--bg-highlight);
-            padding: 16px;
-            border: 1px solid var(--border-strong);
-        }
-
-        .detail-cell {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .detail-label {
-            color: var(--text-secondary);
-            font-weight: 700;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .detail-value {
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 13px;
-            word-break: break-all;
-        }
-
-        /* History Listing Inside Modal */
-        .inner-table-container {
-            border: 1px solid var(--border-strong);
-            overflow: hidden;
-            max-height: 250px;
-            overflow-y: auto;
-        }
-
-        .inner-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-
-        .inner-table th {
-            background-color: var(--bg-highlight);
-            color: var(--text-primary);
-            font-weight: 700;
-            padding: 10px 14px;
-            border-bottom: 2px solid var(--border-strong);
-            text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 0.05em;
-        }
-
-        .inner-table td {
-            padding: 10px 14px;
-            border-bottom: 1px solid var(--border-linen);
-            color: var(--text-primary);
-            vertical-align: middle;
-        }
-
-        /* Edit Sub-Record Panel */
-        .edit-record-panel {
-            background: var(--bg-card);
-            border: 2px solid var(--border-strong);
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 8px;
-        }
-
-        .edit-panel-header {
-            font-family: Georgia, serif;
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-primary);
-            border-bottom: 1px solid var(--border-strong);
-            padding-bottom: 6px;
-            margin-bottom: 4px;
-        }
-
-        .edit-panel-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            margin-top: 4px;
-        }
-
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .search-combo {
@@ -219,6 +66,11 @@
     </style>
 </head>
 <body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
     <div class="app-container">
         <!-- 导航菜单 -->
         <nav class="admin-nav">
@@ -468,6 +320,10 @@
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
                         loadOrders();
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
                     } else {
                         window.location.href = '/admin/login.html';
                     }
@@ -778,6 +634,23 @@
                 if (currentPage < totalPages) {
                     currentPage++;
                     loadOrders();
+                }
+            });
+
+            // Intercept navigation links for smooth transition
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
                 }
             });
 

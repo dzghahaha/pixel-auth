@@ -194,6 +194,11 @@
     </style>
 </head>
 <body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
     <div class="app-container">
         <!-- 导航菜单 -->
         <nav class="admin-nav">
@@ -346,6 +351,10 @@
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
                         loadStats();
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
                     } else {
                         window.location.href = '/admin/login.html';
                     }
@@ -471,6 +480,23 @@
                     }
                 });
             }
+
+            // Intercept navigation links for smooth transition
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
+            });
 
             // Logout event
             btnLogout.addEventListener('click', async (e) => {

@@ -111,6 +111,11 @@
     </style>
 </head>
 <body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
     <!-- 左侧品牌宣传栏 (PC端展示) -->
     <div class="login-promo">
         <div style="width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: 24px; z-index: 10;">
@@ -209,6 +214,26 @@
             const passwordInput = document.getElementById('password');
             const btnLogin = document.getElementById('btn-login');
             const toast = document.getElementById('toast');
+
+            // Check session status: if already logged in, redirect to dashboard
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        window.location.href = '/admin/dashboard.html';
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Session check error:', error);
+                }
+                const loader = document.getElementById('page-loader');
+                if (loader) {
+                    loader.classList.add('fade-out');
+                }
+            }
+
+            checkLogin();
 
             function showToast(message, duration = 2000) {
                 toast.textContent = message;
