@@ -1,0 +1,361 @@
+/* Premium Sleek Modern SaaS Admin Theme */
+
+:root {
+    --bg-main: #f8fafc;         /* Slate 50 - clean modern background */
+    --bg-card: #ffffff;         /* Pure white card surface */
+    --bg-highlight: #f1f5f9;    /* Slate 100 - active/hover highlight */
+    --primary: #4f46e5;         /* Premium Indigo */
+    --primary-hover: #4338ca;   /* Darker Indigo */
+    --primary-light: #eeebff;   /* Soft violet tint */
+    --text-primary: #0f172a;     /* Slate 900 - clean navy black */
+    --text-secondary: #475569;   /* Slate 600 - muted cool grey */
+    --border-color: #e2e8f0;     /* Slate 200 - subtle modern line */
+    --border-focus: #818cf8;     /* Light indigo focus border */
+    
+    --success: #10b981;          /* Emerald green */
+    --success-bg: #d1fae5;
+    --success-text: #065f46;
+    --danger: #ef4444;           /* Coral red */
+    --danger-bg: #fee2e2;
+    --danger-text: #991b1b;
+    --warning: #f59e0b;          /* Amber orange */
+    --warning-bg: #fef3c7;
+    --warning-text: #92400e;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
+}
+
+.app-container {
+    max-width: 1100px;
+    width: 100%;
+    margin: 32px auto;
+    padding: 0 24px;
+}
+
+/* App Header with a clean borderless look */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.diamond-icon {
+    width: 22px;
+    height: 22px;
+    display: inline-block;
+    color: var(--primary);
+}
+
+/* Sleek Floating Tab Panel style Navbar */
+.admin-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-card);
+    padding: 6px;
+    margin-bottom: 32px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+}
+
+.nav-item {
+    text-decoration: none;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-main);
+}
+
+.nav-item.active {
+    background-color: var(--primary-light);
+    color: var(--primary);
+}
+
+.nav-item.logout {
+    margin-left: auto;
+    color: var(--danger);
+    background-color: var(--danger-bg);
+}
+
+.nav-item.logout:hover {
+    background-color: #fca5a5;
+    color: #7f1d1d;
+}
+
+/* Card layout - smooth rounded corners and soft diffuse shadow */
+.card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--bg-main);
+    padding-bottom: 12px;
+}
+
+.card-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.card-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Forms with rounded borders and glowing active states */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-group.required label::after {
+    content: " *";
+    color: var(--danger);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select,
+textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* Modern Pill Buttons */
+.submit-btn,
+.btn-search,
+.btn-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary);
+    color: #ffffff;
+    border: 1px solid var(--primary);
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.submit-btn:hover,
+.btn-search:hover,
+.btn-submit:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+.submit-btn:disabled,
+.btn-search:disabled,
+.btn-submit:disabled {
+    background-color: var(--bg-highlight);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Tables with clean horizontal borders */
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    text-align: left;
+}
+
+.result-table th {
+    font-weight: 600;
+    background-color: var(--bg-main);
+    border-bottom: 1px solid var(--border-color);
+    padding: 14px 18px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.result-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.result-table tr:hover td {
+    background-color: var(--bg-main);
+}
+
+/* Modern Pill Status Badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9999px;
+    border: none;
+}
+
+.status-badge.success {
+    background-color: var(--success-bg);
+    color: var(--success-text);
+}
+
+.status-badge.failed {
+    background-color: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.status-badge.pending,
+.status-badge.running {
+    background-color: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+/* Pagination panel */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+}
+
+.btn-page {
+    background-color: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-page:hover:not(:disabled) {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    border-color: #cbd5e1;
+}
+
+.btn-page:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--bg-card);
+}
+
+/* Toasts */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background-color: #0f172a;
+    color: #ffffff;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    transition: opacity 0.3s;
+}
+
+.toast.hidden {
+    opacity: 0;
+    pointer-events: none;
+}

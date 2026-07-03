@@ -4,55 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>密钥转换管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="./admin.css">
     <style>
-        .convert-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
         .textarea-box {
-            font-family: monospace;
+            font-family: "Courier New", Courier, monospace;
             font-size: 13px;
             min-height: 150px;
         }
         .readonly-box {
-            background-color: #f8fafc;
-            border-color: #cbd5e1;
-            color: #334155;
+            background-color: var(--bg-highlight);
+            color: var(--text-secondary);
             cursor: default;
         }
         .summary-actions {
             display: flex;
             justify-content: flex-end;
             width: 100%;
-        }
-        .admin-nav {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-start;
-            flex-wrap: wrap;
-            width: 100%;
-            margin-bottom: 8px;
-        }
-        .nav-item {
-            text-decoration: none;
-            padding: 6px 12px;
-            font-size: 13px;
-            font-weight: 600;
-            border-radius: 6px;
-            color: #4a5568;
-            background-color: #e2e8f0;
-            transition: all 0.2s;
-        }
-        .nav-item.active {
-            color: #ffffff;
-            background-color: #007aff;
-        }
-        .nav-item.logout {
-            color: #ffffff;
-            background-color: #ff3b30;
-            margin-left: auto;
         }
     </style>
 </head>
@@ -97,7 +64,7 @@
             <!-- 供应商选择 -->
             <div class="form-group required">
                 <label for="select-vendor">选择供应商</label>
-                <select id="select-vendor" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; background-color: white;">
+                <select id="select-vendor">
                     <option value="pass.aisale.one">pass.aisale.one</option>
                     <option value="ai.deard.fun">ai.deard.fun</option>
                 </select>
@@ -106,7 +73,7 @@
             <!-- 一对多转换乘数 -->
             <div class="form-group required">
                 <label id="label-multiplier" for="input-multiplier">生成乘数（每个第三方密钥生成的系统密钥个数）</label>
-                <input type="number" id="input-multiplier" min="1" value="1" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none;">
+                <input type="number" id="input-multiplier" min="1" value="1">
             </div>
 
             <!-- 第三方运营商密钥输入区 -->
@@ -118,7 +85,7 @@
             <!-- 备注 -->
             <div class="form-group">
                 <label for="input-note">备注（可选）</label>
-                <input type="text" id="input-note" placeholder="可输入卡密备注，如来源、渠道、批次等..." style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;">
+                <input type="text" id="input-note" placeholder="可输入卡密备注，如来源、渠道、批次等...">
             </div>
 
             <!-- 转换按钮 -->
@@ -145,10 +112,10 @@
             </div>
 
             <div class="summary-actions" style="display: flex; gap: 12px; width: 100%;">
-                <button type="button" id="btn-copy-sys" class="secondary-btn" style="flex: 1; justify-content: center; padding: 12px;">
+                <button type="button" id="btn-copy-sys" class="btn-submit" style="flex: 1;">
                     复制系统密钥
                 </button>
-                <button type="button" id="btn-export-sys" class="secondary-btn" style="flex: 1; justify-content: center; padding: 12px;">
+                <button type="button" id="btn-export-sys" class="btn-submit" style="flex: 1;">
                     导出格式
                 </button>
             </div>

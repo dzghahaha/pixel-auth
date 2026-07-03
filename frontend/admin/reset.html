@@ -4,55 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>密钥重置管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="./admin.css">
     <style>
-        .reset-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
         .textarea-box {
-            font-family: monospace;
+            font-family: "Courier New", Courier, monospace;
             font-size: 13px;
             min-height: 150px;
         }
         .readonly-box {
-            background-color: #f8fafc;
-            border-color: #cbd5e1;
-            color: #334155;
+            background-color: var(--bg-highlight);
+            color: var(--text-secondary);
             cursor: default;
         }
         .summary-actions {
             display: flex;
             justify-content: flex-end;
             width: 100%;
-        }
-        .admin-nav {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-start;
-            flex-wrap: wrap;
-            width: 100%;
-            margin-bottom: 8px;
-        }
-        .nav-item {
-            text-decoration: none;
-            padding: 6px 12px;
-            font-size: 13px;
-            font-weight: 600;
-            border-radius: 6px;
-            color: #4a5568;
-            background-color: #e2e8f0;
-            transition: all 0.2s;
-        }
-        .nav-item.active {
-            color: #ffffff;
-            background-color: #007aff;
-        }
-        .nav-item.logout {
-            color: #ffffff;
-            background-color: #ff3b30;
-            margin-left: auto;
         }
     </style>
 </head>
@@ -98,7 +65,7 @@
             </div>
 
             <!-- 重置按钮 -->
-            <button type="button" id="btn-reset" class="submit-btn" style="background-color: #ff3b30;">
+            <button type="button" id="btn-reset" class="submit-btn" style="background-color: var(--danger); border-color: var(--danger);">
                 <!-- 重置旋转箭头 SVG -->
                 <svg class="star-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; margin-right: 4px; display: inline-block; vertical-align: middle;">
                     <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
@@ -121,7 +88,7 @@
             </div>
 
             <div class="summary-actions">
-                <button type="button" id="btn-copy-new" class="secondary-btn" style="width: 100%; justify-content: center; padding: 12px;">
+                <button type="button" id="btn-copy-new" class="btn-submit" style="width: 100%;">
                     复制新系统卡密列表
                 </button>
             </div>
