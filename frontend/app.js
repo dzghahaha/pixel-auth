@@ -207,6 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Redirect to dedicated query page after 1.5 seconds
                 setTimeout(() => {
+                    const loader = document.getElementById('page-loader');
+                    if (loader) {
+                        loader.classList.remove('fade-out');
+                    }
                     window.location.href = `/query.html?card_secret=${encodeURIComponent(cardSecret)}`;
                 }, 1500);
             } else {
@@ -228,8 +232,37 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('请输入卡密查询状态');
             return;
         }
-        window.location.href = `/query.html?card_secret=${encodeURIComponent(cardSecret)}`;
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.remove('fade-out');
+        }
+        setTimeout(() => {
+            window.location.href = `/query.html?card_secret=${encodeURIComponent(cardSecret)}`;
+        }, 180);
     });
+
+    // Intercept navigation links for smooth transition
+    document.querySelectorAll('a.back-link-btn').forEach(link => {
+        if (link.getAttribute('href') !== '#') {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetUrl = link.getAttribute('href');
+                const loader = document.getElementById('page-loader');
+                if (loader) {
+                    loader.classList.remove('fade-out');
+                }
+                setTimeout(() => {
+                    window.location.href = targetUrl;
+                }, 180);
+            });
+        }
+    });
+
+    // Fade out loader on page load
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+        loader.classList.add('fade-out');
+    }
 
     // Helper to prevent XSS
     function escapeHtml(str) {

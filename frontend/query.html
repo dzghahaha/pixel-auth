@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
     <div class="app-container query-page-container">
         <!-- 头部区域 -->
         <header class="app-header">
@@ -293,7 +298,12 @@
             }
 
             // Initial fetch
-            fetchOrderDetails();
+            fetchOrderDetails().finally(() => {
+                const loader = document.getElementById('page-loader');
+                if (loader) {
+                    loader.classList.add('fade-out');
+                }
+            });
 
             // Secondary Query handler
             btnQuery.addEventListener('click', () => {
@@ -302,7 +312,30 @@
                     showToast('请输入卡密查询状态');
                     return;
                 }
-                window.location.search = `?card_secret=${encodeURIComponent(newCardSecret)}`;
+                const loader = document.getElementById('page-loader');
+                if (loader) {
+                    loader.classList.remove('fade-out');
+                }
+                setTimeout(() => {
+                    window.location.search = `?card_secret=${encodeURIComponent(newCardSecret)}`;
+                }, 180);
+            });
+
+            // Intercept navigation links for smooth transition
+            document.querySelectorAll('a.back-link-btn').forEach(link => {
+                if (link.getAttribute('href') !== '#') {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
             });
 
             // Prevent XSS
