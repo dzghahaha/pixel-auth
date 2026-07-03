@@ -833,12 +833,14 @@ func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if path == "/admin/login.html" {
-			cookie, err := r.Cookie("admin_session")
-			if err == nil && cookie.Value != "" {
-				if _, ok := checkAdminSession(cookie.Value); ok {
-					http.Redirect(w, r, "/admin/dashboard.html", http.StatusFound)
-					return
+		if path == "/admin/login.html" || path == "/admin/admin.css" {
+			if path == "/admin/login.html" {
+				cookie, err := r.Cookie("admin_session")
+				if err == nil && cookie.Value != "" {
+					if _, ok := checkAdminSession(cookie.Value); ok {
+						http.Redirect(w, r, "/admin/dashboard.html", http.StatusFound)
+						return
+					}
 				}
 			}
 			h.fileServer.ServeHTTP(w, r)
