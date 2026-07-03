@@ -634,3 +634,7 @@ textarea:focus {
     opacity: 0;
     pointer-events: none;
 }
+
+.hidden {
+    display: none !important;
+}
