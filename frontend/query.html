@@ -101,6 +101,10 @@
 
             if (!cardSecret) {
                 tableBody.innerHTML = '<tr><td colspan="6" class="error-td">请提供有效的卡密参数进行查询</td></tr>';
+                const loader = document.getElementById('page-loader');
+                if (loader) {
+                    loader.classList.add('fade-out');
+                }
                 return;
             }
             queryInput.value = cardSecret; // Autofill query field
