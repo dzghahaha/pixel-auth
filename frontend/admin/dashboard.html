@@ -209,8 +209,9 @@
         <header class="app-header">
             <div class="header-left">
                 <!-- 仪表盘图标 SVG -->
-                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM19 19H5V5H19V19ZM11.99 13.5C12.82 13.5 13.5 12.83 13.5 12C13.5 11.17 12.82 10.5 11.99 10.5C11.16 10.5 10.49 11.17 10.49 12C10.49 12.83 11.16 13.5 11.99 13.5ZM12 8C9.5 8 7.4 9.6 7 12C7.4 14.4 9.5 16 12 16C14.5 16 16.6 14.4 17 12C16.6 9.6 14.5 8 12 8Z" fill="#3b82f6" />
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M9 3v18M3 9h18" />
                 </svg>
                 <span class="header-title">数据监控中心</span>
             </div>
@@ -224,8 +225,9 @@
             <!-- 总订单数 -->
             <div class="stat-card" style="border-top: 3px solid var(--text-secondary);">
                 <div class="card-icon-wrapper" style="background-color: var(--bg-highlight);">
-                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M19 8H5c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-9c0-1.1-.9-2-2-2zm-6 8h-2v-2h2v2zm0-4h-2V7h2v5z" fill="var(--text-secondary)" />
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                        <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
                     </svg>
                 </div>
                 <span class="stat-title">今日总订单</span>
@@ -236,8 +238,9 @@
             <!-- 成功订单数 -->
             <div class="stat-card" style="border-top: 3px solid var(--success);">
                 <div class="card-icon-wrapper" style="background-color: var(--success-bg);">
-                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="var(--success)" />
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m9 12 2 2 4-4" />
                     </svg>
                 </div>
                 <span class="stat-title">成功订单数</span>
@@ -248,8 +251,9 @@
             <!-- 失败订单数 -->
             <div class="stat-card" style="border-top: 3px solid var(--danger);">
                 <div class="card-icon-wrapper" style="background-color: var(--danger-bg);">
-                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z" fill="var(--danger)" />
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m15 9-6 6M9 9l6 6" />
                     </svg>
                 </div>
                 <span class="stat-title">失败订单数</span>
@@ -260,8 +264,9 @@
             <!-- 其他状态订单 -->
             <div class="stat-card" style="border-top: 3px solid var(--warning);">
                 <div class="card-icon-wrapper" style="background-color: var(--warning-bg);">
-                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="var(--warning)" />
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v6l4 2" />
                     </svg>
                 </div>
                 <span class="stat-title">其他状态订单</span>
@@ -272,8 +277,10 @@
             <!-- 成功率 -->
             <div class="stat-card" style="border-top: 3px solid var(--border-strong);">
                 <div class="card-icon-wrapper" style="background-color: var(--bg-highlight);">
-                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M7.5 4C5.57 4 4 5.57 4 7.5S5.57 11 7.5 11 11 9.43 11 7.5 9.43 4 7.5 4zm0 5C6.67 9 6 8.33 6 7.5S6.67 6 7.5 6 9 6.67 9 7.5 8.33 9 7.5 9zm9 4c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zm0 5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3.42-13.58L5.42 18.58l1.41 1.41L21.34 5.83l-1.42-1.41z" fill="var(--text-primary)" />
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
                     </svg>
                 </div>
                 <span class="stat-title">今日成功率</span>
