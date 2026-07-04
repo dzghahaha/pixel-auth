@@ -10,39 +10,41 @@
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 14px;
-            margin-bottom: 20px;
+            gap: 20px;
+            margin-bottom: 24px;
         }
 
         .stat-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-strong);
-            padding: 20px;
-            box-shadow: 2px 2px 0px var(--border-strong);
+            border: 1px solid var(--slate-200);
+            border-radius: 12px;
+            padding: 24px 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
             display: flex;
             flex-direction: column;
             gap: 6px;
             position: relative;
             overflow: hidden;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 4px 4px 0px var(--border-strong);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            border-color: var(--slate-300);
         }
 
         .stat-card .card-icon-wrapper {
             position: absolute;
-            right: 14px;
-            top: 16px;
-            width: 38px;
-            height: 38px;
-            border: 1px solid var(--border-strong);
-            background-color: var(--bg-highlight);
+            right: 16px;
+            top: 20px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: all 0.3s;
         }
 
         .stat-card .card-icon {
@@ -52,43 +54,45 @@
         }
 
         .stat-title {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--slate-500);
+            letter-spacing: 0.02em;
         }
 
         .stat-value {
-            font-family: Georgia, serif;
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 32px;
+            font-weight: 800;
+            font-family: inherit;
             color: var(--text-primary);
             margin-top: 4px;
+            letter-spacing: -0.03em;
         }
 
         .stat-footer {
             font-size: 11px;
-            color: var(--text-secondary);
+            color: var(--slate-400);
             font-weight: 500;
+            margin-top: 2px;
         }
 
         /* Chart Card */
         .chart-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-strong);
+            border: 1px solid var(--slate-200);
+            border-radius: 12px;
             padding: 24px;
-            box-shadow: 3px 3px 0px var(--border-strong);
-            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+            margin-bottom: 24px;
         }
 
         .chart-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-strong);
-            padding-bottom: 14px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--slate-100);
+            padding-bottom: 16px;
             flex-wrap: wrap;
             gap: 12px;
         }
@@ -104,15 +108,17 @@
         .summary-item {
             display: flex;
             align-items: center;
-            gap: 6px;
-            background-color: var(--bg-highlight);
-            padding: 5px 12px;
-            border: 1px solid var(--border-strong);
+            gap: 8px;
+            background-color: var(--slate-50);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--slate-200);
+            font-size: 12px;
             font-weight: 600;
         }
 
         .summary-item .label {
-            color: var(--text-secondary);
+            color: var(--slate-500);
         }
 
         .summary-item .value {
@@ -121,18 +127,18 @@
 
         .summary-item.success-item {
             background-color: var(--success-bg);
-            border-color: var(--success);
+            border-color: rgba(16, 185, 129, 0.2);
         }
         .summary-item.success-item .label, .summary-item.success-item .value {
-            color: var(--success);
+            color: var(--success-text);
         }
 
         .summary-item.danger-item {
             background-color: var(--danger-bg);
-            border-color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.2);
         }
         .summary-item.danger-item .label, .summary-item.danger-item .value {
-            color: var(--danger);
+            color: var(--danger-text);
         }
 
         .chart-title-group {
@@ -142,15 +148,15 @@
         }
 
         .chart-title {
-            font-family: Georgia, serif;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 700;
             color: var(--text-primary);
+            letter-spacing: -0.01em;
         }
 
         .chart-subtitle {
-            font-size: 11px;
-            color: var(--text-secondary);
+            font-size: 12px;
+            color: var(--slate-400);
             font-weight: 500;
         }
 
@@ -170,13 +176,13 @@
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
+                gap: 12px;
             }
             .stat-card {
-                padding: 16px;
+                padding: 18px 16px;
             }
             .stat-value {
-                font-size: 24px;
+                font-size: 26px;
             }
             .chart-card {
                 padding: 16px;
@@ -430,6 +436,11 @@
             function drawChart(trend) {
                 const ctx = document.getElementById('trendChart').getContext('2d');
                 
+                // Create a beautiful linear gradient fill
+                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+                gradient.addColorStop(0, 'rgba(79, 70, 229, 0.22)');
+                gradient.addColorStop(1, 'rgba(79, 70, 229, 0.00)');
+
                 // Format YYYY-MM-DD to MM-DD for cleaner chart labels
                 const labels = trend.map(item => {
                     const parts = item.date.split('-');
@@ -449,16 +460,18 @@
                             label: '订单数量',
                             data: counts,
                             borderColor: '#4f46e5',
-                            backgroundColor: 'rgba(79, 70, 229, 0.05)',
-                            borderWidth: 2.5,
-                            tension: 0.35,
+                            backgroundColor: gradient,
+                            borderWidth: 3,
+                            tension: 0.38,
                             fill: true,
-                            pointBackgroundColor: '#4f46e5',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 1.5,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderColor: '#4f46e5',
+                            pointBorderWidth: 2,
                             pointRadius: 4,
                             pointHoverRadius: 6,
-                            pointHoverBorderWidth: 2
+                            pointHoverBackgroundColor: '#4f46e5',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 2.5
                         }]
                     },
                     options: {

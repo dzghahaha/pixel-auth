@@ -1039,13 +1039,6 @@ func handleAdminPayRefund(w http.ResponseWriter, r *http.Request) {
 		}
 
 		newNote := meta.Note
-		if !strings.Contains(newNote, "退款重置冲回") {
-			if newNote != "" {
-				newNote += " (退款重置冲回)"
-			} else {
-				newNote = "退款重置冲回"
-			}
-		}
 
 		// Insert back to card_stock as available
 		_, errInsertStock := tx.Exec(`
