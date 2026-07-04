@@ -109,7 +109,7 @@
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
                 <input type="text" id="search-query" class="search-input" placeholder="全局搜索 (系统卡密/账号/任务ID)...">
-                <input type="text" id="search-original-key" class="search-input" placeholder="按源Key筛选..." style="max-width: 180px;">
+                <input type="text" id="search-original-key" class="search-input admin-only" placeholder="按源Key筛选..." style="max-width: 180px;">
                 <input type="text" id="search-note" class="search-input" placeholder="按备注模糊查询..." style="max-width: 180px;">
                 <select id="filter-status" class="status-select">
                     <option value="">所有状态</option>
@@ -135,7 +135,7 @@
                             <th>提交方式</th>
                             <th>最新账号</th>
                             <th>最新状态</th>
-                            <th>供应商 / Task ID</th>
+                            <th class="admin-only">供应商 / Task ID</th>
                             <th>首次提交时间</th>
                             <th>操作</th>
                         </tr>
@@ -173,7 +173,7 @@
                         <span class="detail-label">系统卡密</span>
                         <span id="detail-card" class="detail-value">-</span>
                     </div>
-                    <div class="detail-cell">
+                    <div class="detail-cell admin-only">
                         <span class="detail-label">供应商原始卡密</span>
                         <span id="detail-vendor-key" class="detail-value" style="font-family: monospace;">-</span>
                     </div>
@@ -181,7 +181,7 @@
                         <span class="detail-label">提交方式</span>
                         <span id="detail-mode" class="detail-value">-</span>
                     </div>
-                    <div class="detail-cell">
+                    <div class="detail-cell admin-only">
                         <span class="detail-label">卡密供应商</span>
                         <span id="detail-vendor" class="detail-value">-</span>
                     </div>
@@ -309,6 +309,7 @@
             let currentOrders = [];
             let activeOrderID = null;
             let activeHistoryRecords = [];
+            let currentUserRole = ''; // Store user role globally
 
             // Toast helper
             function showToast(message, duration = 2000) {
@@ -319,6 +320,14 @@
                 }, duration);
             }
 
+            function applyRoleUI() {
+                if (currentUserRole !== 'admin') {
+                    document.querySelectorAll('.admin-only').forEach(el => {
+                        el.style.display = 'none';
+                    });
+                }
+            }
+
             // Check admin login
             async function checkLogin() {
                 try {
@@ -327,6 +336,7 @@
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
                         
+                        currentUserRole = data.role; // Save role globally
                         const role = data.role;
                         const permissions = data.permissions || [];
                         
@@ -354,6 +364,7 @@
                             }
                         });
 
+                        applyRoleUI();
                         loadOrders();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
@@ -432,12 +443,15 @@
                                 <td style="font-size:13px; color: var(--slate-600);">${o.mode === 'single' ? '单账号' : '批量'}</td>
                                 <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                <td style="font-size:13px;">${vendorTask}</td>
+                                <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
                                 <td class="time-td">${formatDate(o.created_at)}</td>
                                 <td><button type="button" class="btn-detail" data-id="${o.id}">详情</button></td>
                             `;
                             tableBody.appendChild(tr);
                         });
+
+                        // Hide admin columns dynamically
+                        applyRoleUI();
 
                         // Attach event listeners to detail buttons
                         document.querySelectorAll('.btn-detail').forEach(btn => {

@@ -210,6 +210,12 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		if completedAt.Valid {
 			row.CompletedAt = &completedAt.Time
 		}
+		if role != "admin" {
+			row.Vendor = ""
+			row.TaskID = ""
+			row.VendorKey = ""
+			row.OriginalKey = ""
+		}
 		records = append(records, row)
 	}
 
@@ -300,6 +306,20 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	adminID, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "请登录后操作",
+		})
+		return
+	}
+	var role string
+	errRole := db.QueryRow("SELECT role FROM admins WHERE id = ?", adminID).Scan(&role)
+	if errRole != nil {
+		role = "user"
+	}
+
 	rows, err := db.Query(`
 		SELECT id, username, password, two_factor, COALESCE(extra_email, ''), 
 		       status, message, COALESCE(discount_url, ''), task_id, 
@@ -360,6 +380,9 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		if completedAt.Valid {
 			rec.CompletedAt = &completedAt.Time
+		}
+		if role != "admin" {
+			rec.TaskID = ""
 		}
 		records = append(records, rec)
 	}
@@ -498,6 +521,11 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 				"message": "解析数据失败",
 			})
 			return
+		}
+		if role != "admin" {
+			row.Vendor = ""
+			row.VendorKey = ""
+			row.OriginalKey = ""
 		}
 		records = append(records, row)
 	}
