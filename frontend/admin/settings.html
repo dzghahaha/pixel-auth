@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>系统配置 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css">
+    <style>
+        .settings-container {
+            padding: 24px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item active">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 设置图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span class="header-title">系统参数设置</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 系统参数配置卡片 -->
+        <div class="card settings-container">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+                <div class="card-title-group">
+                    <span class="card-title">全局参数配置</span>
+                    <span class="card-subtitle">配置系统全局参数，修改后客户端及后台即时生效</span>
+                </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label for="setting-two-factor-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">客户端二步验证教程链接 (2FA Tutorial Link)</label>
+                    <input type="text" id="setting-two-factor-url" placeholder="请输入教程 URL 链接" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label for="setting-key-price" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">卡密销售单价 (元)</label>
+                    <input type="number" step="0.01" min="0.01" id="setting-key-price" placeholder="请输入卡密单价，例如：9.99" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <button type="button" id="btn-save-settings" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存配置</button>
+            </div>
+        </div>
+
+        <!-- 易支付对接配置卡片 -->
+        <div class="card settings-container" style="margin-top: 20px;">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+                <div class="card-title-group">
+                    <span class="card-title">易支付通道对接设置</span>
+                    <span class="card-subtitle">配置易支付（Epay）接口参数以进行微信和支付宝通道支付对接</span>
+                </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label for="setting-epay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">易支付请求地址 (Epay URL)</label>
+                    <input type="text" id="setting-epay-url" placeholder="例如：https://pay.vansdesign.cn/" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label for="setting-epay-pid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户号 (PID)</label>
+                    <input type="text" id="setting-epay-pid" placeholder="易支付商户号，例如：1668" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label for="setting-epay-key" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户密钥 (KEY)</label>
+                    <input type="password" id="setting-epay-key" placeholder="易支付商户 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label for="setting-epay-wx-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付渠道 ID (Wechat Channel ID)</label>
+                    <input type="text" id="setting-epay-wx-channel" placeholder="微信支付渠道代码，例如：201906181353 (留空表示隐藏微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label for="setting-epay-alipay-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝支付渠道 ID (Alipay Channel ID)</label>
+                    <input type="text" id="setting-epay-alipay-channel" placeholder="支付宝支付渠道代码，例如：201906181354 (留空表示隐藏支付宝支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+                <button type="button" id="btn-save-epay" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存支付配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toast = document.getElementById('toast');
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const btnSaveSettings = document.getElementById('btn-save-settings');
+            const btnSaveEpay = document.getElementById('btn-save-epay');
+            
+            const settingTwoFactorUrl = document.getElementById('setting-two-factor-url');
+            const settingKeyPrice = document.getElementById('setting-key-price');
+            const settingEpayUrl = document.getElementById('setting-epay-url');
+            const settingEpayPid = document.getElementById('setting-epay-pid');
+            const settingEpayKey = document.getElementById('setting-epay-key');
+            const settingEpayWxChannel = document.getElementById('setting-epay-wx-channel');
+            const settingEpayAlipayChannel = document.getElementById('setting-epay-alipay-channel');
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Check Login Status
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+                        
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        loadSettings();
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Fetch settings
+            async function loadSettings() {
+                try {
+                    const res = await fetch('/api/admin/settings');
+                    const data = await res.json();
+                    if (res.ok && data.success && data.settings) {
+                        settingTwoFactorUrl.value = data.settings.two_factor_tutorial_url || '';
+                        settingKeyPrice.value = data.settings.key_price || '';
+                        settingEpayUrl.value = data.settings.epay_url || '';
+                        settingEpayPid.value = data.settings.epay_pid || '';
+                        settingEpayKey.value = data.settings.epay_key || '';
+                        settingEpayWxChannel.value = data.settings.epay_wx_channel || '';
+                        settingEpayAlipayChannel.value = data.settings.epay_alipay_channel || '';
+                    } else {
+                        showToast(data.message || '获取配置失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法加载配置');
+                }
+            }
+
+            // Unified Save Logic
+            async function saveAllSettings() {
+                const tutorialVal = settingTwoFactorUrl.value.trim();
+                const keyPriceVal = settingKeyPrice.value.trim();
+                const epayUrlVal = settingEpayUrl.value.trim();
+                const epayPidVal = settingEpayPid.value.trim();
+                const epayKeyVal = settingEpayKey.value.trim();
+                const epayWxVal = settingEpayWxChannel.value.trim();
+                const epayAliVal = settingEpayAlipayChannel.value.trim();
+
+                if (!tutorialVal) {
+                    showToast('二步验证教程链接不能为空');
+                    return;
+                }
+                if (!keyPriceVal || isNaN(parseFloat(keyPriceVal)) || parseFloat(keyPriceVal) <= 0) {
+                    showToast('请输入有效的卡密单价金额');
+                    return;
+                }
+                if (!epayUrlVal) {
+                    showToast('易支付请求地址不能为空');
+                    return;
+                }
+                if (!epayPidVal) {
+                    showToast('易支付商户号(PID)不能为空');
+                    return;
+                }
+
+                btnSaveSettings.disabled = true;
+                btnSaveEpay.disabled = true;
+                btnSaveSettings.textContent = '保存中...';
+                btnSaveEpay.textContent = '保存中...';
+
+                try {
+                    const res = await fetch('/api/admin/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            two_factor_tutorial_url: tutorialVal,
+                            key_price: keyPriceVal,
+                            epay_url: epayUrlVal,
+                            epay_pid: epayPidVal,
+                            epay_key: epayKeyVal,
+                            epay_wx_channel: epayWxVal,
+                            epay_alipay_channel: epayAliVal
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('配置保存成功！');
+                    } else {
+                        showToast(data.message || '保存配置失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，保存配置失败');
+                } finally {
+                    btnSaveSettings.disabled = false;
+                    btnSaveEpay.disabled = false;
+                    btnSaveSettings.textContent = '保存配置';
+                    btnSaveEpay.textContent = '保存支付配置';
+                }
+            }
+
+            // Save settings events
+            if (btnSaveSettings) {
+                btnSaveSettings.addEventListener('click', saveAllSettings);
+            }
+            if (btnSaveEpay) {
+                btnSaveEpay.addEventListener('click', saveAllSettings);
+            }
+
+            // Logout event
+            if (btnLogout) {
+                btnLogout.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        const res = await fetch('/api/admin/logout', { method: 'POST' });
+                        if (res.ok) {
+                            window.location.href = '/admin/login.html';
+                        } else {
+                            showToast('退出登录失败');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast('网络错误，退出登录失败');
+                    }
+                });
+            }
+
+            // Intercept navigation links for smooth transition
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    if (this.classList.contains('logout') || this.getAttribute('href') === '#') {
+                        return;
+                    }
+                    e.preventDefault();
+                    const targetUrl = this.getAttribute('href');
+                    const loader = document.getElementById('page-loader');
+                    if (loader) {
+                        loader.classList.remove('fade-out');
+                    }
+                    setTimeout(() => {
+                        window.location.href = targetUrl;
+                    }, 300);
+                });
+            });
+
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

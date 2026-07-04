@@ -79,6 +79,12 @@
             <a href="/admin/keys.html" class="nav-item">密钥管理</a>
             <a href="/admin/convert.html" class="nav-item">密钥转换</a>
             <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
         </nav>
 
@@ -200,6 +206,7 @@
                                     <th>状态</th>
                                     <th>备注/优惠链接</th>
                                     <th>提交时间</th>
+                                    <th>完成时间</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -319,6 +326,34 @@
                     const data = await res.json();
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+                        
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
                         loadOrders();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
@@ -435,7 +470,7 @@
                 detailNote.textContent = order.note || '无备注';
 
                 editSection.classList.add('hidden'); // Ensure edit section is closed initially
-                historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载历史记录...</td></tr>';
+                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载历史记录...</td></tr>';
                 detailModal.classList.remove('hidden');
 
                 await loadOrderHistory();
@@ -449,7 +484,7 @@
                     if (res.ok && data.success) {
                         activeHistoryRecords = data.records || [];
                         if (activeHistoryRecords.length === 0) {
-                            historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
+                            historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
                             return;
                         }
 
@@ -483,11 +518,14 @@
                                 ${r.discount_url ? `<div style="margin-top:2px;"><a href="${r.discount_url}" target="_blank" style="font-size:10px; color:var(--primary); text-decoration:none; word-break:break-all;">${r.discount_url}</a></div>` : ''}
                             `;
 
+                            const finishTime = r.completed_at ? formatDate(r.completed_at) : '-';
+
                             tr.innerHTML = `
                                 <td style="padding:10px 14px; line-height:1.4;">${detailsInfo}</td>
                                 <td style="padding:10px 14px;"><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td style="padding:10px 14px; line-height:1.3;">${commentInfo}</td>
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${formatDate(r.created_at)}</td>
+                                <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${finishTime}</td>
                                 <td style="padding:10px 14px;"><button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button></td>
                             `;
                             historyTableBody.appendChild(tr);
@@ -501,11 +539,11 @@
                             });
                         });
                     } else {
-                        historyTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
+                        historyTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
                     }
                 } catch (e) {
                     console.error(e);
-                    historyTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
+                    historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
                 }
             }
 

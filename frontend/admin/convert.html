@@ -37,6 +37,12 @@
             <a href="/admin/keys.html" class="nav-item">密钥管理</a>
             <a href="/admin/convert.html" class="nav-item active">密钥转换</a>
             <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
         </nav>
 
@@ -156,18 +162,67 @@
                 try {
                     const res = await fetch('/api/admin/check');
                     const data = await res.json();
-                    if (!res.ok || !data.success) {
+                    if (res.ok && data.success) {
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+                        
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                        await loadVendorsDropdown();
+                    } else {
                         window.location.href = '/admin/login.html';
-                        return;
                     }
                 } catch (e) {
                     console.error(e);
                     window.location.href = '/admin/login.html';
-                    return;
                 }
-                const loader = document.getElementById('page-loader');
-                if (loader) {
-                    loader.classList.add('fade-out');
+            }
+
+            async function loadVendorsDropdown() {
+                try {
+                    const resp = await fetch('/api/admin/vendors');
+                    const data = await resp.json();
+                    if (data.success && data.vendors) {
+                        const select = document.getElementById('select-vendor');
+                        if (select) {
+                            select.innerHTML = '';
+                            data.vendors.forEach(v => {
+                                const opt = document.createElement('option');
+                                opt.value = v.name;
+                                opt.textContent = v.display_name;
+                                select.appendChild(opt);
+                            });
+                            select.dispatchEvent(new Event('change'));
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load vendors dropdown:', e);
                 }
             }
 

@@ -19,7 +19,7 @@ $oldGoarch = $env:GOARCH
 $env:GOOS = "linux"
 $env:GOARCH = "amd64"
 
-go build -ldflags="-s -w" -o pixel-auth-linux main.go
+go build -ldflags="-s -w" -o pixel-auth-linux .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Compilation failed!" -ForegroundColor Red
     $env:GOOS = $oldGoos

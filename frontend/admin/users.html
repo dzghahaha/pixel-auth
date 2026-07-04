@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>用户管理 - Pixel 订阅</title>
+    <link rel="stylesheet" href="./admin.css">
+    <style>
+        .table-container {
+            margin-top: 20px;
+        }
+        .permissions-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .perm-tag {
+            background-color: var(--slate-100);
+            color: var(--slate-600);
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--slate-200);
+        }
+        .perm-tag.admin {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border-color: #fca5a5;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item active">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="header-left">
+                <!-- 用户图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <span class="header-title">用户与权限管理</span>
+            </div>
+            <button type="button" id="btn-add-user" class="btn-submit" style="width: auto; padding: 8px 16px; margin: 0;">+ 新增用户</button>
+        </header>
+
+        <!-- 用户列表表格 -->
+        <div class="card table-container">
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">用户ID</th>
+                        <th>用户名</th>
+                        <th style="width: 120px;">角色</th>
+                        <th>拥有菜单权限</th>
+                        <th style="width: 180px;">创建时间</th>
+                        <th style="width: 180px;">更新时间</th>
+                        <th style="width: 140px; text-align: center;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载用户列表...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增/编辑用户 Modal 弹窗 -->
+    <div id="user-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-title">新增用户</span>
+                <span id="close-user-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <input type="hidden" id="user-id">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="user-username" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">用户名</label>
+                        <input type="text" id="user-username" required placeholder="请输入用户名" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="user-password" id="label-password" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">密码</label>
+                        <input type="password" id="user-password" placeholder="请输入密码" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                        <small style="color: var(--slate-400); display: block; margin-top: 4px; font-size: 11px;" id="password-help">密码必须填。</small>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="user-role" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">角色</label>
+                        <select id="user-role" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                            <option value="user">普通用户 (Restricted Operator)</option>
+                            <option value="admin">管理员 (Super Administrator)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="permissions-group" style="margin-bottom: 16px;">
+                        <label style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">菜单访问权限 (仅普通用户有效)</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border: 1px solid var(--border-color); padding: 12px; border-radius: 4px; font-size: 13px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="dashboard"> 仪表盘</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="orders"> 订单管理</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="keys"> 密钥管理</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="convert"> 密钥转换</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="reset"> 卡密重置</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="generate"> 生成卡密</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="buy"> 购买卡密</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="vendors"> 合作厂商</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="settings"> 系统设置</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-cancel-user" class="btn-cancel">取消</button>
+                <button type="button" id="btn-save-user" class="btn-submit" style="margin: 0; width: 100px;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toast = document.getElementById('toast');
+            const btnLogout = document.getElementById('btn-logout');
+            const loader = document.getElementById('page-loader');
+
+            const btnAddUser = document.getElementById('btn-add-user');
+            const userModal = document.getElementById('user-modal');
+            const closeUserModal = document.getElementById('close-user-modal');
+            const btnCancelUser = document.getElementById('btn-cancel-user');
+            const btnSaveUser = document.getElementById('btn-save-user');
+            const userTableBody = document.getElementById('users-table-body');
+
+            const formUserId = document.getElementById('user-id');
+            const formUsername = document.getElementById('user-username');
+            const formPassword = document.getElementById('user-password');
+            const formPasswordHelp = document.getElementById('password-help');
+            const formRole = document.getElementById('user-role');
+            const modalTitle = document.getElementById('modal-title');
+            const permissionsGroup = document.getElementById('permissions-group');
+
+            const menuNamesMap = {
+                'dashboard': '仪表盘',
+                'orders': '订单管理',
+                'keys': '密钥管理',
+                'convert': '密钥转换',
+                'reset': '卡密重置',
+                'generate': '生成卡密',
+                'buy': '购买卡密',
+                'vendors': '合作厂商',
+                'settings': '系统设置'
+            };
+
+            // Toast helper
+            function showToast(message, duration = 2000) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Check Login Status
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+                        
+                        // Access Control: Only super admins can access users.html
+                        if (role !== 'admin') {
+                            window.location.href = '/admin/dashboard.html';
+                            return;
+                        }
+
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        loadUsers();
+                        loader.classList.add('fade-out');
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast(data.message || '注销失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Toggle permissions view based on role
+            formRole.addEventListener('change', () => {
+                if (formRole.value === 'admin') {
+                    permissionsGroup.style.opacity = '0.5';
+                    document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                        cb.disabled = true;
+                        cb.checked = true;
+                    });
+                } else {
+                    permissionsGroup.style.opacity = '1';
+                    document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                        cb.disabled = false;
+                    });
+                }
+            });
+
+            // Fetch and list users
+            async function loadUsers() {
+                try {
+                    const res = await fetch('/api/admin/users');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        renderUsers(data.users);
+                    } else {
+                        userTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">${data.message || '加载用户列表失败'}</td></tr>`;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    userTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">加载用户列表错误，请刷新重试</td></tr>`;
+                }
+            }
+
+            function renderUsers(users) {
+                if (!users || users.length === 0) {
+                    userTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--slate-400);">暂无用户</td></tr>';
+                    return;
+                }
+                userTableBody.innerHTML = '';
+                users.forEach(u => {
+                    const tr = document.createElement('tr');
+                    
+                    let roleDisplay = u.role === 'admin' ? '<span class="perm-tag admin">管理员</span>' : '<span class="perm-tag">操作员</span>';
+                    
+                    let permHtml = '';
+                    if (u.role === 'admin') {
+                        permHtml = '<span class="perm-tag admin">全部访问</span>';
+                    } else {
+                        const tags = (u.permissions || []).map(p => `<span class="perm-tag">${menuNamesMap[p] || p}</span>`);
+                        permHtml = tags.length > 0 ? `<div class="permissions-tags">${tags.join('')}</div>` : '<span style="color: var(--slate-400); font-size:12px;">无任何权限</span>';
+                    }
+
+                    const createTime = new Date(u.created_at).toLocaleString();
+                    const updateTime = new Date(u.updated_at).toLocaleString();
+
+                    let actionsHtml = '';
+                    if (u.username === 'admin') {
+                        actionsHtml = `<button type="button" class="btn-detail btn-edit" data-id="${u.id}" data-username="${u.username}" data-role="${u.role}">编辑密码</button>`;
+                    } else {
+                        actionsHtml = `
+                            <button type="button" class="btn-detail btn-edit" data-id="${u.id}" data-username="${u.username}" data-role="${u.role}">编辑</button>
+                            <button type="button" class="btn-reset-key btn-delete" data-id="${u.id}" data-username="${u.username}">删除</button>
+                        `;
+                    }
+
+                    tr.innerHTML = `
+                        <td>${u.id}</td>
+                        <td style="font-weight:600;">${u.username}</td>
+                        <td>${roleDisplay}</td>
+                        <td>${permHtml}</td>
+                        <td>${createTime}</td>
+                        <td>${updateTime}</td>
+                        <td style="text-align: center; display: flex; justify-content: center; gap: 8px;">${actionsHtml}</td>
+                    `;
+                    userTableBody.appendChild(tr);
+                });
+
+                // Attach Action Listeners
+                document.querySelectorAll('.btn-edit').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const id = btn.getAttribute('data-id');
+                        const username = btn.getAttribute('data-username');
+                        const role = btn.getAttribute('data-role');
+                        
+                        openEditUserModal(id, username, role);
+                    });
+                });
+
+                document.querySelectorAll('.btn-delete').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const id = btn.getAttribute('data-id');
+                        const username = btn.getAttribute('data-username');
+                        deleteUser(id, username);
+                    });
+                });
+            }
+
+            // Open Modal for Create
+            btnAddUser.addEventListener('click', () => {
+                modalTitle.textContent = '新增用户';
+                formUserId.value = '';
+                formUsername.value = '';
+                formUsername.disabled = false;
+                formPassword.value = '';
+                formPassword.placeholder = '请输入用户密码';
+                formPasswordHelp.textContent = '新增用户时密码为必填项。';
+                formRole.value = 'user';
+                formRole.disabled = false;
+                permissionsGroup.style.opacity = '1';
+                
+                document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                    cb.checked = false;
+                    cb.disabled = false;
+                });
+
+                userModal.classList.remove('hidden');
+            });
+
+            // Open Modal for Edit
+            async function openEditUserModal(id, username, role) {
+                modalTitle.textContent = `编辑用户: ${username}`;
+                formUserId.value = id;
+                formUsername.value = username;
+                formUsername.disabled = true; // Username is immutable
+                formPassword.value = '';
+                formPassword.placeholder = '留空表示不修改密码';
+                formPasswordHelp.textContent = '修改用户时如果不需要重置密码，请保持密码框留空。';
+                formRole.value = role;
+
+                // Super administrator cannot change their own role
+                if (username === 'admin') {
+                    formRole.disabled = true;
+                    permissionsGroup.style.opacity = '0.5';
+                    document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                        cb.checked = true;
+                        cb.disabled = true;
+                    });
+                } else {
+                    formRole.disabled = false;
+                    // Pre-fill permissions from the row mapping
+                    // Fetch users again or extract from row directly
+                    try {
+                        const res = await fetch('/api/admin/users');
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            const u = data.users.find(user => String(user.id) === String(id));
+                            if (u) {
+                                document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                                    cb.checked = u.permissions.includes(cb.value);
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to load user permissions details:', e);
+                    }
+
+                    if (role === 'admin') {
+                        permissionsGroup.style.opacity = '0.5';
+                        document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                            cb.checked = true;
+                            cb.disabled = true;
+                        });
+                    } else {
+                        permissionsGroup.style.opacity = '1';
+                        document.querySelectorAll('input[name="permissions"]').forEach(cb => {
+                            cb.disabled = false;
+                        });
+                    }
+                }
+
+                userModal.classList.remove('hidden');
+            }
+
+            // Close Modal handlers
+            function closeModal() {
+                userModal.classList.add('hidden');
+            }
+            closeUserModal.addEventListener('click', closeModal);
+            btnCancelUser.addEventListener('click', closeModal);
+
+            // Save user (Create/Update)
+            btnSaveUser.addEventListener('click', async () => {
+                const id = formUserId.value;
+                const username = formUsername.value.trim();
+                const password = formPassword.value.trim();
+                const role = formRole.value;
+
+                if (!id && !username) {
+                    showToast('用户名不能为空');
+                    return;
+                }
+                if (!id && !password) {
+                    showToast('密码不能为空');
+                    return;
+                }
+
+                const permissions = [];
+                if (role !== 'admin') {
+                    document.querySelectorAll('input[name="permissions"]:checked').forEach(cb => {
+                        permissions.push(cb.value);
+                    });
+                }
+
+                const url = id ? '/api/admin/users/update' : '/api/admin/users/create';
+                const payload = id ? { id: parseInt(id), password, role, permissions } : { username, password, role, permissions };
+
+                btnSaveUser.disabled = true;
+                const originalText = btnSaveUser.innerText;
+                btnSaveUser.innerText = '正在保存...';
+
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(id ? '更新用户成功！' : '创建用户成功！');
+                        closeModal();
+                        loadUsers();
+                    } else {
+                        showToast(data.message || '保存用户失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，保存失败');
+                } finally {
+                    btnSaveUser.disabled = false;
+                    btnSaveUser.innerText = originalText;
+                }
+            });
+
+            // Delete user
+            async function deleteUser(id, username) {
+                if (username === 'admin') {
+                    showToast('默认管理员账号不能删除');
+                    return;
+                }
+                if (!confirm(`确认删除用户 "${username}" 吗？此操作无法撤销。`)) {
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/admin/users/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: parseInt(id) })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('删除用户成功');
+                        loadUsers();
+                    } else {
+                        showToast(data.message || '删除用户失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，删除失败');
+                }
+            }
+
+            // Init Check
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

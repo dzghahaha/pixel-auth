@@ -207,6 +207,12 @@
             <a href="/admin/keys.html" class="nav-item">密钥管理</a>
             <a href="/admin/convert.html" class="nav-item">密钥转换</a>
             <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
         </nav>
 
@@ -322,22 +328,6 @@
             </div>
         </div>
 
-        <!-- 系统参数配置卡片 -->
-        <div class="card" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
-                <div class="card-title-group">
-                    <span class="card-title">系统参数配置</span>
-                    <span class="card-subtitle">配置系统全局参数，修改后客户端即时生效</span>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="setting-two-factor-url" style="font-weight: 600; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; display: block;">客户端二步验证教程链接 (2FA Tutorial Link)</label>
-                <div style="display: flex; gap: 12px;">
-                    <input type="text" id="setting-two-factor-url" placeholder="请输入教程 URL 链接" style="flex: 1;">
-                    <button type="button" id="btn-save-settings" class="btn-submit" style="white-space: nowrap;">保存配置</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- 弹窗提示组件 -->
@@ -367,8 +357,35 @@
                     const data = await res.json();
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+                        
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
                         loadStats();
-                        loadSettings();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -406,56 +423,6 @@
                     console.error(e);
                     showToast('网络错误，无法加载监控数据');
                 }
-            }
-
-            // Fetch settings
-            async function loadSettings() {
-                try {
-                    const res = await fetch('/api/admin/settings');
-                    const data = await res.json();
-                    if (res.ok && data.success && data.settings) {
-                        document.getElementById('setting-two-factor-url').value = data.settings.two_factor_tutorial_url || '';
-                    } else {
-                        showToast(data.message || '获取配置失败');
-                    }
-                } catch (e) {
-                    console.error(e);
-                    showToast('网络错误，无法加载配置');
-                }
-            }
-
-            // Save settings event
-            const btnSaveSettings = document.getElementById('btn-save-settings');
-            const settingTwoFactorUrl = document.getElementById('setting-two-factor-url');
-            if (btnSaveSettings && settingTwoFactorUrl) {
-                btnSaveSettings.addEventListener('click', async () => {
-                    const urlVal = settingTwoFactorUrl.value.trim();
-                    if (!urlVal) {
-                        showToast('二步验证教程链接不能为空');
-                        return;
-                    }
-                    btnSaveSettings.disabled = true;
-                    btnSaveSettings.textContent = '保存中...';
-                    try {
-                        const res = await fetch('/api/admin/settings', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ two_factor_tutorial_url: urlVal })
-                        });
-                        const data = await res.json();
-                        if (res.ok && data.success) {
-                            showToast('配置保存成功！');
-                        } else {
-                            showToast(data.message || '保存配置失败');
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        showToast('网络错误，保存配置失败');
-                    } finally {
-                        btnSaveSettings.disabled = false;
-                        btnSaveSettings.textContent = '保存配置';
-                    }
-                });
             }
 
             // Render Chart.js

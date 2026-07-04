@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>购买卡密 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css">
+    <style>
+        @keyframes ping {
+            0% { transform: scale(0.9); opacity: 0.4; }
+            70%, 100% { transform: scale(2.2); opacity: 0; }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .pay-type-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .pay-type-card {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+        .pay-type-card.active {
+            border-color: var(--primary);
+            background-color: rgba(79, 70, 229, 0.05);
+            color: var(--primary);
+        }
+        .summary-price {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 15px 0;
+            text-align: center;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .status-badge.pending {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #d97706;
+        }
+        .status-badge.paid {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #059669;
+        }
+        .key-list-area {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            background-color: #f8fafc;
+            color: #334155;
+            resize: none;
+            box-sizing: border-box;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item active">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 购物图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="9" cy="21" r="1"/>
+                    <circle cx="20" cy="21" r="1"/>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                <span class="header-title">购买卡密</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 购买表单卡片 -->
+        <div id="buy-card" class="card form-card" style="padding: 24px; max-width: 600px; margin: 0 auto 20px;">
+            <div class="card-header" style="margin-bottom: 20px;">
+                <h2 class="card-title" style="font-size: 18px;">在线自助购买卡密</h2>
+                <p class="card-subtitle">系统自动出货，可在购买记录中反复查阅卡密</p>
+            </div>
+
+            <div class="form-group">
+                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">单价 &amp; 库存</label>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px; color: var(--text-secondary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; background-color: var(--bg-main);">
+                    <span>售价: <strong id="price-val" style="color: var(--primary); font-size: 16px;">--</strong> 元/张</span>
+                    <span>系统库存: <strong id="stock-val" style="color: var(--text-primary); font-size: 16px;">--</strong> 张</span>
+                </div>
+
+                <label for="quantity" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">购买数量 (张)</label>
+                <input type="number" id="quantity" min="1" value="10" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box; margin-bottom: 16px;">
+
+                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付方式</label>
+                <div class="pay-type-group" id="pay-type-container">
+                    <div class="pay-type-card active" data-type="wxpay" style="display: flex;">
+                        <!-- WeChat Pay Icon (Green bubble) -->
+                        <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+                            <path d="M1010.8 628c0-141.2-141.3-256.2-299.9-256.2-168 0-300.3 115.1-300.3 256.2 0 141.4 132.3 256.2 300.3 256.2 35.2 0 70.7-8.9 106-17.7l96.8 53-26.6-88.2c70.9-53.2 123.7-123.7 123.7-203.3zM618 588.8c-22.1 0-40-17.9-40-40s17.9-40 40-40 40 17.9 40 40c0 22-17.9 40-40 40z m194.3-0.3c-22.1 0-40-17.9-40-40s17.9-40 40-40 40 17.9 40 40-17.9 40-40 40z" fill="#00C800"></path>
+                            <path d="M366.3 106.9c-194.1 0-353.1 132.3-353.1 300.3 0 97 52.9 176.6 141.3 238.4l-35.3 106.2 123.4-61.9c44.2 8.7 79.6 17.7 123.7 17.7 11.1 0 22.1-0.5 33-1.4-6.9-23.6-10.9-48.3-10.9-74 0-154.3 132.5-279.5 300.2-279.5 11.5 0 22.8 0.8 34 2.1C692 212.6 539.9 106.9 366.3 106.9zM247.7 349.2c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z m246.6 0c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z" fill="#00C800"></path>
+                        </svg>
+                        <span>微信支付</span>
+                    </div>
+                    <div class="pay-type-card" data-type="alipay" style="display: flex;">
+                        <!-- Alipay Icon (Blue Character) -->
+                        <svg class="pay-icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: #1677ff;">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.3 12.3h-2.1v2.1h-1.5v-2.1H7.8v-1.5h1.9v-1.8H7.8V9.5h1.9V7.8h1.5v1.8h2.1V7.8h1.5v1.8h1.9v1.5h-1.9v1.8h1.9v1.5zm-3.6-3.3h-2.1v1.8h2.1v-1.8z"/>
+                        </svg>
+                        <span>支付宝</span>
+                    </div>
+                </div>
+                <div id="no-channel-message" class="hidden" style="color: #ef4444; font-size: 13px; margin: 10px 0; font-weight: 500;">
+                    系统暂未配置任何支付通道，请联系超级管理员配置微信或支付宝渠道 ID。
+                </div>
+
+                <div class="summary-price">
+                    应付总额: <span id="total-price-val">--</span> 元
+                </div>
+
+                <button id="btn-buy" class="btn-submit" style="margin-top: 10px; width: 100%; height: 42px; font-size: 15px;">立即下单支付</button>
+            </div>
+        </div>
+
+        <!-- 支付中/状态轮询卡片 -->
+        <div id="polling-card" class="card form-card hidden" style="padding: 32px 24px; max-width: 500px; margin: 30px auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; box-sizing: border-box;">
+            <!-- Status Header -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 24px;">
+                <!-- Pulsing loader animation -->
+                <div class="pay-pulse-container" style="position: relative; width: 64px; height: 64px;">
+                    <div style="position: absolute; top: 0; left: 0; width: 64px; height: 64px; border-radius: 50%; background-color: var(--primary); opacity: 0.15; animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                    <div style="position: relative; top: 12px; left: 12px; width: 40px; height: 40px; border-radius: 50%; background-color: var(--primary); display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);">
+                        <svg style="width: 20px; height: 20px; animation: spin 2s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="2" x2="12" y2="6"/>
+                            <line x1="12" y1="18" x2="12" y2="22"/>
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+                            <line x1="2" y1="12" x2="6" y2="12"/>
+                            <line x1="18" y1="12" x2="22" y2="12"/>
+                            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
+                            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+                        </svg>
+                    </div>
+                </div>
+                
+                <h2 style="font-size: 18px; font-weight: 700; margin: 4px 0 2px; color: var(--text-primary);">请在新窗口中完成付款</h2>
+                <div id="poll-status" class="status-badge pending" style="margin-bottom: 0;">等待支付回调...</div>
+                
+                <!-- Countdown Pill -->
+                <div id="countdown-timer" style="font-size: 13px; font-weight: 600; color: #dc2626; background-color: #fef2f2; border: 1px solid #fee2e2; padding: 6px 16px; border-radius: 20px; display: inline-block;">
+                    支付倒计时: 05:00
+                </div>
+            </div>
+
+            <!-- Order Info List -->
+            <div style="background-color: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: left; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="color: var(--text-secondary);">订单编号</span>
+                    <span id="poll-trade-no" style="font-family: monospace; font-weight: 600; color: var(--text-primary);">--</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="color: var(--text-secondary);">支付方式</span>
+                    <span id="poll-pay-type" style="font-weight: 600; color: var(--text-primary);">微信支付</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="color: var(--text-secondary);">购买数量</span>
+                    <span id="poll-qty" style="font-weight: 600; color: var(--text-primary);">-- 张</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px;">
+                    <span style="color: var(--text-secondary); font-weight: 600;">支付金额</span>
+                    <span style="font-weight: 700; color: var(--primary); font-size: 15px;">￥<span id="poll-amount">--</span> 元</span>
+                </div>
+            </div>
+
+            <!-- Help Tips -->
+            <div style="text-align: left; padding: 12px; background-color: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #475569; line-height: 1.6; margin-bottom: 24px;">
+                💡 <strong>温馨提示：</strong><br>
+                系统已在新标签页为您调起收银台。若未弹出，请点击下方按钮重新打开；支付成功后，本页面将自动出货，切勿提前关闭。
+            </div>
+            
+            <!-- Actions -->
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <a id="btn-reopen-pay" href="#" target="_blank" class="btn-submit" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 42px; font-size: 14px; font-weight: 600; color: white;">
+                    重新打开支付收银台
+                </a>
+                
+                <a id="btn-cancel-poll" href="#" style="font-size: 13px; color: var(--text-secondary); text-decoration: none; font-weight: 500; transition: color 0.2s;">
+                    返回重新下单
+                </a>
+            </div>
+        </div>
+
+        <!-- 购买完成/展示卡密卡片 -->
+        <div id="result-card" class="card form-card hidden" style="padding: 24px; max-width: 600px; margin: 0 auto 20px;">
+            <div class="card-header" style="text-align: center; margin-bottom: 20px;">
+                <div class="status-badge paid">支付成功</div>
+                <h2 class="card-title" style="margin-top: 8px; font-size: 18px;">卡密已成功发放到下方！</h2>
+                <p class="card-subtitle">系统已自动为您扣除对应库存卡密</p>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                    <span>数量: <strong id="result-qty" style="color: var(--text-primary);">--</strong> 张</span>
+                    <span>实付金额: <strong id="result-amount" style="color: var(--primary);">--</strong> 元</span>
+                </div>
+                
+                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">您的卡密列表 (每行一个):</label>
+                <textarea id="card-keys-text" class="key-list-area" readonly></textarea>
+                
+                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <button id="btn-copy-keys" class="btn-submit" style="margin-top: 0; flex: 1; height: 40px; color: white;">复制卡密</button>
+                    <a href="/admin/buy_records.html" class="btn-submit" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; background-color: var(--primary-hover); color: white; text-align: center; box-sizing: border-box; margin-top: 0; flex: 1; height: 40px;">购买记录</a>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+
+            function showToast(msg, duration = 3000) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Check admin login and set menus
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        // After login checked, proceed to load configurations
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const outTradeNo = urlParams.get('out_trade_no');
+                        if (outTradeNo) {
+                            currentOutTradeNo = outTradeNo;
+                            startPolling(outTradeNo);
+                        } else {
+                            await loadConfig();
+                        }
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Global states
+            let keyPrice = 9.99;
+            let stock = 0;
+            let selectedPayType = 'wxpay';
+            let currentOutTradeNo = '';
+            let pollInterval = null;
+            let countdownInterval = null;
+
+            // Dom elements
+            const priceVal = document.getElementById('price-val');
+            const stockVal = document.getElementById('stock-val');
+            const quantityInput = document.getElementById('quantity');
+            const totalPriceVal = document.getElementById('total-price-val');
+            const btnBuy = document.getElementById('btn-buy');
+            const payTypeCards = document.querySelectorAll('.pay-type-card');
+
+            const buyCard = document.getElementById('buy-card');
+            const pollingCard = document.getElementById('polling-card');
+            const resultCard = document.getElementById('result-card');
+
+            // Polling Card elements
+            const pollTradeNo = document.getElementById('poll-trade-no');
+            const pollAmount = document.getElementById('poll-amount');
+            const btnReopenPay = document.getElementById('btn-reopen-pay');
+
+            // Result Card elements
+            const resultQty = document.getElementById('result-qty');
+            const resultAmount = document.getElementById('result-amount');
+            const cardKeysText = document.getElementById('card-keys-text');
+            const btnCopyKeys = document.getElementById('btn-copy-keys');
+
+            function startCountdown(createdAtStr) {
+                if (countdownInterval) clearInterval(countdownInterval);
+                const orderTime = new Date(createdAtStr.replace(/-/g, '/'));
+                const countdownEl = document.getElementById('countdown-timer');
+                const pollStatusEl = document.getElementById('poll-status');
+
+                function updateTime() {
+                    const now = new Date();
+                    const elapsedSec = Math.floor((now.getTime() - orderTime.getTime()) / 1000);
+                    const remainingSec = 300 - elapsedSec; // 5 minutes
+
+                    if (remainingSec <= 0) {
+                        clearInterval(countdownInterval);
+                        clearInterval(pollInterval);
+                        if (countdownEl) {
+                            countdownEl.textContent = '订单已超时失效，请重新下单';
+                            countdownEl.style.color = '#64748b';
+                        }
+                        if (pollStatusEl) {
+                            pollStatusEl.textContent = '已失效';
+                            pollStatusEl.className = 'status-badge cancelled';
+                        }
+                        return;
+                    }
+
+                    const minutes = Math.floor(remainingSec / 60);
+                    const seconds = remainingSec % 60;
+                    const minStr = String(minutes).padStart(2, '0');
+                    const secStr = String(seconds).padStart(2, '0');
+                    
+                    if (countdownEl) {
+                        countdownEl.textContent = `支付倒计时: ${minStr}:${secStr}`;
+                        countdownEl.style.color = '#ef4444';
+                    }
+                }
+
+                updateTime();
+                countdownInterval = setInterval(updateTime, 1000);
+            }
+
+            async function loadConfig() {
+                try {
+                    const resp = await fetch('/api/pay/config');
+                    const data = await resp.json();
+                    if (data.success) {
+                        keyPrice = parseFloat(data.key_price);
+                        stock = parseInt(data.stock);
+                        
+                        priceVal.textContent = keyPrice.toFixed(2);
+                        stockVal.textContent = stock;
+                        
+                        updateTotalPrice();
+
+                        // Configure visible payment buttons
+                        const wxBtn = document.querySelector('.pay-type-card[data-type="wxpay"]');
+                        const aliBtn = document.querySelector('.pay-type-card[data-type="alipay"]');
+                        const noChannelMsg = document.getElementById('no-channel-message');
+
+                        let wxValid = data.epay_wx_channel && data.epay_wx_channel.trim() !== '';
+                        let aliValid = data.epay_alipay_channel && data.epay_alipay_channel.trim() !== '';
+
+                        if (!wxValid) {
+                            wxBtn.classList.add('hidden');
+                            wxBtn.classList.remove('active');
+                        } else {
+                            wxBtn.classList.remove('hidden');
+                        }
+
+                        if (!aliValid) {
+                            aliBtn.classList.add('hidden');
+                            aliBtn.classList.remove('active');
+                        } else {
+                            aliBtn.classList.remove('hidden');
+                        }
+
+                        const visibleCards = document.querySelectorAll('.pay-type-card:not(.hidden)');
+                        if (visibleCards.length > 0) {
+                            // Ensure only the first visible one is selected
+                            payTypeCards.forEach(c => c.classList.remove('active'));
+                            visibleCards[0].classList.add('active');
+                            selectedPayType = visibleCards[0].getAttribute('data-type');
+                            btnBuy.disabled = false;
+                            noChannelMsg.classList.add('hidden');
+                        } else {
+                            btnBuy.disabled = true;
+                            noChannelMsg.classList.remove('hidden');
+                        }
+                    } else {
+                        showToast('获取系统参数失败');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('网关连接失败，请刷新页面');
+                }
+            }
+
+            function updateTotalPrice() {
+                const qty = parseInt(quantityInput.value) || 1;
+                const total = qty * keyPrice;
+                totalPriceVal.textContent = total.toFixed(2);
+            }
+
+            quantityInput.addEventListener('input', updateTotalPrice);
+
+            // Pay type selector
+            payTypeCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    payTypeCards.forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    selectedPayType = card.getAttribute('data-type');
+                });
+            });
+
+            // Click buy handler
+            btnBuy.addEventListener('click', async () => {
+                const qty = parseInt(quantityInput.value) || 0;
+                if (qty <= 0) {
+                    showToast('请输入有效的购买数量');
+                    return;
+                }
+
+                btnBuy.disabled = true;
+                btnBuy.textContent = '订单创建中...';
+
+                try {
+                    const resp = await fetch('/api/pay/buy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            quantity: qty,
+                            type: selectedPayType
+                        })
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        currentOutTradeNo = data.out_trade_no;
+                        
+                        // Save out_trade_no to localStorage for purchase history
+                        let history = [];
+                        try {
+                            history = JSON.parse(localStorage.getItem('buy_orders') || '[]');
+                        } catch (e) {}
+                        if (!history.includes(data.out_trade_no)) {
+                            history.push(data.out_trade_no);
+                            localStorage.setItem('buy_orders', JSON.stringify(history));
+                        }
+
+                        // Open Epay payment page in a new window/tab
+                        window.open(data.pay_url, '_blank');
+                        
+                        // Show Polling Card
+                        buyCard.classList.add('hidden');
+                        resultCard.classList.add('hidden');
+                        pollingCard.classList.remove('hidden');
+
+                        pollTradeNo.textContent = data.out_trade_no;
+                        pollAmount.textContent = (qty * keyPrice).toFixed(2);
+                        btnReopenPay.href = data.pay_url;
+
+                        // Start polling status
+                        startPolling(data.out_trade_no);
+                    } else {
+                        showToast(data.message || '创建订单失败');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('网络请求故障，请稍后重试');
+                } finally {
+                    btnBuy.disabled = false;
+                    btnBuy.textContent = '立即下单支付';
+                }
+            });
+
+            function startPolling(outTradeNo) {
+                if (pollInterval) clearInterval(pollInterval);
+                
+                // Query once immediately
+                queryOrderStatus(outTradeNo);
+
+                pollInterval = setInterval(() => {
+                    queryOrderStatus(outTradeNo);
+                }, 5000);
+            }
+
+            async function queryOrderStatus(outTradeNo) {
+                try {
+                    const resp = await fetch(`/api/pay/query?out_trade_no=${outTradeNo}`);
+                    if (resp.status === 404) {
+                        clearInterval(pollInterval);
+                        if (countdownInterval) clearInterval(countdownInterval);
+                        showToast('订单不存在');
+                        return;
+                    }
+                    const data = await resp.json();
+                    if (data.success) {
+                        if (data.status === 'paid') {
+                            clearInterval(pollInterval);
+                            if (countdownInterval) clearInterval(countdownInterval);
+                            showSuccessScreen(data);
+                        } else if (data.status === 'cancelled') {
+                            clearInterval(pollInterval);
+                            if (countdownInterval) clearInterval(countdownInterval);
+                            buyCard.classList.add('hidden');
+                            pollingCard.classList.remove('hidden');
+                            resultCard.classList.add('hidden');
+
+                            pollTradeNo.textContent = data.out_trade_no;
+                            pollAmount.textContent = parseFloat(data.total_amount).toFixed(2);
+                            
+                            const countdownEl = document.getElementById('countdown-timer');
+                            if (countdownEl) {
+                                countdownEl.textContent = '订单已超时失效或被取消';
+                                countdownEl.style.color = '#64748b';
+                            }
+                            const pollStatusEl = document.getElementById('poll-status');
+                            if (pollStatusEl) {
+                                pollStatusEl.textContent = '已取消';
+                                pollStatusEl.className = 'status-badge cancelled';
+                            }
+                        } else {
+                            buyCard.classList.add('hidden');
+                            pollingCard.classList.remove('hidden');
+                            resultCard.classList.add('hidden');
+
+                            pollTradeNo.textContent = data.out_trade_no;
+                            pollAmount.textContent = parseFloat(data.total_amount).toFixed(2);
+                            
+                            // Set dynamic text for pay type and qty in the new polished card
+                            const pollPayTypeEl = document.getElementById('poll-pay-type');
+                            if (pollPayTypeEl) {
+                                pollPayTypeEl.textContent = data.pay_type === 'alipay' ? '支付宝' : '微信支付';
+                            }
+                            const pollQtyEl = document.getElementById('poll-qty');
+                            if (pollQtyEl) {
+                                pollQtyEl.textContent = `${data.quantity} 张`;
+                            }
+
+                            btnReopenPay.href = `/api/pay/submit?out_trade_no=${data.out_trade_no}&type=${data.pay_type || selectedPayType}&money=${parseFloat(data.total_amount).toFixed(2)}&name=${encodeURIComponent('购买卡密 x' + data.quantity)}`;
+                            
+                            // Start/update countdown
+                            startCountdown(data.created_at);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }
+
+            function showSuccessScreen(data) {
+                if (countdownInterval) clearInterval(countdownInterval);
+                buyCard.classList.add('hidden');
+                pollingCard.classList.add('hidden');
+                resultCard.classList.remove('hidden');
+
+                resultQty.textContent = data.quantity;
+                resultAmount.textContent = parseFloat(data.total_amount).toFixed(2);
+                cardKeysText.value = data.card_keys || '';
+            }
+
+            // Bind cancel polling action
+            const btnCancelPoll = document.getElementById('btn-cancel-poll');
+            if (btnCancelPoll) {
+                btnCancelPoll.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (pollInterval) clearInterval(pollInterval);
+                    if (countdownInterval) clearInterval(countdownInterval);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    buyCard.classList.remove('hidden');
+                    pollingCard.classList.add('hidden');
+                    resultCard.classList.add('hidden');
+                });
+            }
+
+            btnCopyKeys.addEventListener('click', () => {
+                const keys = cardKeysText.value;
+                if (!keys) return;
+
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(keys).then(() => {
+                        showToast('已复制全部卡密到剪贴板');
+                    }).catch(err => {
+                        fallbackCopy(keys);
+                    });
+                } else {
+                    fallbackCopy(keys);
+                }
+            });
+
+            function fallbackCopy(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('已复制全部卡密到剪贴板');
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // Smooth link transitions
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
+            });
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Trigger init check
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

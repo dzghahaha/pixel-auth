@@ -567,10 +567,27 @@ textarea {
     background: transparent;
 }
 
-.back-link-btn:hover {
+.back-link-btn:hover, .back-link-btn.active {
     background-color: var(--primary);
     color: #ffffff;
     border-color: var(--primary);
+}
+
+.nav-links {
+    display: flex;
+    gap: 10px;
+}
+
+@media (max-width: 480px) {
+    .app-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .nav-links {
+        width: 100%;
+        justify-content: space-between;
+    }
 }
 
 .info-summary-card {

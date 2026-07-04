@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -78,9 +79,21 @@ func initTestDB(t *testing.T) {
 	createTables()
 
 	// Clear tables for test isolation
-	_, _ = db.Exec("DELETE FROM account_records")
-	_, _ = db.Exec("DELETE FROM orders")
-	_, _ = db.Exec("DELETE FROM system_keys")
+	if _, err := db.Exec("DELETE FROM account_records"); err != nil {
+		t.Logf("Failed to clear account_records: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM orders"); err != nil {
+		t.Logf("Failed to clear orders: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM system_keys"); err != nil {
+		t.Logf("Failed to clear system_keys: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM key_orders"); err != nil {
+		t.Logf("Failed to clear key_orders: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM card_stock"); err != nil {
+		t.Logf("Failed to clear card_stock: %v", err)
+	}
 }
 
 func TestMySQLStorage(t *testing.T) {
@@ -1113,7 +1126,7 @@ func TestAdminBackendFlow(t *testing.T) {
 	}
 
 	now := time.Now()
-	_, err = db.Exec("INSERT INTO admins (username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)",
+	_, err = db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?)",
 		"testadmin", string(hashedPassword), now, now)
 	if err != nil {
 		t.Fatalf("failed to insert admin: %v", err)
@@ -1567,5 +1580,297 @@ func TestSettingsAndConfigFlow(t *testing.T) {
 	settingsUpdated := adminGetRespUpdated["settings"].(map[string]interface{})
 	if settingsUpdated["two_factor_tutorial_url"] != newTestURL {
 		t.Errorf("expected updated URL in admin GET %q, got %q", newTestURL, settingsUpdated["two_factor_tutorial_url"])
+	}
+}
+
+func TestEpayDirectGeneration(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+
+	// 1. Log in as admin to get cookie
+	hashedPwd, _ := bcrypt.GenerateFromPassword([]byte("adminpwd"), bcrypt.DefaultCost)
+	now := time.Now()
+	_, errDb := db.Exec("REPLACE INTO admins (username, password_hash, role, created_at, updated_at) VALUES ('admin', ?, 'admin', ?, ?)", string(hashedPwd), now, now)
+	if errDb != nil {
+		t.Fatalf("failed to insert test admin: %v", errDb)
+	}
+
+	loginBody := `{"username":"admin","password":"adminpwd"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	cookie := rrLogin.Result().Cookies()[0]
+
+	// 2. Save settings (Epay credentials and key price)
+	settingsPayload := `{"epay_url":"https://pay.vansdesign.cn/","epay_pid":"1668","epay_key":"test_epay_key_secret","epay_wx_channel":"201906181353","epay_alipay_channel":"201906181354","key_price":"9.99","two_factor_tutorial_url":"https://test.tutorial/url"}`
+	reqSave := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(settingsPayload))
+	reqSave.AddCookie(cookie)
+	rrSave := httptest.NewRecorder()
+	requirePermission("settings", handleAdminSettings)(rrSave, reqSave)
+	if rrSave.Code != http.StatusOK {
+		t.Fatalf("failed to save settings: %d", rrSave.Code)
+	}
+
+	// Pre-insert 3 available keys in card_stock for checkout test
+	_, errInsertStock := db.Exec("INSERT INTO card_stock (card_key, vendor, status, note, created_at, updated_at) VALUES ('STOCKKEY1111', 'ai.deard.fun', 'available', 'Epay Purchased', ?, ?), ('STOCKKEY2222', 'ai.deard.fun', 'available', 'Epay Purchased', ?, ?), ('STOCKKEY3333', 'ai.deard.fun', 'available', 'Epay Purchased', ?, ?)", now, now, now, now, now, now)
+	if errInsertStock != nil {
+		t.Fatalf("failed to insert mock card stock: %v", errInsertStock)
+	}
+
+	rowsDbg, _ := db.Query("SELECT id, card_key, status, vendor, note FROM card_stock")
+	for rowsDbg.Next() {
+		var id int
+		var key, statusVal, vendorVal, noteVal string
+		rowsDbg.Scan(&id, &key, &statusVal, &vendorVal, &noteVal)
+		t.Logf("Dbg CardStock: id=%d, key=%s, status=%s, vendor=%s, note=%s", id, key, statusVal, vendorVal, noteVal)
+	}
+	rowsDbg.Close()
+
+	// 3. GET /api/pay/config - verify stock is 3 (reflects the inserted keys)
+	reqConfig := httptest.NewRequest(http.MethodGet, "/api/pay/config", nil)
+	reqConfig.AddCookie(cookie)
+	rrConfig := httptest.NewRecorder()
+	requirePermission("buy", handleGetPayConfig)(rrConfig, reqConfig)
+	if rrConfig.Code != http.StatusOK {
+		t.Fatalf("expected 200 for pay config, got %d", rrConfig.Code)
+	}
+	var configResp map[string]interface{}
+	json.Unmarshal(rrConfig.Body.Bytes(), &configResp)
+	if configResp["stock"].(float64) != 3 {
+		t.Errorf("expected stock to be 3 (matching pre-inserted count), got %v", configResp["stock"])
+	}
+
+	// 4. Place a card key order
+	buyPayload := `{"quantity": 3, "type": "wxpay"}`
+	reqBuy := httptest.NewRequest(http.MethodPost, "/api/pay/buy", strings.NewReader(buyPayload))
+	reqBuy.AddCookie(cookie)
+	rrBuy := httptest.NewRecorder()
+	requirePermission("buy", handlePayBuy)(rrBuy, reqBuy)
+	if rrBuy.Code != http.StatusOK {
+		t.Fatalf("expected 200 for buy order creation, got %d. Body: %s", rrBuy.Code, rrBuy.Body.String())
+	}
+	var buyResp map[string]interface{}
+	json.Unmarshal(rrBuy.Body.Bytes(), &buyResp)
+	outTradeNo := buyResp["out_trade_no"].(string)
+
+	// Verify order in database is pending
+	var dbStatus string
+	var dbQty int
+	errQuery := db.QueryRow("SELECT status, quantity FROM key_orders WHERE out_trade_no = ?", outTradeNo).Scan(&dbStatus, &dbQty)
+	if errQuery != nil {
+		t.Fatalf("failed to query key_order in DB: %v", errQuery)
+	}
+	if dbStatus != "pending" || dbQty != 3 {
+		t.Errorf("unexpected DB order status/qty: status=%s, qty=%d", dbStatus, dbQty)
+	}
+
+	// Verify no keys returned on query when pending (security validation)
+	reqQuery := httptest.NewRequest(http.MethodGet, "/api/pay/query?out_trade_no="+outTradeNo, nil)
+	reqQuery.AddCookie(cookie)
+	rrQueryPending := httptest.NewRecorder()
+	requirePermission("buy", handlePayQuery)(rrQueryPending, reqQuery)
+	var queryPendingResp map[string]interface{}
+	json.Unmarshal(rrQueryPending.Body.Bytes(), &queryPendingResp)
+	if _, exists := queryPendingResp["card_keys"]; exists {
+		t.Errorf("expected card_keys to be hidden when order is pending, but it was returned")
+	}
+
+	// 5. Simulate callback notify (Success payment)
+	notifyParams := map[string]string{
+		"pid":          "1668",
+		"trade_no":     "202607049999",
+		"out_trade_no": outTradeNo,
+		"type":         "wxpay",
+		"name":         "购买卡密 x3",
+		"money":        "29.97", // 9.99 * 3
+		"trade_status": "TRADE_SUCCESS",
+	}
+	notifySign := calculateEpaySign(notifyParams, "test_epay_key_secret")
+	notifyQuery := fmt.Sprintf("pid=1668&trade_no=202607049999&out_trade_no=%s&type=wxpay&name=%s&money=29.97&trade_status=TRADE_SUCCESS&sign=%s",
+		outTradeNo, url.QueryEscape("购买卡密 x3"), notifySign)
+	reqNotify := httptest.NewRequest(http.MethodGet, "/api/pay/notify?"+notifyQuery, nil)
+	rrNotify := httptest.NewRecorder()
+	handlePayNotify(rrNotify, reqNotify)
+	if rrNotify.Body.String() != "success" {
+		t.Fatalf("expected notify response 'success', got: %s", rrNotify.Body.String())
+	}
+
+	// 6. Verify keys created in DB as 'active' and associated with vendor 'ai.deard.fun'
+	var activeCount int
+	errCount := db.QueryRow("SELECT COUNT(*) FROM system_keys WHERE status = 'active' AND vendor = 'ai.deard.fun' AND note = 'Epay Purchased'").Scan(&activeCount)
+	if errCount != nil {
+		t.Fatalf("failed to query system_keys count: %v", errCount)
+	}
+	if activeCount != 3 {
+		t.Errorf("expected 3 active keys inserted in DB, got %d", activeCount)
+	}
+
+	// 7. Verify query endpoint returns the drawn keys from card_stock pool
+	rrQueryPaid := httptest.NewRecorder()
+	requirePermission("buy", handlePayQuery)(rrQueryPaid, reqQuery)
+	var queryPaidResp map[string]interface{}
+	json.Unmarshal(rrQueryPaid.Body.Bytes(), &queryPaidResp)
+	if queryPaidResp["status"] != "paid" {
+		t.Errorf("expected query status to be paid, got %v", queryPaidResp["status"])
+	}
+	cardKeys := queryPaidResp["card_keys"].(string)
+	keysSplit := strings.Split(strings.TrimSpace(cardKeys), "\n")
+	if len(keysSplit) != 3 {
+		t.Errorf("expected 3 keys in result, got %d. Content: %s", len(keysSplit), cardKeys)
+	}
+	for _, key := range keysSplit {
+		if !strings.HasPrefix(key, "STOCKKEY") {
+			t.Errorf("expected key to be drawn from card_stock pool, got: %s", key)
+		}
+	}
+
+	// 8. Verify keys marked as 'sold' in card_stock
+	var soldCount int
+	db.QueryRow("SELECT COUNT(*) FROM card_stock WHERE status = 'sold'").Scan(&soldCount)
+	if soldCount != 3 {
+		t.Errorf("expected 3 keys in card_stock to be marked as sold, got %d", soldCount)
+	}
+}
+
+func TestEpayCancelAndRefund(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+
+	hashedPwd, _ := bcrypt.GenerateFromPassword([]byte("adminpwd"), bcrypt.DefaultCost)
+	now := time.Now()
+	_, _ = db.Exec("REPLACE INTO admins (username, password_hash, role, created_at, updated_at) VALUES ('admin', ?, 'admin', ?, ?)", string(hashedPwd), now, now)
+
+	loginBody := `{"username":"admin","password":"adminpwd"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	cookie := rrLogin.Result().Cookies()[0]
+
+	// Save settings
+	settingsPayload := `{"epay_url":"https://pay.vansdesign.cn/","epay_pid":"1668","epay_key":"test_epay_key_secret","epay_wx_channel":"201906181353","epay_alipay_channel":"201906181354","key_price":"10.00"}`
+	reqSave := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(settingsPayload))
+	reqSave.AddCookie(cookie)
+	rrSave := httptest.NewRecorder()
+	requirePermission("settings", handleAdminSettings)(rrSave, reqSave)
+	if rrSave.Code != http.StatusOK {
+		t.Fatalf("failed to save settings: %d", rrSave.Code)
+	}
+
+	// Pre-insert keys to card_stock
+	_, errInsertStock := db.Exec("INSERT INTO card_stock (card_key, vendor, status, note, created_at, updated_at) VALUES ('STOCKKEYR1', 'ai.deard.fun', 'available', 'Refund Test', ?, ?), ('STOCKKEYR2', 'ai.deard.fun', 'available', 'Refund Test', ?, ?), ('STOCKKEYR3', 'ai.deard.fun', 'available', 'Refund Test', ?, ?)", now, now, now, now, now, now)
+	if errInsertStock != nil {
+		t.Fatalf("failed to insert stock keys: %v", errInsertStock)
+	}
+
+	// 1. Place a card key order to lock keys
+	buyPayload := `{"quantity": 2, "type": "wxpay"}`
+	reqBuy := httptest.NewRequest(http.MethodPost, "/api/pay/buy", strings.NewReader(buyPayload))
+	reqBuy.AddCookie(cookie)
+	rrBuy := httptest.NewRecorder()
+	requirePermission("buy", handlePayBuy)(rrBuy, reqBuy)
+	if rrBuy.Code != http.StatusOK {
+		t.Fatalf("expected 200 for buy order creation, got %d. Body: %s", rrBuy.Code, rrBuy.Body.String())
+	}
+	var buyResp map[string]interface{}
+	json.Unmarshal(rrBuy.Body.Bytes(), &buyResp)
+	outTradeNo := buyResp["out_trade_no"].(string)
+
+	// Verify that 2 stock keys are locked
+	var lockedCount int
+	db.QueryRow("SELECT COUNT(*) FROM card_stock WHERE status = 'locked'").Scan(&lockedCount)
+	if lockedCount != 2 {
+		t.Errorf("expected 2 locked keys in stock pool, got %d", lockedCount)
+	}
+
+	// 2. Try to place a second order while first is unpaid
+	reqBuy2 := httptest.NewRequest(http.MethodPost, "/api/pay/buy", strings.NewReader(buyPayload))
+	reqBuy2.AddCookie(cookie)
+	rrBuy2 := httptest.NewRecorder()
+	requirePermission("buy", handlePayBuy)(rrBuy2, reqBuy2)
+	if rrBuy2.Code == http.StatusOK {
+		t.Errorf("expected buy order creation to be blocked while there is an unpaid order, but got 200")
+	}
+
+	// 3. Cancel the order manually
+	cancelPayload := fmt.Sprintf(`{"out_trade_no": "%s"}`, outTradeNo)
+	reqCancel := httptest.NewRequest(http.MethodPost, "/api/pay/cancel", strings.NewReader(cancelPayload))
+	reqCancel.AddCookie(cookie)
+	rrCancel := httptest.NewRecorder()
+	requirePermission("buy", handlePayCancel)(rrCancel, reqCancel)
+	if rrCancel.Code != http.StatusOK {
+		t.Fatalf("expected 200 for cancellation, got %d. Body: %s", rrCancel.Code, rrCancel.Body.String())
+	}
+
+	// Verify keys are unlocked back to available
+	var availableCount int
+	db.QueryRow("SELECT COUNT(*) FROM card_stock WHERE status = 'available'").Scan(&availableCount)
+	if availableCount != 3 {
+		t.Errorf("expected all 3 keys to be available after cancel, got %d", availableCount)
+	}
+
+	// 4. Place a new order (should succeed now)
+	reqBuyNew := httptest.NewRequest(http.MethodPost, "/api/pay/buy", strings.NewReader(buyPayload))
+	reqBuyNew.AddCookie(cookie)
+	rrBuyNew := httptest.NewRecorder()
+	requirePermission("buy", handlePayBuy)(rrBuyNew, reqBuyNew)
+	if rrBuyNew.Code != http.StatusOK {
+		t.Fatalf("expected 200 for new buy order, got %d. Body: %s", rrBuyNew.Code, rrBuyNew.Body.String())
+	}
+	var buyNewResp map[string]interface{}
+	json.Unmarshal(rrBuyNew.Body.Bytes(), &buyNewResp)
+	newOutTradeNo := buyNewResp["out_trade_no"].(string)
+
+	// Simulate payment callback notify
+	notifyParams := map[string]string{
+		"pid":          "1668",
+		"trade_no":     "202607049999",
+		"out_trade_no": newOutTradeNo,
+		"type":         "wxpay",
+		"name":         "购买卡密 x2",
+		"money":        "20.00",
+		"trade_status": "TRADE_SUCCESS",
+	}
+	notifySign := calculateEpaySign(notifyParams, "test_epay_key_secret")
+	notifyQuery := fmt.Sprintf("pid=1668&trade_no=202607049999&out_trade_no=%s&type=wxpay&name=%s&money=20.00&trade_status=TRADE_SUCCESS&sign=%s",
+		newOutTradeNo, url.QueryEscape("购买卡密 x2"), notifySign)
+	reqNotify := httptest.NewRequest(http.MethodGet, "/api/pay/notify?"+notifyQuery, nil)
+	rrNotify := httptest.NewRecorder()
+	handlePayNotify(rrNotify, reqNotify)
+
+	// 5. Test Refund API on the paid order
+	refundPayload := fmt.Sprintf(`{"out_trade_no": "%s"}`, newOutTradeNo)
+	reqRefund := httptest.NewRequest(http.MethodPost, "/api/admin/pay/refund", strings.NewReader(refundPayload))
+	reqRefund.AddCookie(cookie)
+	rrRefund := httptest.NewRecorder()
+	requirePermission("buy", handleAdminPayRefund)(rrRefund, reqRefund)
+	if rrRefund.Code != http.StatusOK {
+		t.Fatalf("expected 200 for refund, got %d. Body: %s", rrRefund.Code, rrRefund.Body.String())
+	}
+
+	// Verify order status is refunded in DB
+	var dbStatusNew string
+	db.QueryRow("SELECT status FROM key_orders WHERE out_trade_no = ?", newOutTradeNo).Scan(&dbStatusNew)
+	if dbStatusNew != "refunded" {
+		t.Errorf("expected refunded status, got %s", dbStatusNew)
+	}
+
+	// Verify old system keys are inactive
+	var inactiveCount int
+	db.QueryRow("SELECT COUNT(*) FROM system_keys WHERE status = 'inactive'").Scan(&inactiveCount)
+	if inactiveCount != 2 {
+		t.Errorf("expected 2 system keys deactivated, got %d", inactiveCount)
+	}
+
+	// Verify new keys are generated and returned to card_stock as available
+	var finalAvailable int
+	db.QueryRow("SELECT COUNT(*) FROM card_stock WHERE status = 'available'").Scan(&finalAvailable)
+	// We started with 3. Order 2 was placed (1 left). Then 2 keys were refunded and new ones added back.
+	// So 1 + 2 = 3 available keys!
+	if finalAvailable != 3 {
+		t.Errorf("expected 3 available keys back in card_stock pool, got %d", finalAvailable)
 	}
 }

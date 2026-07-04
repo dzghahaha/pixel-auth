@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>生成卡密 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css">
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-box {
+            border: 1px solid var(--border-color);
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-top: 8px;
+        }
+        .key-output-area {
+            width: 100%;
+            height: 160px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            background-color: #f8fafc;
+            color: #334155;
+            resize: none;
+            box-sizing: border-box;
+            margin-top: 10px;
+        }
+        .form-select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item active">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 生成卡密 SVG 图标 -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="12" y1="8" x2="12" y2="16"/>
+                    <line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+                <span class="header-title">库存卡密生成</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 统计面板 -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div style="font-size: 13px; color: var(--text-secondary);">可用库存卡密</div>
+                <div id="stat-available" class="stat-number">--</div>
+            </div>
+            <div class="stat-box">
+                <div style="font-size: 13px; color: var(--text-secondary);">已售出卡密</div>
+                <div id="stat-sold" class="stat-number" style="color: var(--text-secondary);">--</div>
+            </div>
+            <div class="stat-box">
+                <div style="font-size: 13px; color: var(--text-secondary);">累计生成总量</div>
+                <div id="stat-total" class="stat-number" style="color: var(--text-primary);">--</div>
+            </div>
+        </div>
+
+        <!-- 卡密生成表单 -->
+        <div class="card form-card" style="padding: 24px; max-width: 600px; margin: 0 auto 20px;">
+            <div class="card-header" style="margin-bottom: 20px;">
+                <h2 class="card-title" style="font-size: 18px;">生成卡密库存</h2>
+                <p class="card-subtitle">系统生成或转换外部卡密，并存入库中等待用户选购</p>
+            </div>
+
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label for="vendor-select" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">卡密供应商 (Vendor)</label>
+                    <select id="vendor-select" class="form-select">
+                        <option value="ai.deard.fun">系统直接生成 (ai.deard.fun)</option>
+                        <option value="pass.aisale.one">合作商卡网 (pass.aisale.one)</option>
+                    </select>
+                </div>
+
+                <!-- 系统直接生成参数 (ai.deard.fun) -->
+                <div id="direct-params-block">
+                    <label for="quantity" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">生成卡密数量 (个)</label>
+                    <input type="number" id="quantity" min="1" max="500" value="50" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+
+                <!-- 合作商转换生成参数 (non-deard) -->
+                <div id="external-params-block" class="hidden">
+                    <div style="margin-bottom: 16px;">
+                        <label for="vendor-keys" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">合作商卡密列表 (每行一个)</label>
+                        <textarea id="vendor-keys" placeholder="请粘贴在合作商平台上购买的原卡密..." style="width: 100%; height: 120px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-family: monospace; font-size: 14px; box-sizing: border-box; resize: none;"></textarea>
+                    </div>
+                    <div>
+                        <label for="multiplier" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">卡密转换倍数 (Multiplier)</label>
+                        <input type="number" id="multiplier" min="1" max="10" value="1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="note" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">备注信息 (选填)</label>
+                    <input type="text" id="note" placeholder="例如：7月第一批库存" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                </div>
+
+                <button id="btn-generate" class="btn-submit" style="width: 100%; height: 42px; font-size: 15px; margin-top: 10px;">立即生成库存</button>
+            </div>
+        </div>
+
+        <!-- 卡密导出展示卡片 -->
+        <div id="result-card" class="card form-card hidden" style="padding: 24px; max-width: 600px; margin: 0 auto 20px;">
+            <div class="card-header" style="margin-bottom: 16px;">
+                <h2 class="card-title" style="font-size: 18px; color: var(--success);">卡密生成成功！</h2>
+                <p class="card-subtitle">您可以一键复制这批生成的卡密导出备份</p>
+            </div>
+
+            <div class="form-group">
+                <textarea id="result-keys-text" class="key-output-area" readonly></textarea>
+                <button id="btn-copy-keys" class="btn-submit" style="margin-top: 16px; width: 100%; height: 40px; color: white;">复制本批卡密</button>
+            </div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+
+            const btnGenerate = document.getElementById('btn-generate');
+            const vendorSelect = document.getElementById('vendor-select');
+            const quantityInput = document.getElementById('quantity');
+            const vendorKeysInput = document.getElementById('vendor-keys');
+            const multiplierInput = document.getElementById('multiplier');
+            const noteInput = document.getElementById('note');
+
+            const directParamsBlock = document.getElementById('direct-params-block');
+            const externalParamsBlock = document.getElementById('external-params-block');
+
+            const resultCard = document.getElementById('result-card');
+            const resultKeysText = document.getElementById('result-keys-text');
+            const btnCopyKeys = document.getElementById('btn-copy-keys');
+
+            const statAvailable = document.getElementById('stat-available');
+            const statSold = document.getElementById('stat-sold');
+            const statTotal = document.getElementById('stat-total');
+
+            function showToast(msg, duration = 3000) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, duration);
+            }
+
+            // Vendor change handler
+            vendorSelect.addEventListener('change', () => {
+                const vendor = vendorSelect.value;
+                if (vendor === 'ai.deard.fun') {
+                    directParamsBlock.classList.remove('hidden');
+                    externalParamsBlock.classList.add('hidden');
+                } else {
+                    directParamsBlock.classList.add('hidden');
+                    externalParamsBlock.classList.remove('hidden');
+                }
+            });
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        // Proceed to load stats and vendors dropdown
+                        await loadVendorsDropdown();
+                        await loadStats();
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            async function loadVendorsDropdown() {
+                try {
+                    const resp = await fetch('/api/admin/vendors');
+                    const data = await resp.json();
+                    if (data.success && data.vendors) {
+                        vendorSelect.innerHTML = '';
+                        data.vendors.forEach(v => {
+                            const opt = document.createElement('option');
+                            opt.value = v.name;
+                            opt.textContent = v.display_name;
+                            vendorSelect.appendChild(opt);
+                        });
+                        vendorSelect.dispatchEvent(new Event('change'));
+                    }
+                } catch (e) {
+                    console.error('Failed to load vendors dropdown:', e);
+                }
+            }
+
+            async function loadStats() {
+                try {
+                    // Fetch Epay config to get available count
+                    const resp = await fetch('/api/pay/config');
+                    const data = await resp.json();
+                    if (data.success) {
+                        statAvailable.textContent = data.stock;
+                        statSold.textContent = '--';
+                        statTotal.textContent = '--';
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            btnGenerate.addEventListener('click', async () => {
+                const vendor = vendorSelect.value;
+                const note = noteInput.value.trim();
+                
+                let payload = {
+                    vendor: vendor,
+                    note: note
+                };
+
+                if (vendor === 'ai.deard.fun') {
+                    const qty = parseInt(quantityInput.value) || 0;
+                    if (qty <= 0) {
+                        showToast('请输入有效的生成数量');
+                        return;
+                    }
+                    if (qty > 500) {
+                        showToast('单次最多支持生成 500 个');
+                        return;
+                    }
+                    payload.quantity = qty;
+                } else {
+                    const rawKeys = vendorKeysInput.value.trim();
+                    if (!rawKeys) {
+                        showToast('请粘贴合作商卡密列表');
+                        return;
+                    }
+                    const keysArr = rawKeys.split('\n').map(k => k.trim()).filter(k => k !== '');
+                    if (keysArr.length === 0) {
+                        showToast('合作商卡密列表不能为空');
+                        return;
+                    }
+                    const mult = parseInt(multiplierInput.value) || 1;
+                    if (mult <= 0) {
+                        showToast('卡密转换倍数必须大于 0');
+                        return;
+                    }
+                    if (keysArr.length * mult > 500) {
+                        showToast(`单次转换生成数量不能超过 500 个（当前：${keysArr.length * mult}）`);
+                        return;
+                    }
+                    payload.vendor_keys = keysArr;
+                    payload.multiplier = mult;
+                }
+
+                btnGenerate.disabled = true;
+                btnGenerate.textContent = '正在生成中...';
+
+                try {
+                    const resp = await fetch('/api/admin/generate_stock_keys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showToast(data.message);
+                        resultKeysText.value = data.keys.join('\n');
+                        resultCard.classList.remove('hidden');
+                        
+                        // Clear non-direct textarea if succeeded
+                        if (vendor !== 'ai.deard.fun') {
+                            vendorKeysInput.value = '';
+                        }
+                        
+                        // Reload stats
+                        await loadStats();
+                    } else {
+                        showToast(data.message || '生成失败');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('网络请求失败，请稍后重试');
+                } finally {
+                    btnGenerate.disabled = false;
+                    btnGenerate.textContent = '立即生成库存';
+                }
+            });
+
+            btnCopyKeys.addEventListener('click', () => {
+                const keys = resultKeysText.value;
+                if (!keys) return;
+
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(keys).then(() => {
+                        showToast('已复制生成的卡密到剪贴板');
+                    }).catch(err => {
+                        fallbackCopy(keys);
+                    });
+                } else {
+                    fallbackCopy(keys);
+                }
+            });
+
+            function fallbackCopy(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('已复制生成的卡密到剪贴板');
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // Smooth link transitions
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
+            });
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Trigger init check
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

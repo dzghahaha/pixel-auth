@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>购买记录 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css">
+    <style>
+        .status-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .status-tag.pending {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #d97706;
+        }
+        .status-tag.paid {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #059669;
+        }
+        .status-tag.refunded {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+        }
+        .status-tag.cancelled {
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+        .btn-action-view {
+            padding: 4px 10px;
+            font-size: 12px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-right: 4px;
+        }
+        .btn-action-view:last-child {
+            margin-right: 0;
+        }
+        .btn-action-view.pending {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+        .btn-action-view.danger {
+            background-color: transparent;
+            border: 1px solid #fecaca;
+            color: #ef4444;
+        }
+        .btn-action-view.danger:hover {
+            background-color: #fee2e2;
+        }
+        .empty-tips {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        .modal-keys-textarea {
+            width: 100%;
+            height: 160px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            background-color: #f8fafc;
+            color: #334155;
+            resize: none;
+            box-sizing: border-box;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item active">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 记录图标 SVG -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                <span class="header-title">卡密购买记录</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 数据表格卡片 -->
+        <div class="card" style="padding: 0;">
+            <div class="table-container">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>订单编号</th>
+                            <th>下单时间</th>
+                            <th>单价 (元)</th>
+                            <th>购买数量 (张)</th>
+                            <th>支付总额 (元)</th>
+                            <th>购买账户</th>
+                            <th>支付状态</th>
+                            <th style="text-align: right; padding-right: 20px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="8" class="empty-tips">正在加载历史记录...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 卡密详情弹窗 (Modal) -->
+    <div id="detail-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title">卡密详情</h3>
+                <span class="close-btn" id="close-detail-modal" style="cursor: pointer; font-size: 22px; font-weight: bold; line-height: 1;">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <span>订单号: <strong id="modal-trade-no" style="color: var(--text-primary); font-family: monospace;">--</strong></span>
+                    <span>金额: <strong id="modal-amount" style="color: var(--primary);">--</strong> 元</span>
+                </div>
+                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">提取的卡密如下 (每行一个):</label>
+                <textarea id="modal-card-keys-text" class="modal-keys-textarea" readonly></textarea>
+                <button id="modal-btn-copy-keys" class="btn-submit" style="margin-top: 16px; width: 100%; height: 38px; color: white;">复制全部卡密</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+            const tableBody = document.getElementById('table-body');
+            
+            const detailModal = document.getElementById('detail-modal');
+            const closeDetailModal = document.getElementById('close-detail-modal');
+            const modalTradeNo = document.getElementById('modal-trade-no');
+            const modalAmount = document.getElementById('modal-amount');
+            const modalCardKeysText = document.getElementById('modal-card-keys-text');
+            const modalBtnCopyKeys = document.getElementById('modal-btn-copy-keys');
+
+            let orderRecords = []; // Cache records locally
+            let currentUserRole = ''; // Store user role globally
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        currentUserRole = data.role; // Save role globally
+                        const role = data.role;
+                        const permissions = data.permissions || [];
+
+                        const menuMap = {
+                            '/admin/dashboard.html': 'dashboard',
+                            '/admin/orders.html': 'orders',
+                            '/admin/keys.html': 'keys',
+                            '/admin/convert.html': 'convert',
+                            '/admin/reset.html': 'reset',
+                            '/admin/generate.html': 'generate',
+                            '/admin/buy.html': 'buy',
+                            '/admin/buy_records.html': 'buy',
+                            '/admin/vendors.html': 'vendors',
+                            '/admin/settings.html': 'settings',
+                            '/admin/users.html': 'users'
+                        };
+
+                        document.querySelectorAll('a.nav-item').forEach(link => {
+                            const href = link.getAttribute('href');
+                            if (menuMap[href]) {
+                                const key = menuMap[href];
+                                if (role !== 'admin' && !permissions.includes(key)) {
+                                    link.style.display = 'none';
+                                }
+                            }
+                        });
+
+                        // Proceed to load records
+                        await loadHistory();
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            async function loadHistory() {
+                // Get local order nos
+                let history = [];
+                try {
+                    history = JSON.parse(localStorage.getItem('buy_orders') || '[]');
+                } catch (e) {}
+
+                if (history.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="empty-tips">
+                                <p style="margin-bottom: 12px;">暂无卡密购买记录</p>
+                                <a href="/admin/buy.html" class="btn-submit" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 16px; text-decoration: none; font-size: 13px; height: 32px; color: white;">立即去购买</a>
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                try {
+                    const resp = await fetch(`/api/pay/history?out_trade_nos=${history.join(',')}`);
+                    const data = await resp.json();
+                    
+                    if (data.success && data.records && data.records.length > 0) {
+                        orderRecords = data.records; // Cache the data
+                        tableBody.innerHTML = '';
+                        data.records.forEach(rec => {
+                            const tr = document.createElement('tr');
+                            
+                            let statusText = '待支付';
+                            let statusClass = 'pending';
+                            if (rec.status === 'paid') {
+                                statusText = '已支付';
+                                statusClass = 'paid';
+                            } else if (rec.status === 'refunded') {
+                                statusText = '已退款';
+                                statusClass = 'refunded';
+                            } else if (rec.status === 'cancelled') {
+                                statusText = '已取消';
+                                statusClass = 'cancelled';
+                            }
+                            
+                            const date = new Date(rec.created_at);
+                            const timeStr = date.toLocaleString('zh-CN', { hour12: false });
+
+                            let actionHtml = '';
+                            if (rec.status === 'paid') {
+                                actionHtml = `
+                                    <button class="btn-action-view btn-show-keys" data-no="${rec.out_trade_no}">查看卡密</button>
+                                `;
+                                if (currentUserRole === 'admin') {
+                                    actionHtml += `
+                                        <button class="btn-action-view danger btn-refund-order" data-no="${rec.out_trade_no}">退款</button>
+                                    `;
+                                }
+                            } else if (rec.status === 'pending') {
+                                actionHtml = `
+                                    <a href="/admin/buy.html?out_trade_no=${rec.out_trade_no}" class="btn-action-view pending">去支付</a>
+                                    <button class="btn-action-view danger btn-cancel-order" data-no="${rec.out_trade_no}">取消</button>
+                                `;
+                            } else {
+                                actionHtml = '<span style="color:var(--slate-400); font-size:12px;">-</span>';
+                            }
+
+                            tr.innerHTML = `
+                                <td style="font-family: monospace; font-weight: 600;">${rec.out_trade_no}</td>
+                                <td style="font-size: 12px; color: var(--text-secondary);">${timeStr}</td>
+                                <td>￥${parseFloat(rec.price).toFixed(2)}</td>
+                                <td>${rec.quantity}</td>
+                                <td style="font-weight: 600; color: var(--primary);">￥${parseFloat(rec.total_amount).toFixed(2)}</td>
+                                <td style="font-weight: 500; color: var(--text-primary);">${rec.creator_name || '系统内置'}</td>
+                                <td><span class="status-tag ${statusClass}">${statusText}</span></td>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    ${actionHtml}
+                                </td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+
+                        // Bind event listener to keys viewing button
+                        document.querySelectorAll('.btn-show-keys').forEach(btn => {
+                            btn.addEventListener('click', function(e) {
+                                const no = this.getAttribute('data-no');
+                                const order = orderRecords.find(r => r.out_trade_no === no);
+                                if (order) {
+                                    modalTradeNo.textContent = order.out_trade_no;
+                                    modalAmount.textContent = parseFloat(order.total_amount).toFixed(2);
+                                    modalCardKeysText.value = order.card_keys || '';
+                                    detailModal.classList.remove('hidden');
+                                }
+                            });
+                        });
+
+                        // Bind cancel order button
+                        document.querySelectorAll('.btn-cancel-order').forEach(btn => {
+                            btn.addEventListener('click', async function(e) {
+                                const no = this.getAttribute('data-no');
+                                if (!confirm(`确定要取消未支付订单 ${no} 吗？\n取消后将释放为其预锁定的卡密库存。`)) {
+                                    return;
+                                }
+                                try {
+                                    const res = await fetch('/api/pay/cancel', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ out_trade_no: no })
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok && data.success) {
+                                        showToast(data.message || '订单取消成功');
+                                        await loadHistory();
+                                    } else {
+                                        showToast(data.message || '订单取消失败');
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    showToast('网络错误，取消订单失败');
+                                }
+                            });
+                        });
+
+                        // Bind refund order button
+                        document.querySelectorAll('.btn-refund-order').forEach(btn => {
+                            btn.addEventListener('click', async function(e) {
+                                const no = this.getAttribute('data-no');
+                                if (!confirm(`警告：确定要退款并作废该订单的卡密吗？\n系统会核对卡密使用情况，若卡密全未使用，则会自动作废对应卡密并重新重置生成新卡冲回库存。`)) {
+                                    return;
+                                }
+                                try {
+                                    const res = await fetch('/api/admin/pay/refund', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ out_trade_no: no })
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok && data.success) {
+                                        showToast(data.message || '退款作废重置成功');
+                                        await loadHistory();
+                                    } else {
+                                        showToast(data.message || '退款失败: ' + data.message);
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    showToast('网络错误，退款请求失败');
+                                }
+                            });
+                        });
+                    } else {
+                        tableBody.innerHTML = '<tr><td colspan="8" class="empty-tips">暂无有效的卡密采购订单</td></tr>';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    tableBody.innerHTML = '<tr><td colspan="8" class="empty-tips" style="color: #ef4444;">加载记录失败，请刷新页面重试</td></tr>';
+                }
+            }
+
+            // Close Modal
+            closeDetailModal.addEventListener('click', () => {
+                detailModal.classList.add('hidden');
+            });
+
+            // Click outside the modal content to close it
+            window.addEventListener('click', (e) => {
+                if (e.target === detailModal) {
+                    detailModal.classList.add('hidden');
+                }
+            });
+
+            // Copy Keys inside Modal
+            modalBtnCopyKeys.addEventListener('click', () => {
+                const keys = modalCardKeysText.value;
+                if (!keys) return;
+
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(keys).then(() => {
+                        showToast('已复制全部卡密到剪贴板');
+                    }).catch(err => {
+                        fallbackCopy(keys);
+                    });
+                } else {
+                    fallbackCopy(keys);
+                }
+            });
+
+            function fallbackCopy(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('已复制全部卡密到剪贴板');
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            // Smooth link transitions
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
+            });
+
+            // Logout event
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Trigger init check
+            checkLogin();
+        });
+    </script>
+</body>
+</html>
