@@ -205,8 +205,30 @@ func createTables() {
 		log.Fatalf("Error creating admins table: %v", err)
 	}
 
+	systemSettingsDDL := `
+	CREATE TABLE IF NOT EXISTS system_settings (
+		setting_key VARCHAR(128) PRIMARY KEY,
+		setting_value TEXT NOT NULL,
+		updated_at DATETIME NOT NULL
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
 		log.Fatalf("Error creating admin_sessions table: %v", err)
+	}
+
+	if _, err := db.Exec(systemSettingsDDL); err != nil {
+		log.Fatalf("Error creating system_settings table: %v", err)
+	}
+
+	// Insert default two-factor tutorial URL if not present
+	var countSettings int
+	errCheckSettings := db.QueryRow("SELECT COUNT(*) FROM system_settings WHERE setting_key = 'two_factor_tutorial_url'").Scan(&countSettings)
+	if errCheckSettings == nil && countSettings == 0 {
+		_, errInsert := db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES (?, ?, ?)",
+			"two_factor_tutorial_url", "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1", time.Now())
+		if errInsert != nil {
+			log.Printf("Warning: failed to insert default two_factor_tutorial_url: %v\n", errInsert)
+		}
 	}
 	log.Println("Tables verified/created successfully.")
 
@@ -1661,6 +1683,91 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var tutorialURL string
+	err := db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'two_factor_tutorial_url'").Scan(&tutorialURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			tutorialURL = "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"
+		} else {
+			log.Printf("Error querying setting: %v\n", err)
+			tutorialURL = "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"
+		}
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":                 true,
+		"two_factor_tutorial_url": tutorialURL,
+	})
+}
+
+func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		var tutorialURL string
+		err := db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'two_factor_tutorial_url'").Scan(&tutorialURL)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				tutorialURL = "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"
+			} else {
+				log.Printf("Error querying setting: %v\n", err)
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"message": "获取系统设置失败",
+				})
+				return
+			}
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"settings": map[string]string{
+				"two_factor_tutorial_url": tutorialURL,
+			},
+		})
+	} else if r.Method == http.MethodPost {
+		var req struct {
+			TwoFactorTutorialURL string `json:"two_factor_tutorial_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "无效的请求数据",
+			})
+			return
+		}
+		if req.TwoFactorTutorialURL == "" {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "教程链接不能为空",
+			})
+			return
+		}
+
+		now := time.Now()
+		_, err := db.Exec(`
+			INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+			VALUES ('two_factor_tutorial_url', ?, ?) 
+			ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = ?`,
+			req.TwoFactorTutorialURL, now, req.TwoFactorTutorialURL, now)
+		if err != nil {
+			log.Printf("Error updating settings: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "保存系统设置失败",
+			})
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "系统设置保存成功",
+		})
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 func main() {
 	// 1. Initialize database connection
 	initDB()
@@ -1685,6 +1792,9 @@ func main() {
 	// API - Reset existing system keys and link to new ones (Whitelisted)
 	http.HandleFunc("/api/reset_keys", handleResetKeys)
 
+	// Public config API
+	http.HandleFunc("/api/config", handleGetConfig)
+
 	// Admin APIs
 	http.HandleFunc("/api/admin/login", handleAdminLogin)
 	http.HandleFunc("/api/admin/logout", handleAdminLogout)
@@ -1694,6 +1804,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders/history", requireAdmin(handleAdminOrderHistory))
 	http.HandleFunc("/api/admin/keys", requireAdmin(handleAdminKeys))
 	http.HandleFunc("/api/admin/dashboard/stats", requireAdmin(handleAdminDashboardStats))
+	http.HandleFunc("/api/admin/settings", requireAdmin(handleAdminSettings))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)

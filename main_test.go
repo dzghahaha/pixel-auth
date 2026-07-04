@@ -1420,3 +1420,152 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("expected 302 Found redirect for unauthenticated /admin/, got %d", rrStaticAdmin.Code)
 	}
 }
+
+func TestSettingsAndConfigFlow(t *testing.T) {
+	// Re-initialize DB tables for isolation
+	initDB()
+
+	// 1. Check default tutorial url exists in DB and can be retrieved via public API /api/config
+	reqConfig := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	rrConfig := httptest.NewRecorder()
+	handleGetConfig(rrConfig, reqConfig)
+
+	if rrConfig.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rrConfig.Code)
+	}
+
+	var configResp map[string]interface{}
+	if err := json.Unmarshal(rrConfig.Body.Bytes(), &configResp); err != nil {
+		t.Fatalf("failed to unmarshal config response: %v", err)
+	}
+
+	if configResp["success"] != true {
+		t.Errorf("expected success: true, got %v", configResp["success"])
+	}
+
+	defaultURL := "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"
+	if configResp["two_factor_tutorial_url"] != defaultURL {
+		t.Errorf("expected default tutorial URL %q, got %q", defaultURL, configResp["two_factor_tutorial_url"])
+	}
+
+	// 2. GET /api/admin/settings without admin authentication should fail with 401
+	reqAdminGetUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	rrAdminGetUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminSettings)(rrAdminGetUnauth, reqAdminGetUnauth)
+
+	if rrAdminGetUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for unauthenticated GET /api/admin/settings, got %d", rrAdminGetUnauth.Code)
+	}
+
+	// 3. POST /api/admin/settings without admin authentication should fail with 401
+	reqAdminPostUnauth := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(`{"two_factor_tutorial_url":"https://test-url.com"}`))
+	rrAdminPostUnauth := httptest.NewRecorder()
+	requireAdmin(handleAdminSettings)(rrAdminPostUnauth, reqAdminPostUnauth)
+
+	if rrAdminPostUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized for unauthenticated POST /api/admin/settings, got %d", rrAdminPostUnauth.Code)
+	}
+
+	// 4. Authenticate admin and obtain token
+	// Insert test admin if not exists (initDB ensures this but let's be safe)
+	var adminCount int
+	db.QueryRow("SELECT COUNT(*) FROM admins WHERE username = 'admin'").Scan(&adminCount)
+	if adminCount == 0 {
+		hashed, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		db.Exec("INSERT INTO admins (username, password_hash, created_at, updated_at) VALUES ('admin', ?, ?, ?)", string(hashed), time.Now(), time.Now())
+	} else {
+		// Reset password for admin to 'admin123' to make sure
+		hashed, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		db.Exec("UPDATE admins SET password_hash = ? WHERE username = 'admin'", string(hashed))
+	}
+
+	// Login
+	loginBody := `{"username":"admin","password":"admin123"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+
+	if rrLogin.Code != http.StatusOK {
+		t.Fatalf("failed to login: %d", rrLogin.Code)
+	}
+
+	// Extract cookie
+	cookies := rrLogin.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "admin_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatalf("session cookie not found in login response")
+	}
+
+	// 5. GET /api/admin/settings WITH admin authentication
+	reqAdminGetAuth := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	reqAdminGetAuth.AddCookie(sessionCookie)
+	rrAdminGetAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminSettings)(rrAdminGetAuth, reqAdminGetAuth)
+
+	if rrAdminGetAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for authenticated GET, got %d", rrAdminGetAuth.Code)
+	}
+
+	var adminGetResp map[string]interface{}
+	if err := json.Unmarshal(rrAdminGetAuth.Body.Bytes(), &adminGetResp); err != nil {
+		t.Fatalf("failed to unmarshal admin GET response: %v", err)
+	}
+
+	settings, ok := adminGetResp["settings"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("settings map not found in response: %v", adminGetResp)
+	}
+
+	if settings["two_factor_tutorial_url"] != defaultURL {
+		t.Errorf("expected default URL %q, got %q", defaultURL, settings["two_factor_tutorial_url"])
+	}
+
+	// 6. POST /api/admin/settings WITH admin authentication (Update)
+	newTestURL := "https://www.yuque.com/test-new-link"
+	updateBody := fmt.Sprintf(`{"two_factor_tutorial_url": %q}`, newTestURL)
+	reqAdminPostAuth := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(updateBody))
+	reqAdminPostAuth.AddCookie(sessionCookie)
+	rrAdminPostAuth := httptest.NewRecorder()
+	requireAdmin(handleAdminSettings)(rrAdminPostAuth, reqAdminPostAuth)
+
+	if rrAdminPostAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for authenticated POST, got %d", rrAdminPostAuth.Code)
+	}
+
+	var adminPostResp map[string]interface{}
+	if err := json.Unmarshal(rrAdminPostAuth.Body.Bytes(), &adminPostResp); err != nil {
+		t.Fatalf("failed to unmarshal admin POST response: %v", err)
+	}
+
+	if adminPostResp["success"] != true {
+		t.Errorf("expected success: true, got %v", adminPostResp["success"])
+	}
+
+	// 7. Verify GET /api/config and GET /api/admin/settings return the updated URL
+	// Public endpoint check
+	rrConfigUpdated := httptest.NewRecorder()
+	handleGetConfig(rrConfigUpdated, reqConfig)
+
+	var configRespUpdated map[string]interface{}
+	json.Unmarshal(rrConfigUpdated.Body.Bytes(), &configRespUpdated)
+	if configRespUpdated["two_factor_tutorial_url"] != newTestURL {
+		t.Errorf("expected updated URL %q, got %q", newTestURL, configRespUpdated["two_factor_tutorial_url"])
+	}
+
+	// Admin endpoint check
+	rrAdminGetAuthUpdated := httptest.NewRecorder()
+	requireAdmin(handleAdminSettings)(rrAdminGetAuthUpdated, reqAdminGetAuth)
+
+	var adminGetRespUpdated map[string]interface{}
+	json.Unmarshal(rrAdminGetAuthUpdated.Body.Bytes(), &adminGetRespUpdated)
+	settingsUpdated := adminGetRespUpdated["settings"].(map[string]interface{})
+	if settingsUpdated["two_factor_tutorial_url"] != newTestURL {
+		t.Errorf("expected updated URL in admin GET %q, got %q", newTestURL, settingsUpdated["two_factor_tutorial_url"])
+	}
+}

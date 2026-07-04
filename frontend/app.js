@@ -21,6 +21,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentMode = 'single'; // 'single' or 'batch'
 
+    // Fetch system configurations
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/config');
+            const data = await res.json();
+            if (res.ok && data.success && data.two_factor_tutorial_url) {
+                const tutorialLink = document.getElementById('two-factor-tutorial-link');
+                if (tutorialLink) {
+                    tutorialLink.href = data.two_factor_tutorial_url;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load system config:', e);
+        }
+    }
+    loadConfig();
+
     // Mode Switch Handlers
     btnModeSingle.addEventListener('click', () => {
         currentMode = 'single';
