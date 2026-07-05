@@ -330,6 +330,30 @@ textarea:focus {
     border-color: #f87171;
 }
 
+/* Invalidate Card Secret Button */
+.btn-invalidate-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ffffff 0%, #fee2e2 100%);
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    margin-left: 6px;
+}
+
+.btn-invalidate-key:hover {
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+    border-color: #dc2626;
+    color: #ffffff;
+}
+
 /* Tables with clean horizontal borders */
 .table-container {
     width: 100%;

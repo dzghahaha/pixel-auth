@@ -295,7 +295,10 @@
                             if (k.status === 'active') {
                                 statusClass = 'success';
                                 statusText = '生效中';
-                                actionBtnHtml = `<button type="button" class="btn-reset-key" data-key="${k.system_key}">重置</button>`;
+                                actionBtnHtml = `
+                                    <button type="button" class="btn-reset-key" data-key="${k.system_key}">重置</button>
+                                    <button type="button" class="btn-invalidate-key" data-key="${k.system_key}">作废</button>
+                                `;
                             } else if (k.status === 'inactive') {
                                 statusClass = 'failed';
                                 statusText = '已作废';
@@ -324,6 +327,14 @@
                             btn.addEventListener('click', (e) => {
                                 const key = e.target.getAttribute('data-key');
                                 resetKeyConfirm(key);
+                            });
+                        });
+
+                        // Bind invalidate event
+                        document.querySelectorAll('.btn-invalidate-key').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const key = e.target.getAttribute('data-key');
+                                invalidateKeyConfirm(key);
                             });
                         });
 
@@ -370,6 +381,36 @@
                 } catch (e) {
                     console.error(e);
                     showToast('网络错误，重置密钥失败');
+                }
+            }
+
+            // Invalidate system key
+            async function invalidateKeyConfirm(key) {
+                if (!confirm(`确认要作废卡密 ${key} 吗？作废后该卡密将无法再用于提交订单。`)) {
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/admin/keys/invalidate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            system_key: key
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '卡密已成功作废');
+                        loadKeys(); // reload keys list
+                    } else {
+                        alert(data.message || '作废卡密失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，作废卡密失败');
                 }
             }
 

@@ -539,6 +539,106 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleAdminKeysInvalidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		SystemKey string `json:"system_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求参数",
+		})
+		return
+	}
+
+	req.SystemKey = strings.TrimSpace(req.SystemKey)
+	if req.SystemKey == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "卡密不能为空",
+		})
+		return
+	}
+
+	adminID, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "请登录后操作",
+		})
+		return
+	}
+
+	var role string
+	err := db.QueryRow("SELECT role FROM admins WHERE id = ?", adminID).Scan(&role)
+	if err != nil {
+		log.Printf("Error querying user role for key invalidate: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询用户权限失败",
+		})
+		return
+	}
+
+	var keyCreatorID sql.NullInt64
+	var keyStatus string
+	err = db.QueryRow("SELECT creator_id, status FROM system_keys WHERE system_key = ?", req.SystemKey).Scan(&keyCreatorID, &keyStatus)
+	if err == sql.ErrNoRows {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "卡密不存在",
+		})
+		return
+	} else if err != nil {
+		log.Printf("Error querying key creator: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询卡密失败",
+		})
+		return
+	}
+
+	// Check permission: Non-admin role can only invalidate their own created keys
+	if role != "admin" {
+		if !keyCreatorID.Valid || keyCreatorID.Int64 != adminID {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"success": false,
+				"message": "您无权作废此卡密",
+			})
+			return
+		}
+	}
+
+	if keyStatus == "inactive" {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "该卡密已经处于作废状态",
+		})
+		return
+	}
+
+	now := time.Now()
+	_, errUpdate := db.Exec("UPDATE system_keys SET status = 'inactive', updated_at = ? WHERE system_key = ?", now, req.SystemKey)
+	if errUpdate != nil {
+		log.Printf("Error invalidating key: %v\n", errUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "作废卡密失败，请稍后重试",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "卡密已成功作废",
+	})
+}
+
 func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -872,7 +972,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	rows, err := db.Query("SELECT id, username, role, created_at, updated_at FROM admins ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, username, nickname, role, created_at, updated_at FROM admins ORDER BY id ASC")
 	if err != nil {
 		log.Printf("Error querying admins: %v\n", err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -886,6 +986,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 	type AdminUser struct {
 		ID          int64     `json:"id"`
 		Username    string    `json:"username"`
+		Nickname    string    `json:"nickname"`
 		Role        string    `json:"role"`
 		Permissions []string  `json:"permissions"`
 		CreatedAt   time.Time `json:"created_at"`
@@ -895,7 +996,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 	var users []AdminUser
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			log.Printf("Error scanning admin row: %v\n", err)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
@@ -932,6 +1033,7 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Username    string   `json:"username"`
+		Nickname    string   `json:"nickname"`
 		Password    string   `json:"password"`
 		Role        string   `json:"role"`
 		Permissions []string `json:"permissions"`
@@ -944,6 +1046,7 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
+	req.Nickname = strings.TrimSpace(req.Nickname)
 	req.Password = strings.TrimSpace(req.Password)
 	if req.Username == "" || req.Password == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -976,8 +1079,8 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	now := time.Now()
-	res, errInsert := tx.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		req.Username, string(hashedPassword), req.Role, now, now)
+	res, errInsert := tx.Exec("INSERT INTO admins (username, nickname, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Username, req.Nickname, string(hashedPassword), req.Role, now, now)
 	if errInsert != nil {
 		log.Printf("Error creating admin user: %v\n", errInsert)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1022,6 +1125,7 @@ func handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		ID          int64    `json:"id"`
+		Nickname    string   `json:"nickname"`
 		Password    string   `json:"password"`
 		Role        string   `json:"role"`
 		Permissions []string `json:"permissions"`
@@ -1072,6 +1176,7 @@ func handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	now := time.Now()
+	req.Nickname = strings.TrimSpace(req.Nickname)
 	req.Password = strings.TrimSpace(req.Password)
 	if req.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -1082,8 +1187,8 @@ func handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		_, errUpdate := tx.Exec("UPDATE admins SET password_hash = ?, role = ?, updated_at = ? WHERE id = ?",
-			string(hashedPassword), req.Role, now, req.ID)
+		_, errUpdate := tx.Exec("UPDATE admins SET nickname = ?, password_hash = ?, role = ?, updated_at = ? WHERE id = ?",
+			req.Nickname, string(hashedPassword), req.Role, now, req.ID)
 		if errUpdate != nil {
 			log.Printf("Error updating admin: %v\n", errUpdate)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1093,8 +1198,8 @@ func handleAdminUsersUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		_, errUpdate := tx.Exec("UPDATE admins SET role = ?, updated_at = ? WHERE id = ?",
-			req.Role, now, req.ID)
+		_, errUpdate := tx.Exec("UPDATE admins SET nickname = ?, role = ?, updated_at = ? WHERE id = ?",
+			req.Nickname, req.Role, now, req.ID)
 		if errUpdate != nil {
 			log.Printf("Error updating admin: %v\n", errUpdate)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{

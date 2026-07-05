@@ -74,6 +74,7 @@
                     <tr>
                         <th style="width: 80px;">用户ID</th>
                         <th>用户名</th>
+                        <th>昵称</th>
                         <th style="width: 120px;">角色</th>
                         <th>拥有菜单权限</th>
                         <th style="width: 180px;">创建时间</th>
@@ -103,7 +104,14 @@
                         <input type="text" id="user-username" required placeholder="请输入用户名" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                     </div>
                     <div class="form-group" style="margin-bottom: 16px;">
-                        <label for="user-password" id="label-password" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">密码</label>
+                        <label for="user-nickname" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">昵称</label>
+                        <input type="text" id="user-nickname" placeholder="请输入昵称" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label for="user-password" id="label-password" style="font-weight: 600; display: block; font-size: 13px; color: var(--text-secondary); margin: 0;">密码</label>
+                            <button type="button" id="btn-gen-pwd" style="background: none; border: none; color: var(--primary, #0284c7); cursor: pointer; font-size: 12px; font-weight: 600; padding: 0;">一键生成</button>
+                        </div>
                         <input type="password" id="user-password" placeholder="请输入密码" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                         <small style="color: var(--slate-400); display: block; margin-top: 4px; font-size: 11px;" id="password-help">密码必须填。</small>
                     </div>
@@ -155,7 +163,9 @@
 
             const formUserId = document.getElementById('user-id');
             const formUsername = document.getElementById('user-username');
+            const formNickname = document.getElementById('user-nickname');
             const formPassword = document.getElementById('user-password');
+            const btnGenPwd = document.getElementById('btn-gen-pwd');
             const formPasswordHelp = document.getElementById('password-help');
             const formRole = document.getElementById('user-role');
             const modalTitle = document.getElementById('modal-title');
@@ -273,17 +283,17 @@
                     if (res.ok && data.success) {
                         renderUsers(data.users);
                     } else {
-                        userTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">${data.message || '加载用户列表失败'}</td></tr>`;
+                        userTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger);">${data.message || '加载用户列表失败'}</td></tr>`;
                     }
                 } catch (e) {
                     console.error(e);
-                    userTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">加载用户列表错误，请刷新重试</td></tr>`;
+                    userTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger);">加载用户列表错误，请刷新重试</td></tr>`;
                 }
             }
 
             function renderUsers(users) {
                 if (!users || users.length === 0) {
-                    userTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--slate-400);">暂无用户</td></tr>';
+                    userTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--slate-400);">暂无用户</td></tr>';
                     return;
                 }
                 userTableBody.innerHTML = '';
@@ -316,6 +326,7 @@
                     tr.innerHTML = `
                         <td>${u.id}</td>
                         <td style="font-weight:600;">${u.username}</td>
+                        <td>${u.nickname || '-'}</td>
                         <td>${roleDisplay}</td>
                         <td>${permHtml}</td>
                         <td>${createTime}</td>
@@ -345,12 +356,24 @@
                 });
             }
 
+            // One-click generate password
+            btnGenPwd.addEventListener('click', () => {
+                const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+                let pwd = "";
+                for (let i = 0; i < 16; i++) {
+                    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                formPassword.value = pwd;
+                formPassword.type = 'text'; // Make it visible to user
+            });
+
             // Open Modal for Create
             btnAddUser.addEventListener('click', () => {
                 modalTitle.textContent = '新增用户';
                 formUserId.value = '';
                 formUsername.value = '';
                 formUsername.disabled = false;
+                formNickname.value = '';
                 formPassword.value = '';
                 formPassword.placeholder = '请输入用户密码';
                 formPasswordHelp.textContent = '新增用户时密码为必填项。';
@@ -372,6 +395,7 @@
                 formUserId.value = id;
                 formUsername.value = username;
                 formUsername.disabled = true; // Username is immutable
+                formNickname.value = '';
                 formPassword.value = '';
                 formPassword.placeholder = '留空表示不修改密码';
                 formPasswordHelp.textContent = '修改用户时如果不需要重置密码，请保持密码框留空。';
@@ -387,14 +411,14 @@
                     });
                 } else {
                     formRole.disabled = false;
-                    // Pre-fill permissions from the row mapping
-                    // Fetch users again or extract from row directly
+                    // Pre-fill permissions and nickname from the row mapping
                     try {
                         const res = await fetch('/api/admin/users');
                         const data = await res.json();
                         if (res.ok && data.success) {
                             const u = data.users.find(user => String(user.id) === String(id));
                             if (u) {
+                                formNickname.value = u.nickname || '';
                                 document.querySelectorAll('input[name="permissions"]').forEach(cb => {
                                     cb.checked = u.permissions.includes(cb.value);
                                 });
@@ -432,6 +456,7 @@
             btnSaveUser.addEventListener('click', async () => {
                 const id = formUserId.value;
                 const username = formUsername.value.trim();
+                const nickname = formNickname.value.trim();
                 const password = formPassword.value.trim();
                 const role = formRole.value;
 
@@ -452,7 +477,7 @@
                 }
 
                 const url = id ? '/api/admin/users/update' : '/api/admin/users/create';
-                const payload = id ? { id: parseInt(id), password, role, permissions } : { username, password, role, permissions };
+                const payload = id ? { id: parseInt(id), nickname, password, role, permissions } : { username, nickname, password, role, permissions };
 
                 btnSaveUser.disabled = true;
                 const originalText = btnSaveUser.innerText;

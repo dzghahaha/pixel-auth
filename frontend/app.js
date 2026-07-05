@@ -90,6 +90,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return twoFactor;
     }
 
+    // Validate 2FA key or backup codes format
+    function isValid2FA(twoFactor) {
+        if (!twoFactor) return false;
+        
+        // Case 1: 32-character key after removing spaces
+        const cleanKey = twoFactor.replace(/\s+/g, '');
+        if (/^[a-zA-Z0-9]{32}$/.test(cleanKey)) {
+            return true;
+        }
+        
+        // Case 2: 8-digit backup codes (can be multiple, separated by spaces/dashes/commas)
+        // Check that the string contains only digits and allowed separators (spaces, dashes, commas)
+        const clean = twoFactor.trim();
+        if (/^[0-9\s\-,]+$/.test(clean)) {
+            const cleanDigits = clean.replace(/\D/g, '');
+            if (cleanDigits.length > 0 && cleanDigits.length % 8 === 0) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     // Parse batch line
     function parseBatchLine(line) {
         line = line.trim();
@@ -121,20 +144,40 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
+        let username = parts[0];
+        let password = parts[1];
+        let extraEmail = '';
+        let twoFactor = '';
+
         if (parts.length === 3) {
+            twoFactor = formatBackupCodes(parts[2]);
+        } else {
+            extraEmail = parts[2];
+            twoFactor = formatBackupCodes(parts[3]);
+        }
+
+        if (!isValid2FA(twoFactor)) {
             return {
-                username: parts[0],
-                password: parts[1],
-                two_factor: formatBackupCodes(parts[2])
+                username: username,
+                password: password,
+                two_factor: twoFactor,
+                error: '2FA格式不正确，必须为32位密钥或8位备用码'
             };
         }
 
-        // 4 or more parts: username, password, extra_email, two_factor
+        if (parts.length === 3) {
+            return {
+                username: username,
+                password: password,
+                two_factor: twoFactor
+            };
+        }
+
         return {
-            username: parts[0],
-            password: parts[1],
-            extra_email: parts[2],
-            two_factor: formatBackupCodes(parts[3])
+            username: username,
+            password: password,
+            extra_email: extraEmail,
+            two_factor: twoFactor
         };
     }
 
@@ -155,6 +198,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!username || !password || !twoFactor) {
                 showToast('请填写所有必填项');
+                return;
+            }
+
+            if (!isValid2FA(twoFactor)) {
+                showToast('2FA格式不正确，必须为32位密钥或8位备用码');
                 return;
             }
 

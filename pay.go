@@ -582,13 +582,15 @@ func handlePayHistory(w http.ResponseWriter, r *http.Request) {
 
 	if role == "admin" {
 		rows, err = db.Query(`
-			SELECT o.out_trade_no, o.status, o.quantity, o.price, o.total_amount, o.card_keys, o.created_at, COALESCE(a.username, '系统内置')
+			SELECT o.out_trade_no, o.status, o.quantity, o.price, o.total_amount, o.card_keys, o.created_at, 
+			       COALESCE(a.username, '系统内置'), COALESCE(a.nickname, '')
 			FROM key_orders o
 			LEFT JOIN admins a ON o.creator_id = a.id
 			ORDER BY o.id DESC`)
 	} else {
 		rows, err = db.Query(`
-			SELECT o.out_trade_no, o.status, o.quantity, o.price, o.total_amount, o.card_keys, o.created_at, COALESCE(a.username, '系统内置')
+			SELECT o.out_trade_no, o.status, o.quantity, o.price, o.total_amount, o.card_keys, o.created_at, 
+			       COALESCE(a.username, '系统内置'), COALESCE(a.nickname, '')
 			FROM key_orders o
 			LEFT JOIN admins a ON o.creator_id = a.id
 			WHERE o.creator_id = ?
@@ -606,21 +608,22 @@ func handlePayHistory(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type OrderRecord struct {
-		OutTradeNo  string    `json:"out_trade_no"`
-		Status      string    `json:"status"`
-		Quantity    int       `json:"quantity"`
-		Price       float64   `json:"price"`
-		TotalAmount float64   `json:"total_amount"`
-		CardKeys    string    `json:"card_keys,omitempty"`
-		CreatedAt   time.Time `json:"created_at"`
-		CreatorName string    `json:"creator_name"`
+		OutTradeNo      string    `json:"out_trade_no"`
+		Status          string    `json:"status"`
+		Quantity        int       `json:"quantity"`
+		Price           float64   `json:"price"`
+		TotalAmount     float64   `json:"total_amount"`
+		CardKeys        string    `json:"card_keys,omitempty"`
+		CreatedAt       time.Time `json:"created_at"`
+		CreatorName     string    `json:"creator_name"`
+		CreatorNickname string    `json:"creator_nickname"`
 	}
 
 	var records []OrderRecord
 	for rows.Next() {
 		var rec OrderRecord
 		var cardKeys sql.NullString
-		errScan := rows.Scan(&rec.OutTradeNo, &rec.Status, &rec.Quantity, &rec.Price, &rec.TotalAmount, &cardKeys, &rec.CreatedAt, &rec.CreatorName)
+		errScan := rows.Scan(&rec.OutTradeNo, &rec.Status, &rec.Quantity, &rec.Price, &rec.TotalAmount, &cardKeys, &rec.CreatedAt, &rec.CreatorName, &rec.CreatorNickname)
 		if errScan != nil {
 			log.Printf("Scan pay history error: %v\n", errScan)
 			continue

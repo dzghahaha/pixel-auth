@@ -134,13 +134,14 @@
                             <th>购买数量 (张)</th>
                             <th>支付总额 (元)</th>
                             <th>购买账户</th>
+                            <th>用户昵称</th>
                             <th>支付状态</th>
                             <th style="text-align: right; padding-right: 20px;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="8" class="empty-tips">正在加载历史记录...</td>
+                            <td colspan="9" class="empty-tips">正在加载历史记录...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -255,7 +256,7 @@
                 if (history.length === 0) {
                     tableBody.innerHTML = `
                         <tr>
-                            <td colspan="8" class="empty-tips">
+                            <td colspan="9" class="empty-tips">
                                 <p style="margin-bottom: 12px;">暂无卡密购买记录</p>
                                 <a href="/admin/buy.html" class="btn-submit" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 16px; text-decoration: none; font-size: 13px; height: 32px; color: white;">立即去购买</a>
                             </td>
@@ -315,6 +316,7 @@
                                 <td>${rec.quantity}</td>
                                 <td style="font-weight: 600; color: var(--primary);">￥${parseFloat(rec.total_amount).toFixed(2)}</td>
                                 <td style="font-weight: 500; color: var(--text-primary);">${rec.creator_name || '系统内置'}</td>
+                                <td style="color: var(--text-secondary);">${rec.creator_nickname || '-'}</td>
                                 <td><span class="status-tag ${statusClass}">${statusText}</span></td>
                                 <td style="text-align: right; padding-right: 20px;">
                                     ${actionHtml}
@@ -391,11 +393,11 @@
                             });
                         });
                     } else {
-                        tableBody.innerHTML = '<tr><td colspan="8" class="empty-tips">暂无有效的卡密采购订单</td></tr>';
+                        tableBody.innerHTML = '<tr><td colspan="9" class="empty-tips">暂无有效的卡密采购订单</td></tr>';
                     }
                 } catch (err) {
                     console.error(err);
-                    tableBody.innerHTML = '<tr><td colspan="8" class="empty-tips" style="color: #ef4444;">加载记录失败，请刷新页面重试</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="9" class="empty-tips" style="color: #ef4444;">加载记录失败，请刷新页面重试</td></tr>';
                 }
             }
 

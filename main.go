@@ -56,6 +56,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders/update", requirePermission("orders", handleAdminOrdersUpdate))
 	http.HandleFunc("/api/admin/orders/history", requirePermission("orders", handleAdminOrderHistory))
 	http.HandleFunc("/api/admin/keys", requirePermission("keys", handleAdminKeys))
+	http.HandleFunc("/api/admin/keys/invalidate", requirePermission("keys", handleAdminKeysInvalidate))
 	http.HandleFunc("/api/admin/generate_stock_keys", requirePermission("generate", handleGenerateStockKeys))
 	http.HandleFunc("/api/admin/pay/refund", requirePermission("buy", handleAdminPayRefund))
 	http.HandleFunc("/api/admin/vendors", requirePermission("vendors", handleAdminVendors))

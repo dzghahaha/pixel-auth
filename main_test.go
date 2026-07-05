@@ -76,6 +76,8 @@ func initTestDB(t *testing.T) {
 	}
 
 	// Re-create tables
+	_, _ = db.Exec("DROP TABLE IF EXISTS system_settings")
+	_, _ = db.Exec("DROP TABLE IF EXISTS key_vendors")
 	createTables()
 
 	// Clear tables for test isolation
@@ -1436,7 +1438,11 @@ func TestAdminBackendFlow(t *testing.T) {
 
 func TestSettingsAndConfigFlow(t *testing.T) {
 	// Re-initialize DB tables for isolation
-	initDB()
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
 
 	// 1. Check default tutorial url exists in DB and can be retrieved via public API /api/config
 	reqConfig := httptest.NewRequest(http.MethodGet, "/api/config", nil)
@@ -1872,5 +1878,123 @@ func TestEpayCancelAndRefund(t *testing.T) {
 	// So 1 + 2 = 3 available keys!
 	if finalAvailable != 3 {
 		t.Errorf("expected 3 available keys back in card_stock pool, got %d", finalAvailable)
+	}
+}
+
+func TestAdminKeysInvalidate(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// Clear admin and keys tables
+	_, _ = db.Exec("DELETE FROM admin_sessions")
+	_, _ = db.Exec("DELETE FROM admins")
+	_, _ = db.Exec("DELETE FROM system_keys")
+
+	// Insert test admin
+	hashedAdminPassword, _ := bcrypt.GenerateFromPassword([]byte("adminpass123"), bcrypt.DefaultCost)
+	now := time.Now()
+	resAdmin, err := db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?)",
+		"testadmin", string(hashedAdminPassword), now, now)
+	if err != nil {
+		t.Fatalf("failed to insert admin: %v", err)
+	}
+	adminID, _ := resAdmin.LastInsertId()
+
+	// Insert test user (regular user)
+	hashedUserPassword, _ := bcrypt.GenerateFromPassword([]byte("userpass123"), bcrypt.DefaultCost)
+	resUser, err := db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, 'user', ?, ?)",
+		"testuser", string(hashedUserPassword), now, now)
+	if err != nil {
+		t.Fatalf("failed to insert user: %v", err)
+	}
+	userID, _ := resUser.LastInsertId()
+
+	// Add keys permission to user so they pass requirePermission check
+	_, _ = db.Exec("INSERT INTO admin_permissions (admin_id, permission, created_at) VALUES (?, 'keys', ?)", userID, now)
+
+	// Log in as admin to get cookie
+	loginPayload := `{"username": "testadmin", "password": "adminpass123"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginPayload))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	adminCookie := rrLogin.Result().Cookies()[0]
+
+	// Log in as user to get cookie
+	loginPayloadUser := `{"username": "testuser", "password": "userpass123"}`
+	reqLoginUser := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginPayloadUser))
+	rrLoginUser := httptest.NewRecorder()
+	handleAdminLogin(rrLoginUser, reqLoginUser)
+	userCookie := rrLoginUser.Result().Cookies()[0]
+
+	// Insert test keys: one owned by admin (creator_id = adminID), one owned by user (creator_id = userID)
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"key-admin", "ai.deard.fun", "vendor-key-1", "active", adminID, "key-admin", now, now)
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"key-user", "ai.deard.fun", "vendor-key-2", "active", userID, "key-user", now, now)
+
+	// 1. Test Invalidate key-admin as Admin - Should succeed
+	invalidatePayload := `{"system_key": "key-admin"}`
+	req1 := httptest.NewRequest(http.MethodPost, "/api/admin/keys/invalidate", strings.NewReader(invalidatePayload))
+	req1.AddCookie(adminCookie)
+	rr1 := httptest.NewRecorder()
+	requirePermission("keys", handleAdminKeysInvalidate)(rr1, req1)
+
+	if rr1.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d. Body: %s", rr1.Code, rr1.Body.String())
+	}
+	var resp1 map[string]interface{}
+	json.Unmarshal(rr1.Body.Bytes(), &resp1)
+	if resp1["success"] != true {
+		t.Errorf("expected success: true, got %v", resp1["success"])
+	}
+
+	// Verify key-admin is inactive
+	var statusAdminKey string
+	db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'key-admin'").Scan(&statusAdminKey)
+	if statusAdminKey != "inactive" {
+		t.Errorf("expected inactive, got %s", statusAdminKey)
+	}
+
+	// 2. Test Invalidate key-user as Admin - Should succeed (admin has permission for all keys)
+	invalidatePayload2 := `{"system_key": "key-user"}`
+	req2 := httptest.NewRequest(http.MethodPost, "/api/admin/keys/invalidate", strings.NewReader(invalidatePayload2))
+	req2.AddCookie(adminCookie)
+	rr2 := httptest.NewRecorder()
+	requirePermission("keys", handleAdminKeysInvalidate)(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr2.Code)
+	}
+
+	// Reset key-user back to active for testing user role
+	_, _ = db.Exec("UPDATE system_keys SET status = 'active' WHERE system_key = 'key-user'")
+
+	// 3. Test Invalidate key-admin as User - Should fail (User doesn't own key-admin)
+	req3 := httptest.NewRequest(http.MethodPost, "/api/admin/keys/invalidate", strings.NewReader(invalidatePayload))
+	req3.AddCookie(userCookie)
+	rr3 := httptest.NewRecorder()
+	requirePermission("keys", handleAdminKeysInvalidate)(rr3, req3)
+
+	if rr3.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d. Body: %s", rr3.Code, rr3.Body.String())
+	}
+
+	// 4. Test Invalidate key-user as User - Should succeed (User owns key-user)
+	req4 := httptest.NewRequest(http.MethodPost, "/api/admin/keys/invalidate", strings.NewReader(invalidatePayload2))
+	req4.AddCookie(userCookie)
+	rr4 := httptest.NewRecorder()
+	requirePermission("keys", handleAdminKeysInvalidate)(rr4, req4)
+
+	if rr4.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d. Body: %s", rr4.Code, rr4.Body.String())
+	}
+
+	var statusUserKey string
+	db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'key-user'").Scan(&statusUserKey)
+	if statusUserKey != "inactive" {
+		t.Errorf("expected inactive, got %s", statusUserKey)
 	}
 }

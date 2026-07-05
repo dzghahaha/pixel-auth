@@ -4,6 +4,9 @@
 $ServerIP = "212.129.244.194"
 $User = "root"
 $SSHKey = "C:\Users\15562907296\.ssh\id_rsa_46"
+if (-not (Test-Path $SSHKey)) {
+    $SSHKey = "C:\Users\ding\.ssh\id_rsa_194"
+}
 $RemoteDir = "/home/taozi/pixel_auth"
 $RemotePath = "/home/taozi/pixel_auth/pixel-auth-linux"
 $ServiceName = "pixel-auth"
@@ -19,7 +22,12 @@ $oldGoarch = $env:GOARCH
 $env:GOOS = "linux"
 $env:GOARCH = "amd64"
 
-go build -ldflags="-s -w" -o pixel-auth-linux .
+$GoCmd = "go"
+if (-not (Get-Command $GoCmd -ErrorAction SilentlyContinue)) {
+    $GoCmd = "C:\Users\ding\go\pkg\mod\golang.org\toolchain@v0.0.1-go1.25.0.windows-amd64\bin\go.exe"
+}
+
+& $GoCmd build -ldflags="-s -w" -o pixel-auth-linux .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Compilation failed!" -ForegroundColor Red
     $env:GOOS = $oldGoos

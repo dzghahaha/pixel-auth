@@ -163,6 +163,7 @@ func createTables() {
 	CREATE TABLE IF NOT EXISTS admins (
 		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 		username VARCHAR(128) NOT NULL UNIQUE,
+		nickname VARCHAR(128) NOT NULL DEFAULT '',
 		password_hash VARCHAR(255) NOT NULL,
 		role VARCHAR(32) NOT NULL DEFAULT 'user',
 		permissions TEXT DEFAULT NULL,
@@ -434,6 +435,21 @@ func createTables() {
 		log.Println("Adding 'permissions' column to 'admins' table...")
 		if _, err := db.Exec("ALTER TABLE admins ADD COLUMN permissions TEXT DEFAULT NULL"); err != nil {
 			log.Printf("Warning: failed to add permissions column to admins: %v\n", err)
+		}
+	}
+
+	var hasNickname bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'admins' 
+		  AND COLUMN_NAME = 'nickname'
+	`).Scan(&hasNickname)
+	if errCheck == nil && !hasNickname {
+		log.Println("Adding 'nickname' column to 'admins' table...")
+		if _, err := db.Exec("ALTER TABLE admins ADD COLUMN nickname VARCHAR(128) NOT NULL DEFAULT ''"); err != nil {
+			log.Printf("Warning: failed to add nickname column to admins: %v\n", err)
 		}
 	}
 
