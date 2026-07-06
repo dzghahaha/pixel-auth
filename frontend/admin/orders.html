@@ -162,22 +162,19 @@
             letter-spacing: 0.05em;
         }
 
-        .popover-inputs input[type="date"] {
+        .popover-inputs input {
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            background: var(--bg-card);
+            background: var(--bg-main);
             padding: 8px 12px;
             font-size: 13px;
             color: var(--text-primary);
             outline: none;
             width: 100%;
-            cursor: pointer;
+            cursor: default;
             box-sizing: border-box;
-        }
-
-        .popover-inputs input[type="date"]:focus {
-            border-color: var(--border-focus);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            font-weight: 600;
+            text-align: center;
         }
 
         .popover-separator {
@@ -185,6 +182,126 @@
             font-size: 13px;
             font-weight: 500;
             padding-bottom: 10px;
+        }
+
+        /* Custom Calendar CSS */
+        .calendar-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+        }
+
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4px;
+            margin-bottom: 4px;
+        }
+
+        .calendar-month-year {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .btn-calendar-nav {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .btn-calendar-nav:hover {
+            background-color: var(--slate-100);
+            border-color: #cbd5e1;
+            color: var(--text-primary);
+        }
+
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--slate-400);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            margin-bottom: 4px;
+        }
+
+        .calendar-days-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            min-height: 160px;
+        }
+
+        .calendar-day-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-primary);
+            transition: all 0.15s ease;
+            position: relative;
+            font-weight: 500;
+        }
+
+        .calendar-day-cell:hover {
+            background-color: var(--slate-100);
+            color: var(--primary);
+        }
+
+        .calendar-day-cell.outside {
+            color: var(--slate-300);
+        }
+
+        .calendar-day-cell.outside:hover {
+            background-color: var(--slate-50);
+            color: var(--slate-400);
+        }
+
+        .calendar-day-cell.selected-start {
+            background-color: var(--primary) !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            border-radius: 6px 0 0 6px;
+        }
+
+        .calendar-day-cell.selected-end {
+            background-color: var(--primary) !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .calendar-day-cell.selected-single {
+            background-color: var(--primary) !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+
+        .calendar-day-cell.selected-range {
+            background-color: var(--primary-light) !important;
+            color: var(--primary) !important;
+            border-radius: 0;
+            font-weight: 600;
         }
 
         /* Footer buttons */
@@ -355,13 +472,26 @@
                         <div class="popover-inputs">
                             <div class="popover-input-field">
                                 <span class="field-label">开始日期</span>
-                                <input type="date" id="filter-start-time">
+                                <input type="text" id="filter-start-time" readonly placeholder="开始日期">
                             </div>
                             <span class="popover-separator">至</span>
                             <div class="popover-input-field">
                                 <span class="field-label">结束日期</span>
-                                <input type="date" id="filter-end-time">
+                                <input type="text" id="filter-end-time" readonly placeholder="结束日期">
                             </div>
+                        </div>
+
+                        <!-- Custom Calendar month view -->
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button type="button" class="btn-calendar-nav" id="btn-prev-month">&lt;</button>
+                                <span class="calendar-month-year" id="calendar-month-year">2026年7月</span>
+                                <button type="button" class="btn-calendar-nav" id="btn-next-month">&gt;</button>
+                            </div>
+                            <div class="calendar-weekdays">
+                                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                            </div>
+                            <div class="calendar-days-grid" id="calendar-days-grid"></div>
                         </div>
                         
                         <!-- Footer Row: Actions -->
@@ -1033,16 +1163,7 @@
                 }
             });
 
-            // Close modal on ESC press
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    closeModalAction();
-                    closeReplaceModalAction();
-                    datepickerWrapper.classList.remove('open');
-                }
-            });
-
-            // Premium Floating Datepicker Popover Logic
+            // Premium Custom Calendar Datepicker Logic
             const datepickerWrapper = document.getElementById('datepicker-wrapper');
             const datepickerTrigger = document.getElementById('datepicker-trigger');
             const datepickerPopup = document.getElementById('datepicker-popup');
@@ -1051,10 +1172,25 @@
             const btnPopoverReset = document.getElementById('btn-popover-reset');
             const btnPopoverApply = document.getElementById('btn-popover-apply');
 
+            const btnPrevMonth = document.getElementById('btn-prev-month');
+            const btnNextMonth = document.getElementById('btn-next-month');
+            const calendarMonthYear = document.getElementById('calendar-month-year');
+            const calendarDaysGrid = document.getElementById('calendar-days-grid');
+
+            let calendarCurrentDate = new Date();
+            let selectedStartDate = null;
+            let selectedEndDate = null;
+
+            // Helper to format Date object into YYYY-MM-DD
+            const padNum = (n) => n.toString().padStart(2, '0');
+            const toLocalDateStr = (d) => {
+                return d ? `${d.getFullYear()}-${padNum(d.getMonth() + 1)}-${padNum(d.getDate())}` : '';
+            };
+
             // Format date string for displaying in the trigger
             function updateDatePickerDisplay() {
-                const start = filterStartTime.value;
-                const end = filterEndTime.value;
+                const start = toLocalDateStr(selectedStartDate);
+                const end = toLocalDateStr(selectedEndDate);
 
                 if (start && end) {
                     if (start === end) {
@@ -1071,6 +1207,126 @@
                 }
             }
 
+            // Sync Date selection to text fields
+            function syncSelectionsToInputs() {
+                filterStartTime.value = toLocalDateStr(selectedStartDate);
+                filterEndTime.value = toLocalDateStr(selectedEndDate);
+                updateDatePickerDisplay();
+            }
+
+            // Highlight cells inside custom calendar grid
+            function highlightCell(cell, date) {
+                const time = date.getTime();
+                const start = selectedStartDate ? selectedStartDate.getTime() : null;
+                const end = selectedEndDate ? selectedEndDate.getTime() : null;
+                
+                if (start && end) {
+                    if (time === start) {
+                        cell.classList.add('selected-start');
+                    } else if (time === end) {
+                        cell.classList.add('selected-end');
+                    } else if (time > start && time < end) {
+                        cell.classList.add('selected-range');
+                    }
+                } else if (start) {
+                    if (time === start) {
+                        cell.classList.add('selected-single');
+                    }
+                }
+            }
+
+            // Day cell click handler
+            function handleDayClick(date) {
+                const clickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                
+                if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
+                    // First click or resetting range
+                    selectedStartDate = clickedDate;
+                    selectedEndDate = null;
+                    // Deactivate shortcut highlights
+                    popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                } else {
+                    // Second click
+                    if (clickedDate < selectedStartDate) {
+                        selectedStartDate = clickedDate;
+                        selectedEndDate = null;
+                    } else {
+                        selectedEndDate = clickedDate;
+                    }
+                }
+                
+                syncSelectionsToInputs();
+                renderCalendar();
+            }
+
+            // Render calendar grid
+            function renderCalendar() {
+                const year = calendarCurrentDate.getFullYear();
+                const month = calendarCurrentDate.getMonth(); // 0-11
+                
+                calendarMonthYear.textContent = `${year}年${month + 1}月`;
+                calendarDaysGrid.innerHTML = '';
+                
+                // First day of current month
+                const firstDay = new Date(year, month, 1);
+                let startDayIndex = firstDay.getDay(); // 0 = Sun
+                
+                // Number of days in current month
+                const totalDays = new Date(year, month + 1, 0).getDate();
+                
+                // Prev month padding
+                const prevMonthTotalDays = new Date(year, month, 0).getDate();
+                for (let i = startDayIndex - 1; i >= 0; i--) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    const d = prevMonthTotalDays - i;
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month - 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+                
+                // Current month days
+                for (let d = 1; d <= totalDays; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell';
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+                
+                // Next month padding to fill grid to 42 cells
+                const currentCells = startDayIndex + totalDays;
+                const remainingCells = 42 - currentCells;
+                for (let d = 1; d <= remainingCells; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month + 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+            }
+
+            // Month navigation
+            btnPrevMonth.addEventListener('click', (e) => {
+                e.stopPropagation();
+                calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+                renderCalendar();
+            });
+            btnNextMonth.addEventListener('click', (e) => {
+                e.stopPropagation();
+                calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+                renderCalendar();
+            });
+
             // Toggle popover on trigger click
             datepickerTrigger.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1085,6 +1341,7 @@
                     datepickerWrapper.classList.remove('open');
                 } else {
                     datepickerWrapper.classList.add('open');
+                    renderCalendar(); // Render on open to ensure current values match grid
                 }
             });
 
@@ -1098,36 +1355,15 @@
                 datepickerWrapper.classList.remove('open');
             });
 
-            // Make inputs show native calendar directly when clicked
-            filterStartTime.addEventListener('click', (e) => {
-                e.stopPropagation();
-                try {
-                    filterStartTime.showPicker();
-                } catch (err) {}
-            });
-            filterEndTime.addEventListener('click', (e) => {
-                e.stopPropagation();
-                try {
-                    filterEndTime.showPicker();
-                } catch (err) {}
-            });
-
-            // Deactivate shortcut highlights if custom dates are manually changed
-            filterStartTime.addEventListener('change', () => {
-                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
-            });
-            filterEndTime.addEventListener('change', () => {
-                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
-            });
-
             // Reset action
             btnPopoverReset.addEventListener('click', (e) => {
                 e.stopPropagation();
-                filterStartTime.value = '';
-                filterEndTime.value = '';
+                selectedStartDate = null;
+                selectedEndDate = null;
                 popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
                 
-                updateDatePickerDisplay();
+                syncSelectionsToInputs();
+                renderCalendar();
                 datepickerWrapper.classList.remove('open');
                 
                 currentPage = 1;
@@ -1138,7 +1374,6 @@
             btnPopoverApply.addEventListener('click', (e) => {
                 e.stopPropagation();
                 
-                updateDatePickerDisplay();
                 datepickerWrapper.classList.remove('open');
                 
                 currentPage = 1;
@@ -1156,43 +1391,53 @@
                     const range = btn.getAttribute('data-range');
                     
                     if (range === 'all') {
-                        filterStartTime.value = '';
-                        filterEndTime.value = '';
+                        selectedStartDate = null;
+                        selectedEndDate = null;
                     } else {
                         const now = new Date();
-                        let startD, endD;
+                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
                         if (range === 'today') {
-                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                            selectedStartDate = today;
+                            selectedEndDate = today;
                         } else if (range === 'yesterday') {
-                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+                            const yesterday = new Date(today);
+                            yesterday.setDate(today.getDate() - 1);
+                            selectedStartDate = yesterday;
+                            selectedEndDate = yesterday;
                         } else if (range === '7days') {
-                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
-                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                            const daysAgo = new Date(today);
+                            daysAgo.setDate(today.getDate() - 6);
+                            selectedStartDate = daysAgo;
+                            selectedEndDate = today;
                         } else if (range === '30days') {
-                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
-                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                            const daysAgo = new Date(today);
+                            daysAgo.setDate(today.getDate() - 29);
+                            selectedStartDate = daysAgo;
+                            selectedEndDate = today;
                         }
-
-                        // Helper to format Date object into YYYY-MM-DD
-                        const pad = (n) => n.toString().padStart(2, '0');
-                        const toLocalDateStr = (d) => {
-                            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-                        };
-
-                        if (startD) filterStartTime.value = toLocalDateStr(startD);
-                        if (endD) filterEndTime.value = toLocalDateStr(endD);
                     }
 
-                    updateDatePickerDisplay();
+                    syncSelectionsToInputs();
+                    renderCalendar();
                     datepickerWrapper.classList.remove('open');
                     
                     currentPage = 1;
                     loadOrders();
                 });
             });
+
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModalAction();
+                    closeReplaceModalAction();
+                    datepickerWrapper.classList.remove('open');
+                }
+            });
+
+            // Initial render
+            renderCalendar();
 
             // Search events
             btnSearch.addEventListener('click', () => {
