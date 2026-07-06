@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台订单管理 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css?v=1.0.2">
+    <script src="./admin.js?v=1.0.2"></script>
     <style>
         /* Search Panel */
         .search-combo {
@@ -26,18 +27,24 @@
         }
 
         /* Unified Premium Date Range Picker Style */
+        .date-range-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
         .date-range-group {
             display: inline-flex;
             align-items: center;
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--bg-card);
-            padding: 0 10px;
+            padding: 0 10px 0 12px;
             gap: 6px;
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
         
-        .date-range-group:focus-within {
+        .date-range-group:focus-within,
+        .date-range-wrapper.active .date-range-group {
             border-color: var(--border-focus);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
@@ -51,8 +58,87 @@
             box-shadow: none !important;
             color: var(--text-primary) !important;
             width: auto !important;
-            max-width: 165px !important;
+            max-width: 155px !important;
             cursor: pointer;
+        }
+
+        .range-separator {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            margin: 0 2px;
+        }
+
+        /* Floating Shortcuts Popover */
+        .time-shortcuts-popover {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 0;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg), 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            padding: 6px;
+            display: none;
+            gap: 4px;
+            z-index: 101;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .time-shortcuts-popover.show {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .btn-shortcut {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-shortcut:hover {
+            background-color: var(--slate-50);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        .btn-shortcut.active {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            border-color: var(--border-focus);
+        }
+
+        .btn-clear-date {
+            background: transparent;
+            border: none;
+            color: var(--slate-400);
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 0 4px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s ease;
+            height: 100%;
+        }
+
+        .btn-clear-date:hover {
+            color: var(--danger);
+        }
+
+        .date-range-group.has-value .btn-clear-date {
+            display: inline-flex;
         }
 
         .account-td {
@@ -148,19 +234,30 @@
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
                 </select>
-                <select id="filter-time-shortcut" class="status-select">
-                    <option value="">时间范围：不限</option>
-                    <option value="today">今天</option>
-                    <option value="yesterday">昨天</option>
-                    <option value="7days">最近 7 天</option>
-                    <option value="30days">最近 30 天</option>
-                    <option value="custom">自定义范围</option>
-                </select>
-                <div id="custom-time-container" style="display: none; align-items: center;">
+                <!-- Unified Premium Date Range Input with Hover Popover Shortcuts -->
+                <div class="date-range-wrapper" id="date-range-wrapper">
+                    <!-- Floating Popover for Quick Select Shortcuts -->
+                    <div class="time-shortcuts-popover" id="time-shortcuts-popover">
+                        <button type="button" class="btn-shortcut" data-range="today">今天</button>
+                        <button type="button" class="btn-shortcut" data-range="yesterday">昨天</button>
+                        <button type="button" class="btn-shortcut" data-range="7days">最近 7 天</button>
+                        <button type="button" class="btn-shortcut" data-range="30days">最近 30 天</button>
+                        <button type="button" class="btn-shortcut" data-range="all">全部时间</button>
+                    </div>
+                    <!-- Date Range Group inputs -->
                     <div class="date-range-group">
+                        <!-- Calendar icon (premium visual cue) -->
+                        <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--slate-400); margin-right: 2px; pointer-events: none;">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
                         <input type="datetime-local" id="filter-start-time" placeholder="开始时间">
-                        <span style="color: var(--text-secondary); font-size: 12px; font-weight: 500; margin: 0 4px;">至</span>
+                        <span class="range-separator">至</span>
                         <input type="datetime-local" id="filter-end-time" placeholder="结束时间">
+                        <!-- Tiny close button to clear -->
+                        <button type="button" class="btn-clear-date" id="btn-clear-date" title="清除时间">&times;</button>
                     </div>
                 </div>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
@@ -346,11 +443,13 @@
             const searchOriginalKey = document.getElementById('search-original-key');
             const searchNote = document.getElementById('search-note');
             const statusSelect = document.getElementById('filter-status');
-            const timeShortcutSelect = document.getElementById('filter-time-shortcut');
-            const customTimeContainer = document.getElementById('custom-time-container');
             const filterStartTime = document.getElementById('filter-start-time');
             const filterEndTime = document.getElementById('filter-end-time');
             const btnSearch = document.getElementById('btn-search');
+
+            const dateRangeWrapper = document.getElementById('date-range-wrapper');
+            const timePopover = document.getElementById('time-shortcuts-popover');
+            const btnClearDate = document.getElementById('btn-clear-date');
 
             const btnPrev = document.getElementById('btn-prev-page');
             const btnNext = document.getElementById('btn-next-page');
@@ -418,130 +517,6 @@
                     });
                 }
             }
-
-            function initCustomSelect(selectId) {
-                const select = document.getElementById(selectId);
-                if (!select) return;
-
-                // Create wrapper
-                const wrapper = document.createElement('div');
-                wrapper.className = 'custom-select';
-                if (select.className) {
-                    wrapper.classList.add(select.className);
-                }
-                wrapper.style.minWidth = select.style.minWidth || '150px';
-                if (selectId === 'filter-status') {
-                    wrapper.style.minWidth = '160px';
-                } else if (selectId === 'filter-time-shortcut') {
-                    wrapper.style.minWidth = '180px';
-                }
-
-                // Hide original select
-                select.style.display = 'none';
-                select.parentNode.insertBefore(wrapper, select);
-                wrapper.appendChild(select);
-
-                // Create trigger
-                const trigger = document.createElement('div');
-                trigger.className = 'custom-select-trigger';
-                
-                const triggerText = document.createElement('span');
-                const selectedOpt = select.options[select.selectedIndex];
-                triggerText.textContent = selectedOpt ? selectedOpt.textContent : '';
-                trigger.appendChild(triggerText);
-
-                // Chevron SVG
-                trigger.innerHTML += `<svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-                wrapper.appendChild(trigger);
-
-                // Create options list
-                const optionsContainer = document.createElement('div');
-                optionsContainer.className = 'custom-options-container';
-
-                Array.from(select.options).forEach((opt, idx) => {
-                    const customOpt = document.createElement('div');
-                    customOpt.className = 'custom-option';
-                    customOpt.textContent = opt.textContent;
-                    customOpt.setAttribute('data-value', opt.value);
-                    if (idx === select.selectedIndex) {
-                        customOpt.classList.add('selected');
-                    }
-
-                    customOpt.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        
-                        // Update select value
-                        select.value = opt.value;
-                        
-                        // Update trigger text
-                        trigger.querySelector('span').textContent = opt.textContent;
-
-                        // Toggle active class
-                        optionsContainer.querySelectorAll('.custom-option').forEach(co => {
-                            co.classList.remove('selected');
-                        });
-                        customOpt.classList.add('selected');
-
-                        // Close dropdown
-                        wrapper.classList.remove('open');
-
-                        // Trigger native change event
-                        select.dispatchEvent(new Event('change'));
-                    });
-
-                    optionsContainer.appendChild(customOpt);
-                });
-
-                wrapper.appendChild(optionsContainer);
-
-                // Toggle open/close on trigger click
-                trigger.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const isOpen = wrapper.classList.contains('open');
-                    
-                    // Close all other custom dropdowns first
-                    document.querySelectorAll('.custom-select').forEach(cs => {
-                        cs.classList.remove('open');
-                    });
-
-                    if (!isOpen) {
-                        wrapper.classList.add('open');
-                    }
-                });
-
-                // Sync wrapper state if value is modified programmatically
-                const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
-                Object.defineProperty(select, 'value', {
-                    get: function() {
-                        return originalVal.get.call(this);
-                    },
-                    set: function(val) {
-                        originalVal.set.call(this, val);
-                        const opt = Array.from(select.options).find(o => o.value === val);
-                        if (opt) {
-                            trigger.querySelector('span').textContent = opt.textContent;
-                            optionsContainer.querySelectorAll('.custom-option').forEach(co => {
-                                if (co.getAttribute('data-value') === val) {
-                                    co.classList.add('selected');
-                                } else {
-                                    co.classList.remove('selected');
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-
-            // Close all custom dropdowns on clicking outside
-            document.addEventListener('click', () => {
-                document.querySelectorAll('.custom-select').forEach(cs => {
-                    cs.classList.remove('open');
-                });
-            });
-
-            // Initialize custom selects
-            initCustomSelect('filter-status');
-            initCustomSelect('filter-time-shortcut');
 
             // Check admin login
             async function checkLogin() {
@@ -612,41 +587,16 @@
 
                 let startTimeVal = '';
                 let endTimeVal = '';
-                const timeShortcut = timeShortcutSelect.value;
 
-                if (timeShortcut === 'custom') {
-                    if (filterStartTime.value) {
-                        const startD = new Date(filterStartTime.value);
-                        if (!isNaN(startD.getTime())) {
-                            startTimeVal = Math.floor(startD.getTime() / 1000).toString();
-                        }
-                    }
-                    if (filterEndTime.value) {
-                        const endD = new Date(filterEndTime.value);
-                        if (!isNaN(endD.getTime())) {
-                            endTimeVal = Math.floor(endD.getTime() / 1000).toString();
-                        }
-                    }
-                } else if (timeShortcut) {
-                    const now = new Date();
-                    let startD, endD;
-                    if (timeShortcut === 'today') {
-                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    } else if (timeShortcut === 'yesterday') {
-                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
-                    } else if (timeShortcut === '7days') {
-                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
-                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    } else if (timeShortcut === '30days') {
-                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
-                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    }
-                    if (startD) {
+                if (filterStartTime.value) {
+                    const startD = new Date(filterStartTime.value);
+                    if (!isNaN(startD.getTime())) {
                         startTimeVal = Math.floor(startD.getTime() / 1000).toString();
                     }
-                    if (endD) {
+                }
+                if (filterEndTime.value) {
+                    const endD = new Date(filterEndTime.value);
+                    if (!isNaN(endD.getTime())) {
                         endTimeVal = Math.floor(endD.getTime() / 1000).toString();
                     }
                 }
@@ -982,51 +932,115 @@
                 }
             });
 
-            // Time range events
-            timeShortcutSelect.addEventListener('change', () => {
-                if (timeShortcutSelect.value === 'custom') {
-                    customTimeContainer.style.display = 'inline-flex';
-                } else {
-                    customTimeContainer.style.display = 'none';
-                    filterStartTime.value = '';
-                    filterEndTime.value = '';
-                    currentPage = 1;
-                    loadOrders();
+            // Date Range Wrapper & Popover Logic
+            dateRangeWrapper.addEventListener('click', (e) => {
+                e.stopPropagation();
+                timePopover.classList.add('show');
+                dateRangeWrapper.classList.add('active');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!dateRangeWrapper.contains(e.target)) {
+                    timePopover.classList.remove('show');
+                    dateRangeWrapper.classList.remove('active');
                 }
             });
 
-            // Make the entire datetime input clickable to show the native calendar picker (showPicker)
+            // Make inputs show native calendar directly when clicked
             filterStartTime.addEventListener('click', (e) => {
+                e.stopPropagation();
                 try {
                     filterStartTime.showPicker();
                 } catch (err) {}
             });
             filterEndTime.addEventListener('click', (e) => {
+                e.stopPropagation();
                 try {
                     filterEndTime.showPicker();
                 } catch (err) {}
             });
 
-            // If they click the gap/wrapper, focus on the start picker
-            const dateRangeGroup = document.querySelector('.date-range-group');
-            if (dateRangeGroup) {
-                dateRangeGroup.addEventListener('click', (e) => {
-                    if (e.target === dateRangeGroup) {
-                        try {
-                            filterStartTime.showPicker();
-                        } catch (err) {}
-                    }
-                });
+            // Auto value toggle classes
+            function syncClearBtnState() {
+                if (filterStartTime.value || filterEndTime.value) {
+                    document.querySelector('.date-range-group').classList.add('has-value');
+                } else {
+                    document.querySelector('.date-range-group').classList.remove('has-value');
+                }
             }
 
             filterStartTime.addEventListener('change', () => {
+                syncClearBtnState();
                 currentPage = 1;
                 loadOrders();
             });
 
             filterEndTime.addEventListener('change', () => {
+                syncClearBtnState();
                 currentPage = 1;
                 loadOrders();
+            });
+
+            // Clear dates action
+            btnClearDate.addEventListener('click', (e) => {
+                e.stopPropagation();
+                filterStartTime.value = '';
+                filterEndTime.value = '';
+                
+                document.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+                syncClearBtnState();
+                currentPage = 1;
+                loadOrders();
+            });
+
+            // Shortcut button actions
+            document.querySelectorAll('.btn-shortcut').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    
+                    document.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    const range = btn.getAttribute('data-range');
+                    
+                    if (range === 'all') {
+                        filterStartTime.value = '';
+                        filterEndTime.value = '';
+                    } else {
+                        const now = new Date();
+                        let startD, endD;
+
+                        if (range === 'today') {
+                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                        } else if (range === 'yesterday') {
+                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+                        } else if (range === '7days') {
+                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                        } else if (range === '30days') {
+                            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+                            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                        }
+
+                        // Helper to format Date object into YYYY-MM-DDTHH:MM format for datetime-local
+                        const pad = (n) => n.toString().padStart(2, '0');
+                        const toLocalISO = (d) => {
+                            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        };
+
+                        if (startD) filterStartTime.value = toLocalISO(startD);
+                        if (endD) filterEndTime.value = toLocalISO(endD);
+                    }
+
+                    syncClearBtnState();
+                    timePopover.classList.remove('show');
+                    dateRangeWrapper.classList.remove('active');
+                    
+                    currentPage = 1;
+                    loadOrders();
+                });
             });
 
             // Search events

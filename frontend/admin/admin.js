@@ -1,0 +1,138 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // Automatically turn all select elements (except those with .no-custom class) into custom dropdowns
+    document.querySelectorAll('select:not(.no-custom)').forEach(select => {
+        // Skip if already processed
+        if (select.parentNode.classList.contains('custom-select')) return;
+        
+        initCustomSelect(select);
+    });
+});
+
+function initCustomSelect(select) {
+    if (!select) return;
+
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select';
+    if (select.className) {
+        wrapper.classList.add(select.className);
+    }
+    wrapper.style.minWidth = select.style.minWidth || '150px';
+
+    // Hide original select
+    select.style.display = 'none';
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+
+    // Create trigger
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-select-trigger';
+    
+    const triggerText = document.createElement('span');
+    const selectedOpt = select.options[select.selectedIndex];
+    triggerText.textContent = selectedOpt ? selectedOpt.textContent : '';
+    trigger.appendChild(triggerText);
+
+    // Chevron SVG
+    trigger.innerHTML += `<svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+    wrapper.appendChild(trigger);
+
+    // Create options list container
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'custom-options-container';
+    wrapper.appendChild(optionsContainer);
+
+    // Function to rebuild options dynamically
+    function rebuildOptions() {
+        optionsContainer.innerHTML = '';
+        const currentSelOpt = select.options[select.selectedIndex];
+        trigger.querySelector('span').textContent = currentSelOpt ? currentSelOpt.textContent : '';
+
+        Array.from(select.options).forEach((opt, idx) => {
+            const customOpt = document.createElement('div');
+            customOpt.className = 'custom-option';
+            customOpt.textContent = opt.textContent;
+            customOpt.setAttribute('data-value', opt.value);
+            if (idx === select.selectedIndex) {
+                customOpt.classList.add('selected');
+            }
+
+            customOpt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                // Update select value
+                select.value = opt.value;
+                
+                // Update trigger text
+                trigger.querySelector('span').textContent = opt.textContent;
+
+                // Toggle active class
+                optionsContainer.querySelectorAll('.custom-option').forEach(co => {
+                    co.classList.remove('selected');
+                });
+                customOpt.classList.add('selected');
+
+                // Close dropdown
+                wrapper.classList.remove('open');
+
+                // Trigger native change event
+                select.dispatchEvent(new Event('change'));
+            });
+
+            optionsContainer.appendChild(customOpt);
+        });
+    }
+
+    // Initial build
+    rebuildOptions();
+
+    // Observe dynamic changes in select options (e.g. innerHTML updates)
+    const observer = new MutationObserver(() => {
+        rebuildOptions();
+    });
+    observer.observe(select, { childList: true, subtree: true });
+
+    // Toggle open/close on trigger click
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = wrapper.classList.contains('open');
+        
+        // Close all other custom dropdowns first
+        document.querySelectorAll('.custom-select').forEach(cs => {
+            cs.classList.remove('open');
+        });
+
+        if (!isOpen) {
+            wrapper.classList.add('open');
+        }
+    });
+
+    // Sync wrapper state if value is modified programmatically
+    const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(select, 'value', {
+        get: function() {
+            return originalVal.get.call(this);
+        },
+        set: function(val) {
+            originalVal.set.call(this, val);
+            const opt = Array.from(select.options).find(o => o.value === val);
+            if (opt) {
+                trigger.querySelector('span').textContent = opt.textContent;
+                optionsContainer.querySelectorAll('.custom-option').forEach(co => {
+                    if (co.getAttribute('data-value') === val) {
+                        co.classList.add('selected');
+                    } else {
+                        co.classList.remove('selected');
+                    }
+                });
+            }
+        }
+    });
+}
+
+// Close all custom dropdowns on clicking outside
+document.addEventListener('click', () => {
+    document.querySelectorAll('.custom-select').forEach(cs => {
+        cs.classList.remove('open');
+    });
+});
