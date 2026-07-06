@@ -452,6 +452,20 @@
             closeUserModal.addEventListener('click', closeModal);
             btnCancelUser.addEventListener('click', closeModal);
 
+            // Close modal on clicking outside content
+            window.addEventListener('click', (e) => {
+                if (e.target === userModal) {
+                    closeModal();
+                }
+            });
+
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+
             // Save user (Create/Update)
             btnSaveUser.addEventListener('click', async () => {
                 const id = formUserId.value;

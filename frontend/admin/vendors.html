@@ -381,6 +381,13 @@
                 }
             });
 
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    vendorModal.classList.add('hidden');
+                }
+            });
+
             // Smooth link transitions
             document.querySelectorAll('a.nav-item').forEach(link => {
                 if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {

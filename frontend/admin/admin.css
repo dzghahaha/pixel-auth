@@ -330,6 +330,28 @@ textarea:focus {
     border-color: #f87171;
 }
 
+/* Replace Order Card Secret Button */
+.btn-replace-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+    color: var(--warning-text, #92400e);
+    border: 1px solid #fde68a;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-replace-key:hover {
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+    border-color: #f59e0b;
+}
+
 /* Invalidate Card Secret Button */
 .btn-invalidate-key {
     display: inline-flex;
@@ -582,13 +604,15 @@ textarea:focus {
 .inner-table-container {
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow: hidden;
-    max-height: 250px;
+    overflow-x: auto;
     overflow-y: auto;
+    max-height: 250px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .inner-table {
     width: 100%;
+    min-width: 680px;
     border-collapse: collapse;
     font-size: 12px;
 }

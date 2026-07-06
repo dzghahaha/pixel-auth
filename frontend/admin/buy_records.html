@@ -413,6 +413,13 @@
                 }
             });
 
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    detailModal.classList.add('hidden');
+                }
+            });
+
             // Copy Keys inside Modal
             modalBtnCopyKeys.addEventListener('click', () => {
                 const keys = modalCardKeysText.value;

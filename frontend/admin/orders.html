@@ -203,6 +203,7 @@
                             <thead>
                                 <tr>
                                     <th>账号明细</th>
+                                    <th>卡密</th>
                                     <th>状态</th>
                                     <th>备注/优惠链接</th>
                                     <th>提交时间</th>
@@ -258,6 +259,38 @@
         </div>
     </div>
 
+    <!-- 更换卡密弹窗 -->
+    <div id="replace-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <span>订单换卡重提 (ID: <span id="replace-order-id">-</span>)</span>
+                <span id="close-replace-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="info-item" style="display:flex; justify-content:space-between; font-size:13px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <span style="color:var(--text-secondary); font-weight:500;">当前卡密:</span>
+                    <span id="replace-current-card" style="font-family: 'JetBrains Mono', monospace; font-weight:600; color:var(--text-primary);">-</span>
+                </div>
+                
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="input-new-card" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">请输入新卡密：</label>
+                    <input type="text" id="input-new-card" class="form-input" style="width: 100%; box-sizing: border-box; font-family: 'JetBrains Mono', monospace; font-weight: 600;" placeholder="输入有效的 active 状态新卡密">
+                </div>
+                
+                <div style="margin-top: 16px; font-size: 11px; color: var(--text-secondary); line-height: 1.5; background-color: var(--bg-highlight); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <div style="font-weight: 700; margin-bottom: 2px; color: var(--warning-text, #92400e);">操作说明：</div>
+                    1. 旧卡密将立即作废并修改为 inactive 状态。<br>
+                    2. 当前订单将关联到输入的新卡密并重新发起订阅提交。<br>
+                    3. 原记录的状态将被修改为失败（失败原因：切换卡密订阅）以留存历史。
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-color); background-color: var(--bg-highlight); border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+                <button type="button" id="btn-cancel-replace" class="btn-cancel" style="padding: 6px 16px; font-size: 12px;">取消</button>
+                <button type="button" id="btn-confirm-replace" class="btn-submit" style="padding: 6px 16px; font-size: 12px;">确认提交</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 弹窗提示组件 -->
     <div id="toast" class="toast hidden"></div>
 
@@ -302,6 +335,15 @@
             const inputDiscount = document.getElementById('input-discount');
             const btnCloseEdit = document.getElementById('btn-close-edit');
             const btnSaveRecord = document.getElementById('btn-save-record');
+
+            // Replace Modal elements
+            const replaceModal = document.getElementById('replace-modal');
+            const closeReplaceModal = document.getElementById('close-replace-modal');
+            const btnCancelReplace = document.getElementById('btn-cancel-replace');
+            const btnConfirmReplace = document.getElementById('btn-confirm-replace');
+            const replaceOrderID = document.getElementById('replace-order-id');
+            const replaceCurrentCard = document.getElementById('replace-current-card');
+            const inputNewCard = document.getElementById('input-new-card');
 
             let currentPage = 1;
             let totalPages = 1;
@@ -445,7 +487,10 @@
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
                                 <td class="time-td">${formatDate(o.created_at)}</td>
-                                <td><button type="button" class="btn-detail" data-id="${o.id}">详情</button></td>
+                                <td>
+                                    <button type="button" class="btn-detail" data-id="${o.id}">详情</button>
+                                    <button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>
+                                </td>
                             `;
                             tableBody.appendChild(tr);
                         });
@@ -461,6 +506,14 @@
                             });
                         });
 
+                        // Attach event listeners to replace key buttons
+                        document.querySelectorAll('.btn-replace-key').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const id = parseInt(e.target.getAttribute('data-id'), 10);
+                                replaceCardSecret(id);
+                            });
+                        });
+
                     } else {
                         showToast(data.message || '获取数据失败');
                     }
@@ -468,6 +521,21 @@
                     console.error(e);
                     showToast('网络错误，无法加载数据');
                 }
+            }
+
+            // Replace Card Secret action
+            function replaceCardSecret(orderID) {
+                const order = currentOrders.find(o => o.id === orderID);
+                if (!order) return;
+
+                replaceOrderID.textContent = orderID;
+                replaceCurrentCard.textContent = order.card_secret;
+                inputNewCard.value = '';
+                
+                replaceModal.classList.remove('hidden');
+                setTimeout(() => {
+                    inputNewCard.focus();
+                }, 50);
             }
 
             // Open Details Modal and fetch history
@@ -484,7 +552,7 @@
                 detailNote.textContent = order.note || '无备注';
 
                 editSection.classList.add('hidden'); // Ensure edit section is closed initially
-                historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载历史记录...</td></tr>';
+                historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载历史记录...</td></tr>';
                 detailModal.classList.remove('hidden');
 
                 await loadOrderHistory();
@@ -498,7 +566,7 @@
                     if (res.ok && data.success) {
                         activeHistoryRecords = data.records || [];
                         if (activeHistoryRecords.length === 0) {
-                            historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
+                            historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
                             return;
                         }
 
@@ -536,6 +604,7 @@
 
                             tr.innerHTML = `
                                 <td style="padding:10px 14px; line-height:1.4;">${detailsInfo}</td>
+                                <td style="padding:10px 14px; font-family: monospace; font-size: 12px; font-weight: 600; color: var(--slate-700);">${r.card_secret || '-'}</td>
                                 <td style="padding:10px 14px;"><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td style="padding:10px 14px; line-height:1.3;">${commentInfo}</td>
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${formatDate(r.created_at)}</td>
@@ -553,11 +622,11 @@
                             });
                         });
                     } else {
-                        historyTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
+                        historyTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
                     }
                 } catch (e) {
                     console.error(e);
-                    historyTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
+                    historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
                 }
             }
 
@@ -631,6 +700,73 @@
             }
             closeModal.addEventListener('click', closeModalAction);
             btnCloseModal.addEventListener('click', closeModalAction);
+
+            // Close replace modal actions
+            function closeReplaceModalAction() {
+                replaceModal.classList.add('hidden');
+            }
+            closeReplaceModal.addEventListener('click', closeReplaceModalAction);
+            btnCancelReplace.addEventListener('click', closeReplaceModalAction);
+
+            // Confirm replace key event
+            btnConfirmReplace.addEventListener('click', async () => {
+                const orderID = parseInt(replaceOrderID.textContent, 10);
+                const newCardSecret = inputNewCard.value.trim();
+                
+                if (!newCardSecret) {
+                    showToast('新卡密不能为空');
+                    return;
+                }
+                
+                btnConfirmReplace.disabled = true;
+                btnConfirmReplace.textContent = '提交中...';
+                
+                try {
+                    const res = await fetch('/api/admin/orders/replace', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            order_id: orderID,
+                            new_card_secret: newCardSecret
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast('换卡重新提交成功！');
+                        closeReplaceModalAction();
+                        loadOrders();
+                    } else {
+                        showToast(data.message || '换卡重提失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，换卡重提失败');
+                } finally {
+                    btnConfirmReplace.disabled = false;
+                    btnConfirmReplace.textContent = '确认提交';
+                }
+            });
+
+            // Close modal on clicking outside content
+            window.addEventListener('click', (e) => {
+                if (e.target === detailModal) {
+                    closeModalAction();
+                }
+                if (e.target === replaceModal) {
+                    closeReplaceModalAction();
+                }
+            });
+
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModalAction();
+                    closeReplaceModalAction();
+                }
+            });
 
             // Search events
             btnSearch.addEventListener('click', () => {

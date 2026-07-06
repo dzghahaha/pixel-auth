@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -177,6 +178,20 @@ func handlePayNotify(w http.ResponseWriter, r *http.Request) {
 			err := releaseKeysForOrder(outTradeNo)
 			if err != nil {
 				log.Printf("Failed to release keys for order %s: %v\n", outTradeNo, err)
+				
+				// Handle auto-refund if the order was already cancelled/expired
+				if strings.Contains(err.Error(), "already cancelled or expired") {
+					moneyVal, _ := strconv.ParseFloat(params["money"], 64)
+					log.Printf("[Auto Refund] Refunding already cancelled order %s with amount %f\n", outTradeNo, moneyVal)
+					errRefund := callEpayRefundAPI(outTradeNo, moneyVal)
+					if errRefund != nil {
+						log.Printf("[Auto Refund Error] Failed to refund cancelled order %s: %v\n", outTradeNo, errRefund)
+					}
+					// Return success to Epay so it stops retrying callback
+					w.Write([]byte("success"))
+					return
+				}
+				
 				w.Write([]byte("fail"))
 				return
 			}

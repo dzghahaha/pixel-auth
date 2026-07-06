@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -51,6 +52,20 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 			"message": "卡密不能为空",
 		})
 		return
+	}
+
+	// Transparent card replacement detection
+	var currentCardSecret string
+	errReplaceQuery := db.QueryRow(`
+		SELECT o.card_secret 
+		FROM orders o
+		JOIN account_records r ON r.order_id = o.id
+		WHERE r.card_secret = ?
+		LIMIT 1`, req.CardSecret).Scan(&currentCardSecret)
+
+	if errReplaceQuery == nil && currentCardSecret != "" && currentCardSecret != req.CardSecret {
+		log.Printf("[Transparent Redirect] Replaced card secret detected. Swapping from %s to %s\n", req.CardSecret, currentCardSecret)
+		req.CardSecret = currentCardSecret
 	}
 
 	if len(req.Accounts) == 0 {
@@ -225,8 +240,8 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 				extraEmail = res.ExtraEmail
 			}
 
-			_, errInsertRec := tx.Exec("INSERT INTO account_records (order_id, username, password, two_factor, extra_email, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				orderID, res.Username, res.Password, res.TwoFactor, extraEmail, res.Status, res.Message, res.TaskID, now, now)
+			_, errInsertRec := tx.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, extra_email, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				orderID, req.CardSecret, res.Username, res.Password, res.TwoFactor, extraEmail, res.Status, res.Message, res.TaskID, now, now)
 			if errInsertRec != nil {
 				log.Printf("Error inserting account record: %v\n", errInsertRec)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -244,8 +259,8 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 				extraEmail = acc.ExtraEmail
 			}
 
-			_, errInsertRec := tx.Exec("INSERT INTO account_records (order_id, username, password, two_factor, extra_email, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				orderID, acc.Username, acc.Password, acc.TwoFactor, extraEmail, "pending", "排队处理中", now, now)
+			_, errInsertRec := tx.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, extra_email, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				orderID, req.CardSecret, acc.Username, acc.Password, acc.TwoFactor, extraEmail, "pending", "排队处理中", now, now)
 			if errInsertRec != nil {
 				log.Printf("Error inserting account record: %v\n", errInsertRec)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -348,13 +363,39 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read records from MySQL including id, vendor, and task_id
-	rows, err := db.Query(`
-		SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at
-		FROM account_records r
-		JOIN orders o ON r.order_id = o.id
-		WHERE o.card_secret = ?
-		ORDER BY r.id DESC`, cardSecret)
+	// Find order ID by current or historical card secret
+	var orderID int64
+	errQueryOrderID := db.QueryRow(`
+		SELECT id FROM orders WHERE card_secret = ?
+		UNION
+		SELECT order_id FROM account_records WHERE card_secret = ?
+		LIMIT 1`, cardSecret, cardSecret).Scan(&orderID)
+
+	var rows *sql.Rows
+	var err error
+	if errQueryOrderID == sql.ErrNoRows {
+		// No records found, return empty rows safely
+		rows, err = db.Query(`
+			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at
+			FROM account_records r
+			JOIN orders o ON r.order_id = o.id
+			WHERE 1=0`)
+	} else if errQueryOrderID != nil {
+		log.Printf("Query error for order_id lookup with card_secret %s: %v\n", cardSecret, errQueryOrderID)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询数据库错误",
+		})
+		return
+	} else {
+		// Read records by order_id
+		rows, err = db.Query(`
+			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at
+			FROM account_records r
+			JOIN orders o ON r.order_id = o.id
+			WHERE o.id = ?
+			ORDER BY r.id DESC`, orderID)
+	}
 	if err != nil {
 		log.Printf("Query error for card_secret %s: %v\n", cardSecret, err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -570,4 +611,105 @@ func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		"success":                 true,
 		"two_factor_tutorial_url": tutorialURL,
 	})
+}
+
+func getClientIP(r *http.Request) string {
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return xri
+	}
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		ip = ip[:idx]
+	}
+	return strings.Trim(ip, "[]")
+}
+
+func checkAPIWhitelist(r *http.Request) bool {
+	whitelistStr := getSetting("api_whitelist", "")
+	if strings.TrimSpace(whitelistStr) == "" {
+		return true // Empty whitelist allows all IPs
+	}
+
+	clientIP := getClientIP(r)
+
+	// Normalize delimiters to commas
+	whitelistStr = strings.ReplaceAll(whitelistStr, "\r\n", ",")
+	whitelistStr = strings.ReplaceAll(whitelistStr, "\n", ",")
+	whitelistStr = strings.ReplaceAll(whitelistStr, " ", ",")
+	ips := strings.Split(whitelistStr, ",")
+
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		if ip == clientIP {
+			return true
+		}
+	}
+	return false
+}
+
+func isAPIOpen() bool {
+	return getSetting("api_open", "off") == "on"
+}
+
+func handleDocInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	apiOpen := getSetting("api_open", "off")
+	apiBaseURL := getSetting("api_base_url", "")
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"api_open":     apiOpen,
+		"api_base_url": apiBaseURL,
+	})
+}
+
+func handleOpenSubmit(w http.ResponseWriter, r *http.Request) {
+	if !isAPIOpen() {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": "开放接口未启用",
+		})
+		return
+	}
+	if !checkAPIWhitelist(r) {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("IP %s 未在白名单中", getClientIP(r)),
+		})
+		return
+	}
+
+	handleSubmit(w, r)
+}
+
+func handleOpenQuery(w http.ResponseWriter, r *http.Request) {
+	if !isAPIOpen() {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": "开放接口未启用",
+		})
+		return
+	}
+	if !checkAPIWhitelist(r) {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("IP %s 未在白名单中", getClientIP(r)),
+		})
+		return
+	}
+
+	handleQuery(w, r)
 }

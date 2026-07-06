@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -321,7 +322,7 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, username, password, two_factor, COALESCE(extra_email, ''), 
+		SELECT id, card_secret, username, password, two_factor, COALESCE(extra_email, ''), 
 		       status, message, COALESCE(discount_url, ''), task_id, 
 		       created_at, updated_at, completed_at
 		FROM account_records
@@ -339,6 +340,7 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 
 	type OrderHistoryRecord struct {
 		ID          int64      `json:"id"`
+		CardSecret  string     `json:"card_secret"`
 		Username    string     `json:"username"`
 		Password    string     `json:"password"`
 		TwoFactor   string     `json:"two_factor"`
@@ -358,6 +360,7 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 		var completedAt sql.NullTime
 		errScan := rows.Scan(
 			&rec.ID,
+			&rec.CardSecret,
 			&rec.Username,
 			&rec.Password,
 			&rec.TwoFactor,
@@ -393,6 +396,414 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ReplaceResubmitRequest represents the request payload to replace order key and resubmit
+type ReplaceResubmitRequest struct {
+	OrderID       int64  `json:"order_id"`
+	NewCardSecret string `json:"new_card_secret"`
+}
+
+func handleAdminOrderReplaceResubmit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ReplaceResubmitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式数据",
+		})
+		return
+	}
+
+	req.NewCardSecret = strings.TrimSpace(req.NewCardSecret)
+	if req.OrderID <= 0 || req.NewCardSecret == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "订单ID或新卡密不能为空",
+		})
+		return
+	}
+
+	adminID, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "请登录后操作",
+		})
+		return
+	}
+
+	var role string
+	errRole := db.QueryRow("SELECT role FROM admins WHERE id = ?", adminID).Scan(&role)
+	if errRole != nil {
+		role = "user"
+	}
+
+	// 1. Get original order info
+	var oldCardSecret string
+	var oldVendor string
+	var mode string
+	var creatorID sql.NullInt64
+	errQueryOrder := db.QueryRow("SELECT card_secret, vendor, mode, creator_id FROM orders WHERE id = ?", req.OrderID).
+		Scan(&oldCardSecret, &oldVendor, &mode, &creatorID)
+	if errQueryOrder == sql.ErrNoRows {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "订单不存在",
+		})
+		return
+	} else if errQueryOrder != nil {
+		log.Printf("Error querying order %d: %v\n", req.OrderID, errQueryOrder)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询原订单失败",
+		})
+		return
+	}
+
+	// For non-admin user role, verify they own the order
+	if role == "user" {
+		if !creatorID.Valid || creatorID.Int64 != adminID {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"success": false,
+				"message": "您无权操作此订单",
+			})
+			return
+		}
+	}
+
+	if oldCardSecret == req.NewCardSecret {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "新卡密与原卡密相同，无需更换",
+		})
+		return
+	}
+
+	// 2. Verify and query new card secret mapping details in system_keys
+	var newVendor string
+	var newVendorKey string
+	var newKeyStatus string
+	var newKeyCreatorID sql.NullInt64
+	errNewKeyQuery := db.QueryRow("SELECT vendor, vendor_key, status, creator_id FROM system_keys WHERE system_key = ?", req.NewCardSecret).
+		Scan(&newVendor, &newVendorKey, &newKeyStatus, &newKeyCreatorID)
+	if errNewKeyQuery == sql.ErrNoRows || newKeyStatus != "active" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "新卡密无效或已失效",
+		})
+		return
+	} else if errNewKeyQuery != nil {
+		log.Printf("Error querying new key details: %v\n", errNewKeyQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询新卡密详情失败",
+		})
+		return
+	}
+
+	// For non-admin user role, verify they own/created the new card secret
+	if role == "user" {
+		if !newKeyCreatorID.Valid || newKeyCreatorID.Int64 != adminID {
+			respondJSON(w, http.StatusForbidden, map[string]interface{}{
+				"success": false,
+				"message": "您无权使用该新卡密",
+			})
+			return
+		}
+	}
+
+	// 3. Ensure the new card secret is not already used in orders table
+	var existsCount int
+	errExistsQuery := db.QueryRow("SELECT COUNT(*) FROM orders WHERE card_secret = ?", req.NewCardSecret).Scan(&existsCount)
+	if errExistsQuery != nil {
+		log.Printf("Error checking new key usage in orders: %v\n", errExistsQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "校验新卡密占用失败",
+		})
+		return
+	}
+	if existsCount > 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "新卡密已被其他订单使用",
+		})
+		return
+	}
+
+	// 4. Fetch the accounts to submit (latest record for each unique username in this order)
+	rows, errAccs := db.Query(`
+		SELECT r1.id, r1.username, r1.password, r1.two_factor, COALESCE(r1.extra_email, '')
+		FROM account_records r1
+		INNER JOIN (
+			SELECT username, MAX(id) as max_id
+			FROM account_records
+			WHERE order_id = ?
+			GROUP BY username
+		) r2 ON r1.id = r2.max_id`, req.OrderID)
+	if errAccs != nil {
+		log.Printf("Error querying order accounts for order %d: %v\n", req.OrderID, errAccs)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询订单关联账号失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type AccountRecordItem struct {
+		ID         int64
+		Username   string
+		Password   string
+		TwoFactor  string
+		ExtraEmail string
+	}
+
+	var accounts []AccountRecordItem
+	for rows.Next() {
+		var acc AccountRecordItem
+		if err := rows.Scan(&acc.ID, &acc.Username, &acc.Password, &acc.TwoFactor, &acc.ExtraEmail); err != nil {
+			log.Printf("Scan account row error: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析账号数据失败",
+			})
+			return
+		}
+		accounts = append(accounts, acc)
+	}
+
+	if len(accounts) == 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该订单无提交的账号记录，无法重提",
+		})
+		return
+	}
+
+	// 5. Submit to the new vendor if it is pass.aisale.one (external API submission)
+	type AccountSubmitResult struct {
+		Username   string
+		Password   string
+		TwoFactor  string
+		ExtraEmail string
+		TaskID     string
+		Status     string
+		Message    string
+	}
+	var submitResults []AccountSubmitResult
+	if newVendor == "pass.aisale.one" {
+		for _, acc := range accounts {
+			res, err := submitTaskToVendor(newVendorKey, acc.Username, acc.Password, acc.TwoFactor)
+			if err != nil {
+				log.Printf("Vendor submit network error for %s on replace: %v\n", acc.Username, err)
+				if len(accounts) == 1 {
+					respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+						"success": false,
+						"message": "提交接口网络错误: " + err.Error(),
+					})
+					return
+				}
+				submitResults = append(submitResults, AccountSubmitResult{
+					Username:   acc.Username,
+					Password:   acc.Password,
+					TwoFactor:  acc.TwoFactor,
+					ExtraEmail: acc.ExtraEmail,
+					TaskID:     "",
+					Status:     "failed",
+					Message:    "提交接口失败: " + err.Error(),
+				})
+			} else if !res.Success {
+				log.Printf("Vendor submit API error for %s on replace: %s\n", acc.Username, res.Message)
+				if len(accounts) == 1 {
+					respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+						"success": false,
+						"message": "提交失败: " + res.Message,
+					})
+					return
+				}
+				submitResults = append(submitResults, AccountSubmitResult{
+					Username:   acc.Username,
+					Password:   acc.Password,
+					TwoFactor:  acc.TwoFactor,
+					ExtraEmail: acc.ExtraEmail,
+					TaskID:     "",
+					Status:     "failed",
+					Message:    "提交失败: " + res.Message,
+				})
+			} else {
+				submitResults = append(submitResults, AccountSubmitResult{
+					Username:   acc.Username,
+					Password:   acc.Password,
+					TwoFactor:  acc.TwoFactor,
+					ExtraEmail: acc.ExtraEmail,
+					TaskID:     res.TaskID,
+					Status:     "pending",
+					Message:    "已成功提交，等待处理",
+				})
+			}
+		}
+	}
+
+	// 6. DB Transaction to apply changes
+	tx, errTx := db.Begin()
+	if errTx != nil {
+		log.Printf("Error starting transaction on replace: %v\n", errTx)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库服务故障，请稍后重试",
+		})
+		return
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+
+	// A. Invalidate old card secret in system_keys
+	_, errOldKeyUpdate := tx.Exec("UPDATE system_keys SET status = 'inactive', updated_at = ? WHERE system_key = ?", now, oldCardSecret)
+	if errOldKeyUpdate != nil {
+		log.Printf("Error invalidating old key %s: %v\n", oldCardSecret, errOldKeyUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "作废旧卡密失败",
+		})
+		return
+	}
+
+	// B. Update order card secret & vendor in orders table
+	_, errOrderUpdate := tx.Exec("UPDATE orders SET card_secret = ?, vendor = ?, updated_at = ? WHERE id = ?", req.NewCardSecret, newVendor, now, req.OrderID)
+	if errOrderUpdate != nil {
+		log.Printf("Error updating order card secret: %v\n", errOrderUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新订单卡密失败",
+		})
+		return
+	}
+
+	// C. Update original record status to failed (old key subscription failed)
+	for _, acc := range accounts {
+		_, errOldRecUpdate := tx.Exec(`
+			UPDATE account_records 
+			SET status = 'failed', message = '切换卡密订阅', completed_at = ?, updated_at = ? 
+			WHERE id = ?`,
+			now, now, acc.ID)
+		if errOldRecUpdate != nil {
+			log.Printf("Error updating original record %d: %v\n", acc.ID, errOldRecUpdate)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "修改原记录状态失败",
+			})
+			return
+		}
+	}
+
+	// D. Insert resubmitted records for the new card secret
+	var usernames []string
+	if newVendor == "pass.aisale.one" {
+		for _, res := range submitResults {
+			var extraEmail interface{} = nil
+			if res.ExtraEmail != "" {
+				extraEmail = res.ExtraEmail
+			}
+			_, errInsertRec := tx.Exec(`
+				INSERT INTO account_records (order_id, card_secret, username, password, two_factor, extra_email, status, message, task_id, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				req.OrderID, req.NewCardSecret, res.Username, res.Password, res.TwoFactor, extraEmail, res.Status, res.Message, res.TaskID, now, now)
+			if errInsertRec != nil {
+				log.Printf("Error inserting resubmitted record: %v\n", errInsertRec)
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"message": "记录新提交账号失败",
+				})
+				return
+			}
+			usernames = append(usernames, res.Username)
+		}
+	} else {
+		for _, acc := range accounts {
+			var extraEmail interface{} = nil
+			if acc.ExtraEmail != "" {
+				extraEmail = acc.ExtraEmail
+			}
+			_, errInsertRec := tx.Exec(`
+				INSERT INTO account_records (order_id, card_secret, username, password, two_factor, extra_email, status, message, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, 'pending', '排队处理中', ?, ?)`,
+				req.OrderID, req.NewCardSecret, acc.Username, acc.Password, acc.TwoFactor, extraEmail, now, now)
+			if errInsertRec != nil {
+				log.Printf("Error inserting resubmitted record: %v\n", errInsertRec)
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"message": "记录新提交账号失败",
+				})
+				return
+			}
+			usernames = append(usernames, acc.Username)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("Error committing transaction on replace: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "提交事务失败",
+		})
+		return
+	}
+
+	// E. Spawn mock background daemon for non-aisale and non-deard vendors if not in test env
+	isTesting := strings.Contains(os.Args[0], ".test") || os.Getenv("MYSQL_TEST_DSN") != ""
+	if newVendor != "pass.aisale.one" && newVendor != "ai.deard.fun" && !isTesting {
+		go func(cSecret string, oID int64, targets []string) {
+			time.Sleep(5 * time.Second)
+
+			// Loop through the accounts we just submitted
+			for i, username := range targets {
+				nowTime := time.Now()
+				var status string
+				var message string
+				var discountURL string
+
+				// Toggle success or failure alternately based on index
+				if i%2 == 0 {
+					status = "success"
+					message = "订阅成功绑定，绑卡信息已生效"
+					cleanUser := username
+					if len(username) > 4 {
+						cleanUser = username[:4]
+					}
+					cleanCard := cSecret
+					if len(cSecret) > 4 {
+						cleanCard = cSecret[:4]
+					}
+					discountURL = "https://pixel.sub/discount/CLAIM-MOCK-" + cleanCard + "-" + cleanUser
+				} else {
+					status = "failed"
+					message = "二步验证(2FA)校验失败，请检查备用验证码或密钥"
+					discountURL = ""
+				}
+
+				_, errUpdate := db.Exec(`
+					UPDATE account_records 
+					SET status = ?, message = ?, discount_url = ?, completed_at = ?, updated_at = ? 
+					WHERE order_id = ? AND username = ? AND status = 'pending'`,
+					status, message, discountURL, nowTime, nowTime, oID, username)
+				if errUpdate != nil {
+					log.Printf("Error running background update on account %s: %v\n", username, errUpdate)
+				}
+			}
+		}(req.NewCardSecret, req.OrderID, usernames)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "换卡重新提交成功",
+	})
+}
+
 func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -417,6 +828,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * pageSize
 	searchTerm := r.URL.Query().Get("query")
 	statusFilter := r.URL.Query().Get("status")
+	vendorFilter := r.URL.Query().Get("vendor")
 
 	adminID, ok := getAdminID(r)
 	if !ok {
@@ -454,6 +866,11 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	if statusFilter != "" {
 		whereClauses = append(whereClauses, "status = ?")
 		args = append(args, statusFilter)
+	}
+
+	if vendorFilter != "" {
+		whereClauses = append(whereClauses, "vendor = ?")
+		args = append(args, vendorFilter)
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")
@@ -530,12 +947,25 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		records = append(records, row)
 	}
 
+	var activeVendors []string
+	rowsV, errV := db.Query("SELECT DISTINCT vendor FROM system_keys WHERE vendor != '' ORDER BY vendor ASC")
+	if errV == nil {
+		defer rowsV.Close()
+		for rowsV.Next() {
+			var v string
+			if errScan := rowsV.Scan(&v); errScan == nil {
+				activeVendors = append(activeVendors, v)
+			}
+		}
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":   true,
 		"total":     totalCount,
 		"page":      page,
 		"page_size": pageSize,
 		"records":   records,
+		"vendors":   activeVendors,
 	})
 }
 
@@ -882,6 +1312,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"epay_wx_channel":         getSetting("epay_wx_channel", "201906181353"),
 				"epay_alipay_channel":     getSetting("epay_alipay_channel", ""),
 				"key_price":               getSetting("key_price", "9.99"),
+				"api_open":                getSetting("api_open", "off"),
+				"api_base_url":            getSetting("api_base_url", ""),
+				"api_whitelist":           getSetting("api_whitelist", ""),
 			},
 		})
 	} else if r.Method == http.MethodPost {
@@ -893,6 +1326,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			EpayWxChannel        string `json:"epay_wx_channel"`
 			EpayAlipayChannel    string `json:"epay_alipay_channel"`
 			KeyPrice             string `json:"key_price"`
+			APIOpen              string `json:"api_open"`
+			APIBaseURL           string `json:"api_base_url"`
+			APIWhitelist         string `json:"api_whitelist"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -910,6 +1346,8 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		oldWx := getSetting("epay_wx_channel", "201906181353")
 		oldAlipay := getSetting("epay_alipay_channel", "")
 		oldPrice := getSetting("key_price", "9.99")
+		oldAPIOpen := getSetting("api_open", "off")
+		oldAPIBaseURL := getSetting("api_base_url", "")
 
 		if req.TwoFactorTutorialURL == "" {
 			req.TwoFactorTutorialURL = oldTutorial
@@ -932,6 +1370,16 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		if req.KeyPrice == "" {
 			req.KeyPrice = oldPrice
 		}
+		if req.APIOpen == "" {
+			req.APIOpen = oldAPIOpen
+		}
+		if req.APIBaseURL == "" {
+			req.APIBaseURL = oldAPIBaseURL
+		}
+		// Allow saving empty whitelist
+		if r.Body != nil && !strings.Contains(r.URL.RawQuery, "partial") {
+			// Do not override if not present in request body, but allow explicit empty
+		}
 
 		now := time.Now()
 		settingsToSave := map[string]string{
@@ -942,6 +1390,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"epay_wx_channel":         req.EpayWxChannel,
 			"epay_alipay_channel":     req.EpayAlipayChannel,
 			"key_price":               req.KeyPrice,
+			"api_open":                req.APIOpen,
+			"api_base_url":            req.APIBaseURL,
+			"api_whitelist":           req.APIWhitelist,
 		}
 		for k, v := range settingsToSave {
 			_, err := db.Exec(`

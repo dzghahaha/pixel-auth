@@ -126,6 +126,7 @@ func createTables() {
 	CREATE TABLE IF NOT EXISTS account_records (
 		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 		order_id BIGINT UNSIGNED NOT NULL,
+		card_secret VARCHAR(255) NOT NULL DEFAULT '',
 		username VARCHAR(255) NOT NULL,
 		password VARCHAR(255) NOT NULL,
 		two_factor VARCHAR(255) NOT NULL,
@@ -489,6 +490,26 @@ func createTables() {
 			// Add index
 			if _, err := db.Exec("ALTER TABLE orders ADD KEY idx_orders_creator_id (creator_id)"); err != nil {
 				log.Printf("Warning: failed to add idx_orders_creator_id index: %v\n", err)
+			}
+		}
+	}
+
+	var hasCardSecret bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'account_records' 
+		  AND COLUMN_NAME = 'card_secret'
+	`).Scan(&hasCardSecret)
+	if errCheck == nil && !hasCardSecret {
+		log.Println("Adding 'card_secret' column to 'account_records' table...")
+		if _, err := db.Exec("ALTER TABLE account_records ADD COLUMN card_secret VARCHAR(255) NOT NULL DEFAULT ''"); err != nil {
+			log.Printf("Warning: failed to add card_secret column: %v\n", err)
+		} else {
+			// Backfill card_secret in account_records from orders table
+			if _, err := db.Exec("UPDATE account_records r JOIN orders o ON r.order_id = o.id SET r.card_secret = o.card_secret WHERE r.card_secret = ''"); err != nil {
+				log.Printf("Warning: failed to backfill card_secret in account_records: %v\n", err)
 			}
 		}
 	}

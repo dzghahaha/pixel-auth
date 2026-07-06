@@ -38,6 +38,11 @@ func main() {
 
 	// Public config API
 	http.HandleFunc("/api/config", handleGetConfig)
+	http.HandleFunc("/api/doc/info", handleDocInfo)
+
+	// Developer Open APIs
+	http.HandleFunc("/api/open/submit", handleOpenSubmit)
+	http.HandleFunc("/api/open/query", handleOpenQuery)
 
 	// Epay Integration APIs
 	http.HandleFunc("/api/pay/submit", handlePaySubmit)
@@ -55,6 +60,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders", requirePermission("orders", handleAdminOrders))
 	http.HandleFunc("/api/admin/orders/update", requirePermission("orders", handleAdminOrdersUpdate))
 	http.HandleFunc("/api/admin/orders/history", requirePermission("orders", handleAdminOrderHistory))
+	http.HandleFunc("/api/admin/orders/replace", requirePermission("orders", handleAdminOrderReplaceResubmit))
 	http.HandleFunc("/api/admin/keys", requirePermission("keys", handleAdminKeys))
 	http.HandleFunc("/api/admin/keys/invalidate", requirePermission("keys", handleAdminKeysInvalidate))
 	http.HandleFunc("/api/admin/generate_stock_keys", requirePermission("generate", handleGenerateStockKeys))

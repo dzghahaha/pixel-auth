@@ -519,7 +519,13 @@
 
                         pollTradeNo.textContent = data.out_trade_no;
                         pollAmount.textContent = (qty * keyPrice).toFixed(2);
-                        btnReopenPay.href = data.pay_url;
+                        
+                        if (btnReopenPay) {
+                            btnReopenPay.style.pointerEvents = 'auto';
+                            btnReopenPay.style.opacity = '1';
+                            btnReopenPay.textContent = '重新打开支付收银台';
+                            btnReopenPay.href = data.pay_url;
+                        }
 
                         // Start polling status
                         startPolling(data.out_trade_no);
@@ -581,6 +587,14 @@
                                 pollStatusEl.textContent = '已取消';
                                 pollStatusEl.className = 'status-badge cancelled';
                             }
+
+                            // Disable reopen payment button
+                            if (btnReopenPay) {
+                                btnReopenPay.style.pointerEvents = 'none';
+                                btnReopenPay.style.opacity = '0.5';
+                                btnReopenPay.textContent = '订单已失效/取消';
+                                btnReopenPay.removeAttribute('href');
+                            }
                         } else {
                             buyCard.classList.add('hidden');
                             pollingCard.classList.remove('hidden');
@@ -624,10 +638,23 @@
             // Bind cancel polling action
             const btnCancelPoll = document.getElementById('btn-cancel-poll');
             if (btnCancelPoll) {
-                btnCancelPoll.addEventListener('click', (e) => {
+                btnCancelPoll.addEventListener('click', async (e) => {
                     e.preventDefault();
                     if (pollInterval) clearInterval(pollInterval);
                     if (countdownInterval) clearInterval(countdownInterval);
+                    
+                    if (currentOutTradeNo) {
+                        try {
+                            await fetch('/api/pay/cancel', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ out_trade_no: currentOutTradeNo })
+                            });
+                        } catch (err) {
+                            console.error('Error cancelling order:', err);
+                        }
+                    }
+
                     window.history.replaceState({}, document.title, window.location.pathname);
                     buyCard.classList.remove('hidden');
                     pollingCard.classList.add('hidden');

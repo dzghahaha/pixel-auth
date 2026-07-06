@@ -94,6 +94,9 @@
                     <option value="active">生效中 (Active)</option>
                     <option value="inactive">已作废 (Inactive)</option>
                 </select>
+                <select id="filter-vendor" class="status-select admin-only">
+                    <option value="">所有厂商</option>
+                </select>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
             </div>
         </div>
@@ -158,6 +161,7 @@
             const tableBody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-query');
             const statusSelect = document.getElementById('filter-status');
+            const vendorSelect = document.getElementById('filter-vendor');
             const btnSearch = document.getElementById('btn-search');
 
             const btnPrev = document.getElementById('btn-prev-page');
@@ -263,9 +267,10 @@
                 tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取卡密数据...</td></tr>';
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
+                const vendorVal = vendorSelect.value;
 
                 try {
-                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}`;
+                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -279,6 +284,21 @@
                         totalCountSpan.textContent = total;
                         btnPrev.disabled = currentPage <= 1;
                         btnNext.disabled = currentPage >= totalPages;
+
+                        // Dynamically populate vendor dropdown
+                        if (data.vendors) {
+                            const selectedVendor = vendorSelect.value;
+                            vendorSelect.innerHTML = '<option value="">所有厂商</option>';
+                            data.vendors.forEach(v => {
+                                const opt = document.createElement('option');
+                                opt.value = v;
+                                opt.textContent = v;
+                                if (v === selectedVendor) {
+                                    opt.selected = true;
+                                }
+                                vendorSelect.appendChild(opt);
+                            });
+                        }
 
                         if (currentKeys.length === 0) {
                             tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
@@ -421,6 +441,20 @@
             closeResultModal.addEventListener('click', closeResult);
             btnCloseResult.addEventListener('click', closeResult);
 
+            // Close modal on clicking outside content
+            window.addEventListener('click', (e) => {
+                if (e.target === resultModal) {
+                    closeResult();
+                }
+            });
+
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeResult();
+                }
+            });
+
             // Search events
             btnSearch.addEventListener('click', () => {
                 currentPage = 1;
@@ -431,6 +465,14 @@
                     currentPage = 1;
                     loadKeys();
                 }
+            });
+            statusSelect.addEventListener('change', () => {
+                currentPage = 1;
+                loadKeys();
+            });
+            vendorSelect.addEventListener('change', () => {
+                currentPage = 1;
+                loadKeys();
             });
 
             // Pagination events

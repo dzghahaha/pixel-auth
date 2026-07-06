@@ -669,7 +669,7 @@ func TestResetKeys(t *testing.T) {
 
 	// 5. Verify order isolation: the order must remain with the oldSysKey
 	var orderCardSecret string
-	err = db.QueryRow("SELECT card_secret FROM orders o JOIN account_records r ON r.order_id = o.id WHERE r.username = 'reset_test_user@gmail.com'").Scan(&orderCardSecret)
+	err = db.QueryRow("SELECT o.card_secret FROM orders o JOIN account_records r ON r.order_id = o.id WHERE r.username = 'reset_test_user@gmail.com'").Scan(&orderCardSecret)
 	if err != nil {
 		t.Fatalf("failed to query order card secret: %v", err)
 	}
@@ -1998,3 +1998,208 @@ func TestAdminKeysInvalidate(t *testing.T) {
 		t.Errorf("expected inactive, got %s", statusUserKey)
 	}
 }
+
+func TestAdminOrderReplaceResubmit(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// Clear relevant tables
+	_, _ = db.Exec("DELETE FROM admin_sessions")
+	_, _ = db.Exec("DELETE FROM admins")
+	_, _ = db.Exec("DELETE FROM account_records")
+	_, _ = db.Exec("DELETE FROM orders")
+	_, _ = db.Exec("DELETE FROM system_keys")
+
+	now := time.Now()
+
+	// 1. Insert test admin
+	hashedAdminPassword, _ := bcrypt.GenerateFromPassword([]byte("adminpass123"), bcrypt.DefaultCost)
+	resAdmin, err := db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?)",
+		"testadmin", string(hashedAdminPassword), now, now)
+	if err != nil {
+		t.Fatalf("failed to insert admin: %v", err)
+	}
+	adminID, _ := resAdmin.LastInsertId()
+
+	// Add orders permission
+	_, _ = db.Exec("INSERT INTO admin_permissions (admin_id, permission, created_at) VALUES (?, 'orders', ?)", adminID, now)
+
+	// Log in as admin to get cookie
+	loginPayload := `{"username": "testadmin", "password": "adminpass123"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginPayload))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	adminCookie := rrLogin.Result().Cookies()[0]
+
+	// 2. Insert keys in system_keys
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"old-key", "ai.deard.fun", "old-vendor-key", "active", adminID, "old-key", now, now)
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"new-key", "ai.deard.fun", "new-vendor-key", "active", adminID, "new-key", now, now)
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"used-key", "ai.deard.fun", "used-vendor-key", "active", adminID, "used-key", now, now)
+
+	// 3. Create an order with old-key
+	resOrder, errOrder := db.Exec("INSERT INTO orders (card_secret, vendor, mode, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"old-key", "ai.deard.fun", "single", adminID, now, now)
+	if errOrder != nil {
+		t.Fatalf("failed to create order: %v", errOrder)
+	}
+	orderID, _ := resOrder.LastInsertId()
+
+	// Create an order with used-key to test key usage validation
+	_, _ = db.Exec("INSERT INTO orders (card_secret, vendor, mode, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"used-key", "ai.deard.fun", "single", adminID, now, now)
+
+	// 4. Create account records for the first order
+	_, _ = db.Exec("INSERT INTO account_records (order_id, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "user@example.com", "pass123", "twofa123", "running", "正在处理中", now, now)
+
+	// 5. Test Replace & Resubmit requests
+	// Case A: Replace with the same key
+	payloadSame := fmt.Sprintf(`{"order_id": %d, "new_card_secret": "old-key"}`, orderID)
+	reqSame := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadSame))
+	reqSame.AddCookie(adminCookie)
+	rrSame := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrSame, reqSame)
+	if rrSame.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for same key, got %d. Body: %s", rrSame.Code, rrSame.Body.String())
+	}
+
+	// Case B: Replace with already used key
+	payloadUsed := fmt.Sprintf(`{"order_id": %d, "new_card_secret": "used-key"}`, orderID)
+	reqUsed := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadUsed))
+	reqUsed.AddCookie(adminCookie)
+	rrUsed := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrUsed, reqUsed)
+	if rrUsed.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for already used key, got %d. Body: %s", rrUsed.Code, rrUsed.Body.String())
+	}
+
+	// Case C: Replace with invalid key (doesn't exist)
+	payloadInvalid := fmt.Sprintf(`{"order_id": %d, "new_card_secret": "non-existent-key"}`, orderID)
+	reqInvalid := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadInvalid))
+	reqInvalid.AddCookie(adminCookie)
+	rrInvalid := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrInvalid, reqInvalid)
+	if rrInvalid.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for non-existent key, got %d. Body: %s", rrInvalid.Code, rrInvalid.Body.String())
+	}
+
+	// Case D: Replace with valid active key (new-key) - Should succeed
+	payloadValid := fmt.Sprintf(`{"order_id": %d, "new_card_secret": "new-key"}`, orderID)
+	reqValid := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadValid))
+	reqValid.AddCookie(adminCookie)
+	rrValid := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrValid, reqValid)
+	if rrValid.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid replace, got %d. Body: %s", rrValid.Code, rrValid.Body.String())
+	}
+
+	// 6. Verification
+	// Old key should be inactive
+	var oldKeyStatus string
+	db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'old-key'").Scan(&oldKeyStatus)
+	if oldKeyStatus != "inactive" {
+		t.Errorf("expected old-key status 'inactive', got: %s", oldKeyStatus)
+	}
+
+	// New key should still be active
+	var newKeyStatus string
+	db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'new-key'").Scan(&newKeyStatus)
+	if newKeyStatus != "active" {
+		t.Errorf("expected new-key status 'active', got: %s", newKeyStatus)
+	}
+
+	// Order card secret should be updated
+	var updatedSecret string
+	var updatedVendor string
+	db.QueryRow("SELECT card_secret, vendor FROM orders WHERE id = ?", orderID).Scan(&updatedSecret, &updatedVendor)
+	if updatedSecret != "new-key" || updatedVendor != "ai.deard.fun" {
+		t.Errorf("expected order secret updated to 'new-key' and vendor 'ai.deard.fun', got secret='%s', vendor='%s'", updatedSecret, updatedVendor)
+	}
+
+	// Check records in account_records: there should be 2 records
+	rows, errQuery := db.Query("SELECT id, status, message FROM account_records WHERE order_id = ? ORDER BY id ASC", orderID)
+	if errQuery != nil {
+		t.Fatalf("failed to query account records: %v", errQuery)
+	}
+	defer rows.Close()
+
+	type Rec struct {
+		ID      int64
+		Status  string
+		Message string
+	}
+	var records []Rec
+	for rows.Next() {
+		var r Rec
+		rows.Scan(&r.ID, &r.Status, &r.Message)
+		records = append(records, r)
+	}
+
+	if len(records) != 2 { // 1 original (updated to failed status with message "切换卡密订阅") + 1 new pending submission
+		t.Errorf("expected 2 records in account_records for order, got %d: %+v", len(records), records)
+	} else {
+		// First record is original updated to failed
+		if records[0].Status != "failed" || records[0].Message != "切换卡密订阅" {
+			t.Errorf("expected first record failed with '切换卡密订阅', got status=%s, message=%s", records[0].Status, records[0].Message)
+		}
+		// Second record is the new pending submission
+		if records[1].Status != "pending" || records[1].Message != "排队处理中" {
+			t.Errorf("expected second record pending with '排队处理中', got status=%s, message=%s", records[1].Status, records[1].Message)
+		}
+	}
+}
+
+func TestOpenAPIs(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Initially API is OFF (by default)
+	reqQuery := httptest.NewRequest(http.MethodGet, "/api/open/query?card_secret=test-card", nil)
+	rrQuery := httptest.NewRecorder()
+	handleOpenQuery(rrQuery, reqQuery)
+	if rrQuery.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when API is off, got %d", rrQuery.Code)
+	}
+
+	// 2. Set API ON in database settings
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_open', 'on', ?) ON DUPLICATE KEY UPDATE setting_value='on'", time.Now())
+
+	// Test when whitelist is empty (allows all)
+	_, _ = db.Exec("DELETE FROM system_settings WHERE setting_key = 'api_whitelist'")
+	rrQuery2 := httptest.NewRecorder()
+	handleOpenQuery(rrQuery2, reqQuery)
+	if rrQuery2.Code != http.StatusOK { // 200 OK because query endpoint returns empty slice for invalid cards
+		t.Errorf("expected 200 when whitelist empty and card invalid, got %d. Body: %s", rrQuery2.Code, rrQuery2.Body.String())
+	}
+
+	// 3. Set API whitelist to a specific IP (e.g. 192.168.1.1)
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_whitelist', '192.168.1.1', ?) ON DUPLICATE KEY UPDATE setting_value='192.168.1.1'", time.Now())
+
+	// Request from non-whitelisted IP (standard localhost request)
+	reqQueryIP := httptest.NewRequest(http.MethodGet, "/api/open/query?card_secret=test-card", nil)
+	reqQueryIP.RemoteAddr = "127.0.0.1:12345"
+	rrQueryIP := httptest.NewRecorder()
+	handleOpenQuery(rrQueryIP, reqQueryIP)
+	if rrQueryIP.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when request IP not whitelisted, got %d. Body: %s", rrQueryIP.Code, rrQueryIP.Body.String())
+	}
+
+	// Request with whitelisted IP in X-Forwarded-For header
+	reqQueryFF := httptest.NewRequest(http.MethodGet, "/api/open/query?card_secret=test-card", nil)
+	reqQueryFF.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")
+	rrQueryFF := httptest.NewRecorder()
+	handleOpenQuery(rrQueryFF, reqQueryFF)
+	if rrQueryFF.Code != http.StatusOK { // Whitelist check passes via X-Forwarded-For, returns 200 with empty list
+		t.Errorf("expected 200 when whitelisted IP matches, got %d. Body: %s", rrQueryFF.Code, rrQueryFF.Body.String())
+	}
+}
+
