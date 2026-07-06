@@ -543,6 +543,85 @@
                 </ul>
             </div>
         </div>
+
+        <!-- 接口三：卡密重置 -->
+        <div class="api-block collapsed">
+            <div class="api-header" onclick="toggleApiBlock(this)">
+                <!-- Arrow icon -->
+                <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: var(--text-secondary); margin-right: 4px; transition: transform 0.2s;">
+                    <path d="M6 9l6 6 6-6" />
+                </svg>
+                <span class="method-badge post">POST</span>
+                <span class="api-path">/api/open/reset</span>
+                <span class="api-desc">批量重置已绑定的卡密并生成新激活卡密</span>
+            </div>
+            <div class="api-body">
+                <h4 class="section-subtitle">请求 Header 说明</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Header名</th>
+                            <th>类型</th>
+                            <th>必填</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Content-Type</td>
+                            <td><span class="type-tag">string</span></td>
+                            <td><span class="req-tag">必填</span></td>
+                            <td>必须为 <code>application/json</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="section-subtitle">请求 JSON Body 参数</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>字段名</th>
+                            <th>类型</th>
+                            <th>必填</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>old_keys</td>
+                            <td><span class="type-tag">string[]</span></td>
+                            <td><span class="req-tag">必填</span></td>
+                            <td>需要被重置的旧卡密列表。单次最大支持 50 个。</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="section-subtitle">请求 Payload 示例 (JSON)</h4>
+                <div class="code-container">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制代码</button>
+                    <pre class="code-block">{
+  "old_keys": [
+    "ABCD1234EFGH5678"
+  ]
+}</pre>
+                </div>
+
+                <h4 class="section-subtitle">返回数据示例 (JSON)</h4>
+                <div class="code-container">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制代码</button>
+                    <pre class="code-block">{
+  "success": true,
+  "new_keys": [
+    "WXYZ5678ABCD1234"
+  ],
+  "original_keys": [
+    "ABCD1234EFGH5678"
+  ],
+  "message": "重置密钥成功"
+}</pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 弹窗提示 -->

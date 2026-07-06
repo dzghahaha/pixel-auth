@@ -43,6 +43,7 @@ func main() {
 	// Developer Open APIs
 	http.HandleFunc("/api/open/submit", handleOpenSubmit)
 	http.HandleFunc("/api/open/query", handleOpenQuery)
+	http.HandleFunc("/api/open/reset", handleOpenReset)
 
 	// Epay Integration APIs
 	http.HandleFunc("/api/pay/submit", handlePaySubmit)

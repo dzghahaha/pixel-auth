@@ -25,6 +25,36 @@
             cursor: pointer;
         }
 
+        /* Unified Premium Date Range Picker Style */
+        .date-range-group {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            padding: 0 10px;
+            gap: 6px;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        
+        .date-range-group:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+        
+        .date-range-group input[type="datetime-local"] {
+            border: none !important;
+            background: transparent !important;
+            padding: 9px 4px !important;
+            font-size: 13px !important;
+            outline: none !important;
+            box-shadow: none !important;
+            color: var(--text-primary) !important;
+            width: auto !important;
+            max-width: 165px !important;
+            cursor: pointer;
+        }
+
         .account-td {
             font-weight: 600;
             color: var(--text-primary);
@@ -118,6 +148,21 @@
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
                 </select>
+                <select id="filter-time-shortcut" class="status-select">
+                    <option value="">时间范围：不限</option>
+                    <option value="today">今天</option>
+                    <option value="yesterday">昨天</option>
+                    <option value="7days">最近 7 天</option>
+                    <option value="30days">最近 30 天</option>
+                    <option value="custom">自定义范围</option>
+                </select>
+                <div id="custom-time-container" style="display: none; align-items: center;">
+                    <div class="date-range-group">
+                        <input type="datetime-local" id="filter-start-time" placeholder="开始时间">
+                        <span style="color: var(--text-secondary); font-size: 12px; font-weight: 500; margin: 0 4px;">至</span>
+                        <input type="datetime-local" id="filter-end-time" placeholder="结束时间">
+                    </div>
+                </div>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
             </div>
         </div>
@@ -301,6 +346,10 @@
             const searchOriginalKey = document.getElementById('search-original-key');
             const searchNote = document.getElementById('search-note');
             const statusSelect = document.getElementById('filter-status');
+            const timeShortcutSelect = document.getElementById('filter-time-shortcut');
+            const customTimeContainer = document.getElementById('custom-time-container');
+            const filterStartTime = document.getElementById('filter-start-time');
+            const filterEndTime = document.getElementById('filter-end-time');
             const btnSearch = document.getElementById('btn-search');
 
             const btnPrev = document.getElementById('btn-prev-page');
@@ -437,8 +486,49 @@
                 const noteVal = searchNote.value.trim();
                 const statusVal = statusSelect.value;
 
+                let startTimeVal = '';
+                let endTimeVal = '';
+                const timeShortcut = timeShortcutSelect.value;
+
+                if (timeShortcut === 'custom') {
+                    if (filterStartTime.value) {
+                        const startD = new Date(filterStartTime.value);
+                        if (!isNaN(startD.getTime())) {
+                            startTimeVal = Math.floor(startD.getTime() / 1000).toString();
+                        }
+                    }
+                    if (filterEndTime.value) {
+                        const endD = new Date(filterEndTime.value);
+                        if (!isNaN(endD.getTime())) {
+                            endTimeVal = Math.floor(endD.getTime() / 1000).toString();
+                        }
+                    }
+                } else if (timeShortcut) {
+                    const now = new Date();
+                    let startD, endD;
+                    if (timeShortcut === 'today') {
+                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                    } else if (timeShortcut === 'yesterday') {
+                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+                    } else if (timeShortcut === '7days') {
+                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                    } else if (timeShortcut === '30days') {
+                        startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+                        endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                    }
+                    if (startD) {
+                        startTimeVal = Math.floor(startD.getTime() / 1000).toString();
+                    }
+                    if (endD) {
+                        endTimeVal = Math.floor(endD.getTime() / 1000).toString();
+                    }
+                }
+
                 try {
-                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}`;
+                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}&start_time=${startTimeVal}&end_time=${endTimeVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -766,6 +856,29 @@
                     closeModalAction();
                     closeReplaceModalAction();
                 }
+            });
+
+            // Time range events
+            timeShortcutSelect.addEventListener('change', () => {
+                if (timeShortcutSelect.value === 'custom') {
+                    customTimeContainer.style.display = 'inline-flex';
+                } else {
+                    customTimeContainer.style.display = 'none';
+                    filterStartTime.value = '';
+                    filterEndTime.value = '';
+                    currentPage = 1;
+                    loadOrders();
+                }
+            });
+
+            filterStartTime.addEventListener('change', () => {
+                currentPage = 1;
+                loadOrders();
+            });
+
+            filterEndTime.addEventListener('change', () => {
+                currentPage = 1;
+                loadOrders();
             });
 
             // Search events

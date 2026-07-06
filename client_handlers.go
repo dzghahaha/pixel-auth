@@ -713,3 +713,22 @@ func handleOpenQuery(w http.ResponseWriter, r *http.Request) {
 
 	handleQuery(w, r)
 }
+
+func handleOpenReset(w http.ResponseWriter, r *http.Request) {
+	if !isAPIOpen() {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": "开放接口未启用",
+		})
+		return
+	}
+	if !checkAPIWhitelist(r) {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("IP %s 未在白名单中", getClientIP(r)),
+		})
+		return
+	}
+
+	handleResetKeys(w, r)
+}

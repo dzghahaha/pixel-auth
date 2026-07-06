@@ -47,6 +47,8 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	originalKeyFilter := r.URL.Query().Get("original_key")
 	noteFilter := r.URL.Query().Get("note")
+	startTimeParam := r.URL.Query().Get("start_time")
+	endTimeParam := r.URL.Query().Get("end_time")
 
 	adminID, ok := getAdminID(r)
 	if !ok {
@@ -94,6 +96,24 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	if noteFilter != "" {
 		whereClauses = append(whereClauses, "sk.note LIKE ?")
 		args = append(args, "%"+noteFilter+"%")
+	}
+
+	if startTimeParam != "" {
+		var sec int64
+		if _, err := fmt.Sscanf(startTimeParam, "%d", &sec); err == nil {
+			startTime := time.Unix(sec, 0)
+			whereClauses = append(whereClauses, "o.created_at >= ?")
+			args = append(args, startTime)
+		}
+	}
+
+	if endTimeParam != "" {
+		var sec int64
+		if _, err := fmt.Sscanf(endTimeParam, "%d", &sec); err == nil {
+			endTime := time.Unix(sec, 0)
+			whereClauses = append(whereClauses, "o.created_at <= ?")
+			args = append(args, endTime)
+		}
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")

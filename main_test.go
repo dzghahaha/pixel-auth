@@ -1244,6 +1244,32 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("expected 1 order record in result, got %v", ordersResp)
 	}
 
+	// Test start_time / end_time filter
+	nowSec := time.Now().Unix()
+	urlWithTimeMatch := fmt.Sprintf("/api/admin/orders?query=orderuser&start_time=%d&end_time=%d", nowSec-30, nowSec+30)
+	reqOrdersTimeMatch := httptest.NewRequest(http.MethodGet, urlWithTimeMatch, nil)
+	reqOrdersTimeMatch.AddCookie(sessionCookie)
+	rrOrdersTimeMatch := httptest.NewRecorder()
+	requireAdmin(handleAdminOrders)(rrOrdersTimeMatch, reqOrdersTimeMatch)
+
+	var ordersRespTimeMatch map[string]interface{}
+	json.Unmarshal(rrOrdersTimeMatch.Body.Bytes(), &ordersRespTimeMatch)
+	if ordersRespTimeMatch["success"] != true || int(ordersRespTimeMatch["total"].(float64)) != 1 {
+		t.Errorf("expected 1 order record in time matching query, got %v", ordersRespTimeMatch)
+	}
+
+	urlWithTimeBefore := fmt.Sprintf("/api/admin/orders?query=orderuser&start_time=%d&end_time=%d", nowSec-60, nowSec-10)
+	reqOrdersTimeBefore := httptest.NewRequest(http.MethodGet, urlWithTimeBefore, nil)
+	reqOrdersTimeBefore.AddCookie(sessionCookie)
+	rrOrdersTimeBefore := httptest.NewRecorder()
+	requireAdmin(handleAdminOrders)(rrOrdersTimeBefore, reqOrdersTimeBefore)
+
+	var ordersRespTimeBefore map[string]interface{}
+	json.Unmarshal(rrOrdersTimeBefore.Body.Bytes(), &ordersRespTimeBefore)
+	if ordersRespTimeBefore["success"] != true || int(ordersRespTimeBefore["total"].(float64)) != 0 {
+		t.Errorf("expected 0 order records in time before query, got %v", ordersRespTimeBefore)
+	}
+
 	// 5.b Test Order History API
 	// Query order history - unauthorized (no cookie)
 	reqHistoryUnauth := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/orders/history?order_id=%d", orderID), nil)
@@ -2200,6 +2226,36 @@ func TestOpenAPIs(t *testing.T) {
 	handleOpenQuery(rrQueryFF, reqQueryFF)
 	if rrQueryFF.Code != http.StatusOK { // Whitelist check passes via X-Forwarded-For, returns 200 with empty list
 		t.Errorf("expected 200 when whitelisted IP matches, got %d. Body: %s", rrQueryFF.Code, rrQueryFF.Body.String())
+	}
+
+	// Test open reset API when API is off
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_open', 'off', ?) ON DUPLICATE KEY UPDATE setting_value='off'", time.Now())
+	reqResetOff := httptest.NewRequest(http.MethodPost, "/api/open/reset", strings.NewReader(`{"old_keys":["key1"]}`))
+	rrResetOff := httptest.NewRecorder()
+	handleOpenReset(rrResetOff, reqResetOff)
+	if rrResetOff.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for open reset when API is off, got %d", rrResetOff.Code)
+	}
+
+	// Test open reset API when API is on
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_open', 'on', ?) ON DUPLICATE KEY UPDATE setting_value='on'", time.Now())
+	_, _ = db.Exec("DELETE FROM system_settings WHERE setting_key = 'api_whitelist'")
+
+	// Insert active system key to reset
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
+		"key-to-reset-open", "ai.deard.fun", "vendor-key-1", "active", "key-to-reset-open", time.Now(), time.Now())
+
+	reqResetOn := httptest.NewRequest(http.MethodPost, "/api/open/reset", strings.NewReader(`{"old_keys":["key-to-reset-open"]}`))
+	rrResetOn := httptest.NewRecorder()
+	handleOpenReset(rrResetOn, reqResetOn)
+	if rrResetOn.Code != http.StatusOK {
+		t.Fatalf("expected 200 for open reset when API is on, got %d. Body: %s", rrResetOn.Code, rrResetOn.Body.String())
+	}
+
+	var resetOpenResp ResetKeysResponse
+	json.Unmarshal(rrResetOn.Body.Bytes(), &resetOpenResp)
+	if !resetOpenResp.Success || len(resetOpenResp.NewKeys) != 1 {
+		t.Errorf("expected successful open reset and 1 new key, got %v", resetOpenResp)
 	}
 }
 
