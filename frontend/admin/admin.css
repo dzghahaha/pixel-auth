@@ -238,6 +238,92 @@ select {
     cursor: pointer;
 }
 
+/* Custom Select Dropdown Styling */
+.custom-select {
+    position: relative;
+    display: inline-block;
+    min-width: 150px;
+    user-select: none;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-select-trigger:hover {
+    border-color: #94a3b8;
+}
+
+.custom-select.open .custom-select-trigger {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.custom-select .chevron-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--slate-500);
+    transition: transform 0.2s ease;
+    margin-left: 8px;
+}
+
+.custom-select.open .chevron-icon {
+    transform: rotate(180deg);
+}
+
+.custom-options-container {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg), 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    z-index: 100;
+    overflow-y: auto;
+    max-height: 250px;
+    
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.custom-select.open .custom-options-container {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.custom-option {
+    padding: 9px 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.custom-option:hover {
+    background-color: var(--slate-50);
+}
+
+.custom-option.selected {
+    background-color: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+}
+
 /* Premium Modern SaaS Buttons with Subtle Gradients and Inner Soft Lighting */
 .submit-btn,
 .btn-search,
