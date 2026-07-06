@@ -1,3 +1,74 @@
+// Global Loading UI HTML Helpers
+window.getTableLoadingHTML = function(colspan, text = '正在加载数据，请稍候...') {
+    return `
+        <tr>
+            <td colspan="${colspan}" style="padding: 48px 0; text-align: center;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
+                    <div class="loader-spinner"></div>
+                    <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">${text}</span>
+                </div>
+            </td>
+        </tr>
+    `;
+};
+
+window.getLoadingHTML = function(text = '正在加载...') {
+    return `
+        <div style="display: inline-flex; align-items: center; gap: 8px; justify-content: center; padding: 16px; width: 100%;">
+            <div class="loader-spinner" style="width: 18px; height: 18px; border-width: 2px;"></div>
+            <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">${text}</span>
+        </div>
+    `;
+};
+
+// Global Page Loader helpers
+window.showPageLoader = function() {
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+        loader.classList.remove('fade-out');
+    }
+};
+
+window.hidePageLoader = function() {
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+        loader.classList.add('fade-out');
+    }
+};
+
+// Global Fetch Interceptor for progress spinner overlay
+(function() {
+    const originalFetch = window.fetch;
+    let activeRequestsCount = 0;
+
+    window.fetch = async function(...args) {
+        const url = args[0];
+        const isBackground = typeof url === 'string' && (
+            url.includes('/api/pay/query') || 
+            url.includes('/api/admin/check')
+        );
+
+        if (!isBackground) {
+            activeRequestsCount++;
+            window.showPageLoader();
+        }
+
+        try {
+            return await originalFetch(...args);
+        } catch (error) {
+            throw error;
+        } finally {
+            if (!isBackground) {
+                activeRequestsCount--;
+                if (activeRequestsCount <= 0) {
+                    activeRequestsCount = 0;
+                    window.hidePageLoader();
+                }
+            }
+        }
+    };
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
     // Automatically turn all select elements (except those with .no-custom class) into custom dropdowns
     document.querySelectorAll('select:not(.no-custom)').forEach(select => {

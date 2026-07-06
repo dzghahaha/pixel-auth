@@ -525,7 +525,12 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="10" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载订单列表数据...</td>
+                            <td colspan="10" style="padding: 48px 0; text-align: center;">
+                                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
+                                    <div class="loader-spinner"></div>
+                                    <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载订单列表数据...</span>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -794,7 +799,7 @@
                         });
 
                         applyRoleUI();
-                        loadOrders();
+                        await loadOrders();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -818,7 +823,7 @@
 
             // Fetch and render unique orders
             async function loadOrders() {
-                tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--slate-400);">正在读取数据...</td></tr>';
+                tableBody.innerHTML = getTableLoadingHTML(10, '正在读取数据...');
                 const queryVal = searchInput.value.trim();
                 const originalKeyVal = searchOriginalKey.value.trim();
                 const noteVal = searchNote.value.trim();

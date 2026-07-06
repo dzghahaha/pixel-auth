@@ -84,7 +84,14 @@
                     </tr>
                 </thead>
                 <tbody id="users-table-body">
-                    <tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--slate-400);">正在加载用户列表...</td></tr>
+                    <tr>
+                        <td colspan="7" style="padding: 48px 0; text-align: center;">
+                            <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
+                                <div class="loader-spinner"></div>
+                                <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载用户列表...</span>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -278,6 +285,7 @@
 
             // Fetch and list users
             async function loadUsers() {
+                userTableBody.innerHTML = getTableLoadingHTML(7, '正在加载用户列表...');
                 try {
                     const res = await fetch('/api/admin/users');
                     const data = await res.json();
