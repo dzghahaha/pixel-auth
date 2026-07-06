@@ -202,6 +202,7 @@ input[type="text"],
 input[type="number"],
 input[type="password"],
 input[type="datetime-local"],
+input[type="date"],
 select,
 textarea {
     width: 100%;
@@ -220,6 +221,7 @@ input[type="text"]:focus,
 input[type="number"]:focus,
 input[type="password"]:focus,
 input[type="datetime-local"]:focus,
+input[type="date"]:focus,
 select:focus,
 textarea:focus {
     border-color: var(--border-focus);

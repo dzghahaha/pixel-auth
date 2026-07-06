@@ -27,9 +27,41 @@
         }
 
         /* Unified Premium Date Range Picker Style */
-        .date-range-wrapper {
-            position: relative;
-            display: inline-block;
+        .date-range-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .time-shortcuts-row {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .btn-shortcut {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-shortcut:hover {
+            background-color: var(--slate-50);
+            color: var(--text-primary);
+            border-color: #cbd5e1;
+        }
+
+        .btn-shortcut.active {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            border-color: var(--border-focus);
+            font-weight: 600;
         }
 
         .date-range-group {
@@ -43,22 +75,21 @@
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
         
-        .date-range-group:focus-within,
-        .date-range-wrapper.active .date-range-group {
+        .date-range-group:focus-within {
             border-color: var(--border-focus);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
         
-        .date-range-group input[type="datetime-local"] {
+        .date-range-group input[type="date"] {
             border: none !important;
             background: transparent !important;
-            padding: 9px 4px !important;
+            padding: 8px 4px !important;
             font-size: 13px !important;
             outline: none !important;
             box-shadow: none !important;
             color: var(--text-primary) !important;
             width: auto !important;
-            max-width: 155px !important;
+            max-width: 125px !important;
             cursor: pointer;
         }
 
@@ -67,55 +98,6 @@
             font-size: 12px;
             font-weight: 500;
             margin: 0 2px;
-        }
-
-        /* Floating Shortcuts Popover */
-        .time-shortcuts-popover {
-            position: absolute;
-            bottom: calc(100% + 8px);
-            left: 0;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            box-shadow: var(--shadow-lg), 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-            padding: 6px;
-            display: none;
-            gap: 4px;
-            z-index: 101;
-            white-space: nowrap;
-            opacity: 0;
-            transform: translateY(6px);
-            transition: opacity 0.15s ease, transform 0.15s ease;
-        }
-
-        .time-shortcuts-popover.show {
-            display: flex;
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .btn-shortcut {
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .btn-shortcut:hover {
-            background-color: var(--slate-50);
-            color: var(--text-primary);
-            border-color: var(--border-color);
-        }
-
-        .btn-shortcut.active {
-            background-color: var(--primary-light);
-            color: var(--primary);
-            border-color: var(--border-focus);
         }
 
         .btn-clear-date {
@@ -234,17 +216,17 @@
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
                 </select>
-                <!-- Unified Premium Date Range Input with Hover Popover Shortcuts -->
-                <div class="date-range-wrapper" id="date-range-wrapper">
-                    <!-- Floating Popover for Quick Select Shortcuts -->
-                    <div class="time-shortcuts-popover" id="time-shortcuts-popover">
+                <!-- Unified Premium Date Range Container with Stacked Shortcuts Above -->
+                <div class="date-range-container" id="date-range-container">
+                    <!-- Quick Select Buttons (above) -->
+                    <div class="time-shortcuts-row" id="time-shortcuts-row">
                         <button type="button" class="btn-shortcut" data-range="today">今天</button>
                         <button type="button" class="btn-shortcut" data-range="yesterday">昨天</button>
                         <button type="button" class="btn-shortcut" data-range="7days">最近 7 天</button>
                         <button type="button" class="btn-shortcut" data-range="30days">最近 30 天</button>
-                        <button type="button" class="btn-shortcut" data-range="all">全部时间</button>
+                        <button type="button" class="btn-shortcut" data-range="all">全部</button>
                     </div>
-                    <!-- Date Range Group inputs -->
+                    <!-- Date Range Group inputs (changed type to 'date') -->
                     <div class="date-range-group">
                         <!-- Calendar icon (premium visual cue) -->
                         <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--slate-400); margin-right: 2px; pointer-events: none;">
@@ -253,9 +235,9 @@
                             <line x1="8" y1="2" x2="8" y2="6"></line>
                             <line x1="3" y1="10" x2="21" y2="10"></line>
                         </svg>
-                        <input type="datetime-local" id="filter-start-time" placeholder="开始时间">
+                        <input type="date" id="filter-start-time" placeholder="开始日期">
                         <span class="range-separator">至</span>
-                        <input type="datetime-local" id="filter-end-time" placeholder="结束时间">
+                        <input type="date" id="filter-end-time" placeholder="结束日期">
                         <!-- Tiny close button to clear -->
                         <button type="button" class="btn-clear-date" id="btn-clear-date" title="清除时间">&times;</button>
                     </div>
@@ -447,8 +429,6 @@
             const filterEndTime = document.getElementById('filter-end-time');
             const btnSearch = document.getElementById('btn-search');
 
-            const dateRangeWrapper = document.getElementById('date-range-wrapper');
-            const timePopover = document.getElementById('time-shortcuts-popover');
             const btnClearDate = document.getElementById('btn-clear-date');
 
             const btnPrev = document.getElementById('btn-prev-page');
@@ -589,13 +569,13 @@
                 let endTimeVal = '';
 
                 if (filterStartTime.value) {
-                    const startD = new Date(filterStartTime.value);
+                    const startD = new Date(filterStartTime.value + 'T00:00:00');
                     if (!isNaN(startD.getTime())) {
                         startTimeVal = Math.floor(startD.getTime() / 1000).toString();
                     }
                 }
                 if (filterEndTime.value) {
-                    const endD = new Date(filterEndTime.value);
+                    const endD = new Date(filterEndTime.value + 'T23:59:59');
                     if (!isNaN(endD.getTime())) {
                         endTimeVal = Math.floor(endD.getTime() / 1000).toString();
                     }
@@ -932,20 +912,9 @@
                 }
             });
 
-            // Date Range Wrapper & Popover Logic
-            dateRangeWrapper.addEventListener('click', (e) => {
-                e.stopPropagation();
-                timePopover.classList.add('show');
-                dateRangeWrapper.classList.add('active');
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!dateRangeWrapper.contains(e.target)) {
-                    timePopover.classList.remove('show');
-                    dateRangeWrapper.classList.remove('active');
-                }
-            });
-
+            // Date Range Wrapper & Shortcuts Row Logic
+            const shortcutsRow = document.getElementById('time-shortcuts-row');
+            
             // Make inputs show native calendar directly when clicked
             filterStartTime.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -960,22 +929,37 @@
                 } catch (err) {}
             });
 
+            // If click the wrapper group area (e.g. padding/calendar icon), trigger start picker
+            const dateRangeGroup = document.querySelector('.date-range-group');
+            if (dateRangeGroup) {
+                dateRangeGroup.addEventListener('click', (e) => {
+                    if (e.target === dateRangeGroup || e.target.closest('.calendar-icon')) {
+                        try {
+                            filterStartTime.showPicker();
+                        } catch (err) {}
+                    }
+                });
+            }
+
             // Auto value toggle classes
             function syncClearBtnState() {
                 if (filterStartTime.value || filterEndTime.value) {
-                    document.querySelector('.date-range-group').classList.add('has-value');
+                    dateRangeGroup.classList.add('has-value');
                 } else {
-                    document.querySelector('.date-range-group').classList.remove('has-value');
+                    dateRangeGroup.classList.remove('has-value');
                 }
             }
 
             filterStartTime.addEventListener('change', () => {
+                // Clear shortcut highlights when manually selecting a date range
+                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
                 syncClearBtnState();
                 currentPage = 1;
                 loadOrders();
             });
 
             filterEndTime.addEventListener('change', () => {
+                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
                 syncClearBtnState();
                 currentPage = 1;
                 loadOrders();
@@ -987,18 +971,18 @@
                 filterStartTime.value = '';
                 filterEndTime.value = '';
                 
-                document.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
                 syncClearBtnState();
                 currentPage = 1;
                 loadOrders();
             });
 
             // Shortcut button actions
-            document.querySelectorAll('.btn-shortcut').forEach(btn => {
+            shortcutsRow.querySelectorAll('.btn-shortcut').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     
-                    document.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+                    shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
 
                     const range = btn.getAttribute('data-range');
@@ -1024,20 +1008,17 @@
                             endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
                         }
 
-                        // Helper to format Date object into YYYY-MM-DDTHH:MM format for datetime-local
+                        // Helper to format Date object into YYYY-MM-DD format for input[type="date"]
                         const pad = (n) => n.toString().padStart(2, '0');
-                        const toLocalISO = (d) => {
-                            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        const toLocalDateStr = (d) => {
+                            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
                         };
 
-                        if (startD) filterStartTime.value = toLocalISO(startD);
-                        if (endD) filterEndTime.value = toLocalISO(endD);
+                        if (startD) filterStartTime.value = toLocalDateStr(startD);
+                        if (endD) filterEndTime.value = toLocalDateStr(endD);
                     }
 
                     syncClearBtnState();
-                    timePopover.classList.remove('show');
-                    dateRangeWrapper.classList.remove('active');
-                    
                     currentPage = 1;
                     loadOrders();
                 });
