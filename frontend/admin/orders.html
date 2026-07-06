@@ -26,101 +26,204 @@
             cursor: pointer;
         }
 
-        /* Unified Premium Date Range Picker Style */
-        .date-range-container {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
+        /* Premium Floating Datepicker Styling */
+        .datepicker-wrapper {
+            position: relative;
+            display: inline-block;
         }
 
-        .time-shortcuts-row {
-            display: flex;
-            gap: 4px;
+        .datepicker-trigger {
+            display: inline-flex;
             align-items: center;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 500;
+            gap: 8px;
+            min-width: 220px;
+            justify-content: space-between;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            user-select: none;
         }
 
-        .btn-shortcut {
-            background: var(--bg-card);
+        .datepicker-trigger:hover {
+            border-color: #94a3b8;
+        }
+
+        .datepicker-wrapper.open .datepicker-trigger {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .datepicker-trigger .calendar-icon {
+            width: 15px;
+            height: 15px;
+            color: var(--slate-500);
+            flex-shrink: 0;
+        }
+
+        .datepicker-trigger .chevron-icon {
+            width: 14px;
+            height: 14px;
+            color: var(--slate-400);
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .datepicker-wrapper.open .datepicker-trigger .chevron-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Floating Popup Window */
+        .datepicker-popup {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg), 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 14px;
+            z-index: 101;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 320px;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .datepicker-wrapper.open .datepicker-popup {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Shortcuts inside popup */
+        .popover-shortcuts {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .btn-popover-shortcut {
+            background: var(--bg-highlight);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 500;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
             color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.15s ease;
         }
 
-        .btn-shortcut:hover {
-            background-color: var(--slate-50);
+        .btn-popover-shortcut:hover {
+            background-color: var(--slate-100);
             color: var(--text-primary);
             border-color: #cbd5e1;
         }
 
-        .btn-shortcut.active {
+        .btn-popover-shortcut.active {
             background-color: var(--primary-light);
             color: var(--primary);
             border-color: var(--border-focus);
-            font-weight: 600;
         }
 
-        .date-range-group {
-            display: inline-flex;
-            align-items: center;
+        .popover-divider {
+            height: 1px;
+            background-color: var(--border-color);
+        }
+
+        /* Inputs Row */
+        .popover-inputs {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .popover-input-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .popover-input-field .field-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--slate-500);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .popover-inputs input[type="date"] {
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--bg-card);
-            padding: 0 10px 0 12px;
-            gap: 6px;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text-primary);
+            outline: none;
+            width: 100%;
+            cursor: pointer;
+            box-sizing: border-box;
         }
-        
-        .date-range-group:focus-within {
+
+        .popover-inputs input[type="date"]:focus {
             border-color: var(--border-focus);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
-        
-        .date-range-group input[type="date"] {
-            border: none !important;
-            background: transparent !important;
-            padding: 8px 4px !important;
-            font-size: 13px !important;
-            outline: none !important;
-            box-shadow: none !important;
-            color: var(--text-primary) !important;
-            width: auto !important;
-            max-width: 125px !important;
-            cursor: pointer;
-        }
 
-        .range-separator {
+        .popover-separator {
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
-            margin: 0 2px;
+            padding-bottom: 10px;
         }
 
-        .btn-clear-date {
+        /* Footer buttons */
+        .popover-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 4px;
+        }
+
+        .btn-popover-reset {
             background: transparent;
             border: none;
-            color: var(--slate-400);
-            font-size: 18px;
-            font-weight: 500;
+            color: var(--slate-500);
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
-            padding: 0 4px;
-            display: none;
-            align-items: center;
-            justify-content: center;
             transition: color 0.15s ease;
-            height: 100%;
         }
 
-        .btn-clear-date:hover {
+        .btn-popover-reset:hover {
             color: var(--danger);
         }
 
-        .date-range-group.has-value .btn-clear-date {
-            display: inline-flex;
+        .btn-popover-apply {
+            background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+            border: 1px solid #4338ca;
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #ffffff;
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: opacity 0.15s ease;
+        }
+
+        .btn-popover-apply:hover {
+            opacity: 0.9;
         }
 
         .account-td {
@@ -216,30 +319,56 @@
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
                 </select>
-                <!-- Unified Premium Date Range Container with Stacked Shortcuts Above -->
-                <div class="date-range-container" id="date-range-container">
-                    <!-- Quick Select Buttons (above) -->
-                    <div class="time-shortcuts-row" id="time-shortcuts-row">
-                        <button type="button" class="btn-shortcut" data-range="today">今天</button>
-                        <button type="button" class="btn-shortcut" data-range="yesterday">昨天</button>
-                        <button type="button" class="btn-shortcut" data-range="7days">最近 7 天</button>
-                        <button type="button" class="btn-shortcut" data-range="30days">最近 30 天</button>
-                        <button type="button" class="btn-shortcut" data-range="all">全部</button>
-                    </div>
-                    <!-- Date Range Group inputs (changed type to 'date') -->
-                    <div class="date-range-group">
-                        <!-- Calendar icon (premium visual cue) -->
-                        <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--slate-400); margin-right: 2px; pointer-events: none;">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                <!-- Premium Custom Datepicker Component -->
+                <div class="datepicker-wrapper" id="datepicker-wrapper">
+                    <!-- The Trigger (displays current selection) -->
+                    <div class="datepicker-trigger" id="datepicker-trigger">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span id="datepicker-display-value">时间范围：全部时间</span>
+                        </div>
+                        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
-                        <input type="date" id="filter-start-time" placeholder="开始日期">
-                        <span class="range-separator">至</span>
-                        <input type="date" id="filter-end-time" placeholder="结束日期">
-                        <!-- Tiny close button to clear -->
-                        <button type="button" class="btn-clear-date" id="btn-clear-date" title="清除时间">&times;</button>
+                    </div>
+                    
+                    <!-- The Datepicker Popover Card -->
+                    <div class="datepicker-popup" id="datepicker-popup">
+                        <!-- Top Row: Shortcuts inside the popup -->
+                        <div class="popover-shortcuts" id="popover-shortcuts">
+                            <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
+                        </div>
+                        
+                        <!-- Divider -->
+                        <div class="popover-divider"></div>
+                        
+                        <!-- Middle Row: Date Inputs -->
+                        <div class="popover-inputs">
+                            <div class="popover-input-field">
+                                <span class="field-label">开始日期</span>
+                                <input type="date" id="filter-start-time">
+                            </div>
+                            <span class="popover-separator">至</span>
+                            <div class="popover-input-field">
+                                <span class="field-label">结束日期</span>
+                                <input type="date" id="filter-end-time">
+                            </div>
+                        </div>
+                        
+                        <!-- Footer Row: Actions -->
+                        <div class="popover-footer">
+                            <button type="button" class="btn-popover-reset" id="btn-popover-reset">清除时间</button>
+                            <button type="button" class="btn-popover-apply" id="btn-popover-apply">应用筛选</button>
+                        </div>
                     </div>
                 </div>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
@@ -909,12 +1038,66 @@
                 if (e.key === 'Escape') {
                     closeModalAction();
                     closeReplaceModalAction();
+                    datepickerWrapper.classList.remove('open');
                 }
             });
 
-            // Date Range Wrapper & Shortcuts Row Logic
-            const shortcutsRow = document.getElementById('time-shortcuts-row');
-            
+            // Premium Floating Datepicker Popover Logic
+            const datepickerWrapper = document.getElementById('datepicker-wrapper');
+            const datepickerTrigger = document.getElementById('datepicker-trigger');
+            const datepickerPopup = document.getElementById('datepicker-popup');
+            const datepickerDisplay = document.getElementById('datepicker-display-value');
+            const popoverShortcuts = document.getElementById('popover-shortcuts');
+            const btnPopoverReset = document.getElementById('btn-popover-reset');
+            const btnPopoverApply = document.getElementById('btn-popover-apply');
+
+            // Format date string for displaying in the trigger
+            function updateDatePickerDisplay() {
+                const start = filterStartTime.value;
+                const end = filterEndTime.value;
+
+                if (start && end) {
+                    if (start === end) {
+                        datepickerDisplay.textContent = start;
+                    } else {
+                        datepickerDisplay.textContent = `${start} 至 ${end}`;
+                    }
+                } else if (start) {
+                    datepickerDisplay.textContent = `${start} 起`;
+                } else if (end) {
+                    datepickerDisplay.textContent = `至 ${end}`;
+                } else {
+                    datepickerDisplay.textContent = '时间范围：全部时间';
+                }
+            }
+
+            // Toggle popover on trigger click
+            datepickerTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = datepickerWrapper.classList.contains('open');
+                
+                // Close other custom dropdowns
+                document.querySelectorAll('.custom-select').forEach(cs => {
+                    cs.classList.remove('open');
+                });
+
+                if (isOpen) {
+                    datepickerWrapper.classList.remove('open');
+                } else {
+                    datepickerWrapper.classList.add('open');
+                }
+            });
+
+            // Prevent closing when clicking inside the popover
+            datepickerPopup.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            // Close popover when clicking outside
+            document.addEventListener('click', () => {
+                datepickerWrapper.classList.remove('open');
+            });
+
             // Make inputs show native calendar directly when clicked
             filterStartTime.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -929,60 +1112,45 @@
                 } catch (err) {}
             });
 
-            // If click the wrapper group area (e.g. padding/calendar icon), trigger start picker
-            const dateRangeGroup = document.querySelector('.date-range-group');
-            if (dateRangeGroup) {
-                dateRangeGroup.addEventListener('click', (e) => {
-                    if (e.target === dateRangeGroup || e.target.closest('.calendar-icon')) {
-                        try {
-                            filterStartTime.showPicker();
-                        } catch (err) {}
-                    }
-                });
-            }
-
-            // Auto value toggle classes
-            function syncClearBtnState() {
-                if (filterStartTime.value || filterEndTime.value) {
-                    dateRangeGroup.classList.add('has-value');
-                } else {
-                    dateRangeGroup.classList.remove('has-value');
-                }
-            }
-
+            // Deactivate shortcut highlights if custom dates are manually changed
             filterStartTime.addEventListener('change', () => {
-                // Clear shortcut highlights when manually selecting a date range
-                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
-                syncClearBtnState();
-                currentPage = 1;
-                loadOrders();
+                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
             });
-
             filterEndTime.addEventListener('change', () => {
-                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
-                syncClearBtnState();
-                currentPage = 1;
-                loadOrders();
+                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
             });
 
-            // Clear dates action
-            btnClearDate.addEventListener('click', (e) => {
+            // Reset action
+            btnPopoverReset.addEventListener('click', (e) => {
                 e.stopPropagation();
                 filterStartTime.value = '';
                 filterEndTime.value = '';
+                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
                 
-                shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
-                syncClearBtnState();
+                updateDatePickerDisplay();
+                datepickerWrapper.classList.remove('open');
+                
                 currentPage = 1;
                 loadOrders();
             });
 
-            // Shortcut button actions
-            shortcutsRow.querySelectorAll('.btn-shortcut').forEach(btn => {
+            // Apply action
+            btnPopoverApply.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                updateDatePickerDisplay();
+                datepickerWrapper.classList.remove('open');
+                
+                currentPage = 1;
+                loadOrders();
+            });
+
+            // Shortcut clicks inside popover
+            popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     
-                    shortcutsRow.querySelectorAll('.btn-shortcut').forEach(b => b.classList.remove('active'));
+                    popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
 
                     const range = btn.getAttribute('data-range');
@@ -1008,7 +1176,7 @@
                             endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
                         }
 
-                        // Helper to format Date object into YYYY-MM-DD format for input[type="date"]
+                        // Helper to format Date object into YYYY-MM-DD
                         const pad = (n) => n.toString().padStart(2, '0');
                         const toLocalDateStr = (d) => {
                             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -1018,7 +1186,9 @@
                         if (endD) filterEndTime.value = toLocalDateStr(endD);
                     }
 
-                    syncClearBtnState();
+                    updateDatePickerDisplay();
+                    datepickerWrapper.classList.remove('open');
+                    
                     currentPage = 1;
                     loadOrders();
                 });
