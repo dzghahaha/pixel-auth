@@ -44,7 +44,7 @@ body {
 }
 
 .app-container {
-    max-width: 1200px;
+    max-width: 900px;
     width: 100%;
     margin: 40px auto;
     padding: 0 20px;
@@ -150,15 +150,8 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 24px;
-    margin: 0 auto 20px auto;
+    margin-bottom: 20px;
     box-shadow: var(--shadow-sm);
-    max-width: 600px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.card.table-card {
-    max-width: 1200px;
 }
 
 .card-header {
