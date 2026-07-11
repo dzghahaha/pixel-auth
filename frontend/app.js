@@ -329,6 +329,27 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.classList.add('fade-out');
     }
 
+    // Toggle Password Visibility
+    const passwordToggleBtn = document.getElementById('password-toggle-btn');
+    if (passwordToggleBtn) {
+        const eyeIconVisible = passwordToggleBtn.querySelector('.eye-icon-visible');
+        const eyeIconHidden = passwordToggleBtn.querySelector('.eye-icon-hidden');
+        
+        passwordToggleBtn.addEventListener('click', () => {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIconVisible.classList.add('hidden');
+                eyeIconHidden.classList.remove('hidden');
+                passwordToggleBtn.setAttribute('aria-label', '隐藏密码');
+            } else {
+                passwordInput.type = 'password';
+                eyeIconVisible.classList.remove('hidden');
+                eyeIconHidden.classList.add('hidden');
+                passwordToggleBtn.setAttribute('aria-label', '显示密码');
+            }
+        });
+    }
+
     // Helper to prevent XSS
     function escapeHtml(str) {
         if (!str) return '';

@@ -29,6 +29,7 @@ func main() {
 
 	// 4. API - Query status of a card secret
 	http.HandleFunc("/api/query", handleQuery)
+	http.HandleFunc("/api/query/cancel", handleCancelSubscription)
 
 	// API - Batch convert third party keys (Admin protected)
 	http.HandleFunc("/api/convert_keys", requirePermission("convert", handleConvertKeys))
@@ -44,6 +45,7 @@ func main() {
 	http.HandleFunc("/api/open/submit", handleOpenSubmit)
 	http.HandleFunc("/api/open/query", handleOpenQuery)
 	http.HandleFunc("/api/open/reset", handleOpenReset)
+	http.HandleFunc("/api/open/cancel", handleOpenCancel)
 
 	// Epay Integration APIs
 	http.HandleFunc("/api/pay/submit", handlePaySubmit)
@@ -62,6 +64,7 @@ func main() {
 	http.HandleFunc("/api/admin/orders/update", requirePermission("orders", handleAdminOrdersUpdate))
 	http.HandleFunc("/api/admin/orders/history", requirePermission("orders", handleAdminOrderHistory))
 	http.HandleFunc("/api/admin/orders/replace", requirePermission("orders", handleAdminOrderReplaceResubmit))
+	http.HandleFunc("/api/admin/orders/retry", requirePermission("orders", handleAdminOrderRetry))
 	http.HandleFunc("/api/admin/keys", requirePermission("keys", handleAdminKeys))
 	http.HandleFunc("/api/admin/keys/invalidate", requirePermission("keys", handleAdminKeysInvalidate))
 	http.HandleFunc("/api/admin/generate_stock_keys", requirePermission("generate", handleGenerateStockKeys))

@@ -13,18 +13,19 @@ import (
 
 // AccountRecord represents a single account status within a card order
 type AccountRecord struct {
-	Username    string     `json:"username"`
-	Password    string     `json:"password"`
-	TwoFactor   string     `json:"two_factor"`
-	ExtraEmail  string     `json:"extra_email,omitempty"`
-	Status      string     `json:"status"` // "pending", "running", "success", "failed"
-	Message     string     `json:"message"`
-	DiscountURL string     `json:"discount_url"`
-	Vendor      string     `json:"vendor"`
-	TaskID      string     `json:"task_id"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Username       string     `json:"username"`
+	Password       string     `json:"password"`
+	TwoFactor      string     `json:"two_factor"`
+	ExtraEmail     string     `json:"extra_email,omitempty"`
+	Status         string     `json:"status"` // "pending", "running", "success", "failed"
+	Message        string     `json:"message"`
+	DiscountURL    string     `json:"discount_url"`
+	Vendor         string     `json:"vendor"`
+	TaskID         string     `json:"task_id"`
+	ExecutionCount int        `json:"execution_count"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
 }
 
 // CardOrder holds the order history for a single card secret
@@ -135,6 +136,7 @@ func createTables() {
 		message VARCHAR(500) DEFAULT NULL,
 		discount_url VARCHAR(500) DEFAULT NULL,
 		task_id VARCHAR(128) NOT NULL DEFAULT '',
+		execution_count INT UNSIGNED NOT NULL DEFAULT 1,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		completed_at DATETIME DEFAULT NULL,
@@ -511,6 +513,21 @@ func createTables() {
 			if _, err := db.Exec("UPDATE account_records r JOIN orders o ON r.order_id = o.id SET r.card_secret = o.card_secret WHERE r.card_secret = ''"); err != nil {
 				log.Printf("Warning: failed to backfill card_secret in account_records: %v\n", err)
 			}
+		}
+	}
+
+	var hasExecutionCount bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'account_records' 
+		  AND COLUMN_NAME = 'execution_count'
+	`).Scan(&hasExecutionCount)
+	if errCheck == nil && !hasExecutionCount {
+		log.Println("Adding 'execution_count' column to 'account_records' table...")
+		if _, err := db.Exec("ALTER TABLE account_records ADD COLUMN execution_count INT UNSIGNED NOT NULL DEFAULT 1"); err != nil {
+			log.Printf("Warning: failed to add execution_count column: %v\n", err)
 		}
 	}
 

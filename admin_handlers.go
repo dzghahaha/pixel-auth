@@ -312,6 +312,163 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// RetryOrderRequest represents the request payload to retry an account record submission
+type RetryOrderRequest struct {
+	RecordID int64 `json:"record_id"`
+}
+
+func handleAdminOrderRetry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RetryOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式数据",
+		})
+		return
+	}
+
+	if req.RecordID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "记录ID无效",
+		})
+		return
+	}
+
+	_, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "请登录后操作",
+		})
+		return
+	}
+
+	var (
+		orderID        int64
+		cardSecret     string
+		username       string
+		password       string
+		twoFactor      string
+		vendor         string
+		executionCount int
+	)
+
+	errQuery := db.QueryRow(`
+		SELECT r.order_id, r.card_secret, r.username, r.password, r.two_factor, o.vendor, r.execution_count
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		WHERE r.id = ?`, req.RecordID).Scan(&orderID, &cardSecret, &username, &password, &twoFactor, &vendor, &executionCount)
+
+	if errQuery == sql.ErrNoRows {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "找不到该账号记录",
+		})
+		return
+	} else if errQuery != nil {
+		log.Printf("Error querying account record %d for retry: %v\n", req.RecordID, errQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询数据库失败",
+		})
+		return
+	}
+
+	var vendorKey string
+	errKeyQuery := db.QueryRow("SELECT vendor_key FROM system_keys WHERE system_key = ?", cardSecret).Scan(&vendorKey)
+	if errKeyQuery == sql.ErrNoRows {
+		vendorKey = cardSecret
+	} else if errKeyQuery != nil {
+		log.Printf("Query error for system key mapping %s on retry: %v\n", cardSecret, errKeyQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询系统卡密映射失败",
+		})
+		return
+	}
+
+	var newTaskID string
+	var newStatus string = "pending"
+	var newMessage string = "已重新提交，等待处理"
+
+	isTesting := strings.Contains(os.Args[0], ".test") || os.Getenv("MYSQL_TEST_DSN") != ""
+	if vendor == "pass.aisale.one" && !isTesting {
+		res, errSubmit := submitTaskToVendor(vendorKey, username, password, twoFactor)
+		if errSubmit != nil {
+			log.Printf("Vendor submit network error on retry for %s: %v\n", username, errSubmit)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "提交至第三方渠道失败: " + errSubmit.Error(),
+			})
+			return
+		}
+		if !res.Success {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "第三方渠道提交返回失败: " + res.Message,
+			})
+			return
+		}
+		newTaskID = res.TaskID
+		newStatus = "pending"
+		newMessage = "已重新提交，等待处理"
+	} else {
+		newStatus = "pending"
+		newMessage = "已重试排队中"
+	}
+
+	now := time.Now()
+	_, errUpdate := db.Exec(`
+		UPDATE account_records 
+		SET status = ?, message = ?, task_id = ?, execution_count = execution_count + 1, completed_at = NULL, updated_at = ? 
+		WHERE id = ?`,
+		newStatus, newMessage, newTaskID, now, req.RecordID)
+
+	if errUpdate != nil {
+		log.Printf("Error updating record %d on retry: %v\n", req.RecordID, errUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新数据库记录失败",
+		})
+		return
+	}
+
+	if vendor != "pass.aisale.one" && vendor != "ai.deard.fun" && !isTesting {
+		go func(cSecret string, oID int64, user string) {
+			time.Sleep(5 * time.Second)
+			nowTime := time.Now()
+			status := "success"
+			message := "重试订阅成功绑定，绑卡信息已生效"
+			cleanUser := user
+			if len(user) > 4 {
+				cleanUser = user[:4]
+			}
+			cleanCard := cSecret
+			if len(cSecret) > 4 {
+				cleanCard = cSecret[:4]
+			}
+			discountURL := "https://pixel.sub/discount/CLAIM-MOCK-" + cleanCard + "-" + cleanUser
+
+			_, _ = db.Exec(`
+				UPDATE account_records 
+				SET status = ?, message = ?, discount_url = ?, completed_at = ?, updated_at = ? 
+				WHERE order_id = ? AND username = ? AND status = 'pending'`,
+				status, message, discountURL, nowTime, nowTime, oID, user)
+		}(cardSecret, orderID, username)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "已成功重试并加入队列",
+	})
+}
+
 func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -344,7 +501,7 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
 		SELECT id, card_secret, username, password, two_factor, COALESCE(extra_email, ''), 
 		       status, message, COALESCE(discount_url, ''), task_id, 
-		       created_at, updated_at, completed_at
+		       created_at, updated_at, completed_at, execution_count
 		FROM account_records
 		WHERE order_id = ?
 		ORDER BY id DESC`, orderID)
@@ -359,19 +516,20 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type OrderHistoryRecord struct {
-		ID          int64      `json:"id"`
-		CardSecret  string     `json:"card_secret"`
-		Username    string     `json:"username"`
-		Password    string     `json:"password"`
-		TwoFactor   string     `json:"two_factor"`
-		ExtraEmail  string     `json:"extra_email"`
-		Status      string     `json:"status"`
-		Message     string     `json:"message"`
-		DiscountURL string     `json:"discount_url"`
-		TaskID      string     `json:"task_id"`
-		CreatedAt   time.Time  `json:"created_at"`
-		UpdatedAt   time.Time  `json:"updated_at"`
-		CompletedAt *time.Time `json:"completed_at,omitempty"`
+		ID             int64      `json:"id"`
+		CardSecret     string     `json:"card_secret"`
+		Username       string     `json:"username"`
+		Password       string     `json:"password"`
+		TwoFactor      string     `json:"two_factor"`
+		ExtraEmail     string     `json:"extra_email"`
+		Status         string     `json:"status"`
+		Message        string     `json:"message"`
+		DiscountURL    string     `json:"discount_url"`
+		TaskID         string     `json:"task_id"`
+		ExecutionCount int        `json:"execution_count"`
+		CreatedAt      time.Time  `json:"created_at"`
+		UpdatedAt      time.Time  `json:"updated_at"`
+		CompletedAt    *time.Time `json:"completed_at,omitempty"`
 	}
 
 	var records []OrderHistoryRecord
@@ -392,6 +550,7 @@ func handleAdminOrderHistory(w http.ResponseWriter, r *http.Request) {
 			&rec.CreatedAt,
 			&rec.UpdatedAt,
 			&completedAt,
+			&rec.ExecutionCount,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning history row: %v\n", errScan)

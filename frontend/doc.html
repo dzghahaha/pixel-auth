@@ -622,6 +622,91 @@
                 </div>
             </div>
         </div>
+
+        <!-- 接口四：取消排队 -->
+        <div class="api-block collapsed">
+            <div class="api-header" onclick="toggleApiBlock(this)">
+                <!-- Arrow icon -->
+                <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: var(--text-secondary); margin-right: 4px; transition: transform 0.2s;">
+                    <path d="M6 9l6 6 6-6" />
+                </svg>
+                <span class="method-badge post">POST</span>
+                <span class="api-path">/api/open/cancel</span>
+                <span class="api-desc">取消处于排队中 (pending) 状态的订阅任务</span>
+            </div>
+            <div class="api-body">
+                <h4 class="section-subtitle">请求 Header 说明</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Header名</th>
+                            <th>类型</th>
+                            <th>必填</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Content-Type</td>
+                            <td><span class="type-tag">string</span></td>
+                            <td><span class="req-tag">必填</span></td>
+                            <td>必须为 <code>application/json</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="section-subtitle">请求 JSON Body 参数</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>字段名</th>
+                            <th>类型</th>
+                            <th>必填</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>card_secret</td>
+                            <td><span class="type-tag">string</span></td>
+                            <td><span class="req-tag">必填</span></td>
+                            <td>提交任务时使用的授权卡密。</td>
+                        </tr>
+                        <tr>
+                            <td>username</td>
+                            <td><span class="type-tag">string</span></td>
+                            <td><span class="req-tag">必填</span></td>
+                            <td>需要取消的订阅账号（用户名/邮箱）。</td>
+                        </tr>
+                        <tr>
+                            <td>lang</td>
+                            <td><span class="type-tag">string</span></td>
+                            <td><span class="opt-tag">可选</span></td>
+                            <td>可选：<code>zh</code> / <code>en</code> / <code>ko</code>，用于控制接口返回消息的语言。</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4 class="section-subtitle">请求 Payload 示例 (JSON)</h4>
+                <div class="code-container">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制代码</button>
+                    <pre class="code-block">{
+  "card_secret": "ABCD1234EFGH5678",
+  "username": "user@example.com",
+  "lang": "zh"
+}</pre>
+                </div>
+
+                <h4 class="section-subtitle">返回数据示例 (JSON)</h4>
+                <div class="code-container">
+                    <button class="copy-code-btn" onclick="copyCode(this)">复制代码</button>
+                    <pre class="code-block">{
+  "success": true,
+  "message": "取消排队成功，积分已退还"
+}</pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 弹窗提示 -->

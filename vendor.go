@@ -190,6 +190,72 @@ func queryTaskFromVendor(cardSecret, taskID string) (*VendorQueryResponse, error
 	return &vendorResp, nil
 }
 
+// VendorCancelRequest represents request payload to cancel task from vendor
+type VendorCancelRequest struct {
+	Action string `json:"action"`
+	CDKey  string `json:"cdkey"`
+	TaskID string `json:"task_id"`
+	Lang   string `json:"lang"`
+}
+
+// VendorCancelResponse represents response payload from vendor cancel endpoint
+type VendorCancelResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+func cancelTaskOnVendor(cardSecret, taskID string) (*VendorCancelResponse, error) {
+	reqBody := VendorCancelRequest{
+		Action: "cancel_task",
+		CDKey:  cardSecret,
+		TaskID: taskID,
+		Lang:   "zh",
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dynamic API url resolution
+	apiURL := "https://pass.aisale.one/gateway.php"
+	if vendorBaseURL != "https://pass.aisale.one/gateway.php" {
+		apiURL = vendorBaseURL
+	} else {
+		var vendor string
+		errVendor := db.QueryRow("SELECT vendor FROM system_keys WHERE system_key = ?", cardSecret).Scan(&vendor)
+		if errVendor != nil {
+			_ = db.QueryRow("SELECT vendor FROM orders WHERE card_secret = ?", cardSecret).Scan(&vendor)
+		}
+		if vendor != "" {
+			var dbAPIURL string
+			errVal := db.QueryRow("SELECT api_url FROM key_vendors WHERE name = ?", vendor).Scan(&dbAPIURL)
+			if errVal == nil && dbAPIURL != "" {
+				apiURL = dbAPIURL
+			}
+		}
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var vendorResp VendorCancelResponse
+	if err := json.Unmarshal(bodyBytes, &vendorResp); err != nil {
+		return nil, err
+	}
+
+	return &vendorResp, nil
+}
+
 func generateSystemKey() string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	const length = 12

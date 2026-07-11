@@ -376,7 +376,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	if errQueryOrderID == sql.ErrNoRows {
 		// No records found, return empty rows safely
 		rows, err = db.Query(`
-			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at
+			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at, r.execution_count
 			FROM account_records r
 			JOIN orders o ON r.order_id = o.id
 			WHERE 1=0`)
@@ -390,7 +390,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Read records by order_id
 		rows, err = db.Query(`
-			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at
+			SELECT r.id, o.vendor, r.task_id, r.username, r.password, r.two_factor, COALESCE(r.extra_email, ''), r.status, r.message, COALESCE(r.discount_url, ''), r.created_at, r.updated_at, r.completed_at, r.execution_count
 			FROM account_records r
 			JOIN orders o ON r.order_id = o.id
 			WHERE o.id = ?
@@ -407,19 +407,20 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type QueryRecord struct {
-		ID          int64
-		Vendor      string
-		TaskID      string
-		Username    string
-		Password    string
-		TwoFactor   string
-		ExtraEmail  string
-		Status      string
-		Message     string
-		DiscountURL string
-		CreatedAt   time.Time
-		UpdatedAt   time.Time
-		CompletedAt *time.Time
+		ID             int64
+		Vendor         string
+		TaskID         string
+		Username       string
+		Password       string
+		TwoFactor      string
+		ExtraEmail     string
+		Status         string
+		Message        string
+		DiscountURL    string
+		CreatedAt      time.Time
+		UpdatedAt      time.Time
+		CompletedAt    *time.Time
+		ExecutionCount int
 	}
 
 	var records []QueryRecord
@@ -442,6 +443,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 			&rec.CreatedAt,
 			&rec.UpdatedAt,
 			&completedAt,
+			&rec.ExecutionCount,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning row: %v\n", errScan)
@@ -466,7 +468,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	for i := range records {
 		rec := &records[i]
-		if rec.Vendor == "pass.aisale.one" && rec.TaskID != "" && rec.Status != "success" && rec.Status != "failed" {
+		if rec.Vendor == "pass.aisale.one" && rec.TaskID != "" && rec.Status != "success" && rec.Status != "failed" && rec.Status != "cancelled" {
 			wg.Add(1)
 			go func(r *QueryRecord) {
 				defer wg.Done()
@@ -731,4 +733,240 @@ func handleOpenReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handleResetKeys(w, r)
+}
+
+func handleOpenCancel(w http.ResponseWriter, r *http.Request) {
+	if !isAPIOpen() {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": "开放接口未启用",
+		})
+		return
+	}
+	if !checkAPIWhitelist(r) {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("IP %s 未在白名单中", getClientIP(r)),
+		})
+		return
+	}
+
+	handleCancelSubscription(w, r)
+}
+
+// CancelSubscriptionRequest represents request body to cancel a subscription
+type CancelSubscriptionRequest struct {
+	CardSecret string `json:"card_secret"`
+	Username   string `json:"username"`
+}
+
+func handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "读取请求体失败",
+		})
+		return
+	}
+
+	var req CancelSubscriptionRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "解析JSON数据失败",
+		})
+		return
+	}
+
+	req.CardSecret = strings.TrimSpace(req.CardSecret)
+	req.Username = strings.TrimSpace(req.Username)
+
+	if req.CardSecret == "" || req.Username == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "卡密和账号不能为空",
+		})
+		return
+	}
+
+	// 1. Check vendor to determine if it is self-operated (自营)
+	var vendor string
+	var recordID int64
+	var status string
+	var taskID string
+	errQuery := db.QueryRow(`
+		SELECT r.id, o.vendor, r.status, r.task_id
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		WHERE r.card_secret = ? AND r.username = ?`, 
+		req.CardSecret, req.Username).Scan(&recordID, &vendor, &status, &taskID)
+
+	if errQuery == sql.ErrNoRows {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "未找到对应的提交记录",
+		})
+		return
+	} else if errQuery != nil {
+		log.Printf("Error querying account record for cancel: %v\n", errQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询数据库错误",
+		})
+		return
+	}
+
+	if status != "pending" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "当前状态不是排队中，无法取消",
+		})
+		return
+	}
+
+	// Determine if self-operated (自营)
+	// Self-operated conditions: vendor is empty, or "ai.deard.fun", or api_url is empty in key_vendors table
+	isSelfOperated := false
+	if vendor == "" || vendor == "ai.deard.fun" {
+		isSelfOperated = true
+	} else {
+		var apiURL string
+		errAPI := db.QueryRow("SELECT api_url FROM key_vendors WHERE name = ?", vendor).Scan(&apiURL)
+		if errAPI == sql.ErrNoRows || apiURL == "" {
+			isSelfOperated = true
+		}
+	}
+
+	now := time.Now()
+
+	if isSelfOperated {
+		// Update status directly
+		_, errUpdate := db.Exec(`
+			UPDATE account_records 
+			SET status = 'cancelled', message = '已取消', completed_at = ?, updated_at = ? 
+			WHERE id = ? AND status = 'pending'`, now, now, recordID)
+		if errUpdate != nil {
+			log.Printf("Error updating self-operated record status to cancelled: %v\n", errUpdate)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "更新订单状态失败",
+			})
+			return
+		}
+
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "取消成功",
+		})
+		return
+	}
+
+	// Non-self-operated (非自营): Call third-party API and use a transaction
+	tx, errTx := db.Begin()
+	if errTx != nil {
+		log.Printf("Error beginning transaction: %v\n", errTx)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库事务启动失败",
+		})
+		return
+	}
+	defer tx.Rollback()
+
+	// Double check and lock the row
+	var currentStatus string
+	var currentTaskID string
+	errLock := tx.QueryRow(`
+		SELECT status, task_id 
+		FROM account_records 
+		WHERE id = ? FOR UPDATE`, recordID).Scan(&currentStatus, &currentTaskID)
+
+	if errLock != nil {
+		log.Printf("Error locking record: %v\n", errLock)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "锁定数据库记录失败",
+		})
+		return
+	}
+
+	if currentStatus != "pending" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "当前状态不是排队中，已被处理或取消",
+		})
+		return
+	}
+
+	// Get vendor key
+	var vendorKey string
+	errKeyQuery := tx.QueryRow("SELECT vendor_key FROM system_keys WHERE system_key = ?", req.CardSecret).Scan(&vendorKey)
+	if errKeyQuery == sql.ErrNoRows {
+		vendorKey = req.CardSecret
+	} else if errKeyQuery != nil {
+		log.Printf("Error querying vendor key mapping: %v\n", errKeyQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库查询卡密映射错误",
+		})
+		return
+	}
+
+	// Call third-party API
+	res, errAPI := cancelTaskOnVendor(vendorKey, currentTaskID)
+	if errAPI != nil {
+		log.Printf("Error calling third-party cancel API: %v\n", errAPI)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("调用第三方接口失败: %v", errAPI),
+		})
+		return
+	}
+
+	if !res.Success {
+		log.Printf("Third-party cancel API returned failure: %s\n", res.Message)
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("第三方取消失败: %s", res.Message),
+		})
+		return
+	}
+
+	// Update DB status inside transaction
+	dbMsg := res.Message
+	if dbMsg == "" {
+		dbMsg = "已取消"
+	}
+	_, errUpdate := tx.Exec(`
+		UPDATE account_records 
+		SET status = 'cancelled', message = ?, completed_at = ?, updated_at = ? 
+		WHERE id = ?`, dbMsg, now, now, recordID)
+	if errUpdate != nil {
+		log.Printf("Error updating record in transaction: %v\n", errUpdate)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新数据库记录失败",
+		})
+		return
+	}
+
+	if errCommit := tx.Commit(); errCommit != nil {
+		log.Printf("Error committing transaction: %v\n", errCommit)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "提交事务失败",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "取消成功",
+	})
 }

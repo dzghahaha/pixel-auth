@@ -100,15 +100,11 @@
             const urlParams = new URLSearchParams(window.location.search);
             const cardSecret = urlParams.get('card_secret');
 
-            if (!cardSecret) {
-                tableBody.innerHTML = '<tr><td colspan="6" class="error-td">请提供有效的卡密参数进行查询</td></tr>';
-                const loader = document.getElementById('page-loader');
-                if (loader) {
-                    loader.classList.add('fade-out');
-                }
-                return;
+            if (cardSecret) {
+                queryInput.value = cardSecret; // Autofill query field
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="6" class="empty-td">请在上方输入您的卡密并点击查询</td></tr>';
             }
-            queryInput.value = cardSecret; // Autofill query field
 
             // Toast helper
             function showToast(message, duration = 2000) {
@@ -199,6 +195,7 @@
 
             // Query API
             async function fetchOrderDetails() {
+                if (!cardSecret) return;
                 try {
                     const response = await fetch(`/api/query?card_secret=${encodeURIComponent(cardSecret)}`);
                     const result = await response.json();
@@ -226,12 +223,15 @@
                             } else if (rec.status === 'failed') {
                                 statusClass = 'status-failed';
                                 statusLabel = '失败';
+                            } else if (rec.status === 'cancelled') {
+                                statusClass = 'status-cancelled';
+                                statusLabel = '已取消';
                             }
                             const statusTag = `<span class="result-status ${statusClass}">${statusLabel}</span>`;
 
                             // Dates
                             const submitTime = rec.created_at ? new Date(rec.created_at).toLocaleString() : '-';
-                            const finishTime = rec.completed_at ? new Date(rec.completed_at).toLocaleString() : '等待中';
+                            const finishTime = rec.completed_at ? new Date(rec.completed_at).toLocaleString() : (rec.status === 'cancelled' ? '已取消' : '等待中');
 
                             tr.innerHTML = `
                                 <td class="account-td"><span class="clickable-copy" onclick="copyText(event, '${escapeHtml(rec.username)}')" style="max-width: 120px;">${escapeHtml(rec.username)}</span></td>
@@ -241,7 +241,7 @@
                                 <td class="time-td">${finishTime}</td>
                             `;
 
-                            // Operations cell (resubmit button for failed 2FA key submissions)
+                            // Operations cell (resubmit button for failed 2FA key submissions, cancel button for pending)
                             const actionTd = document.createElement('td');
                             if (rec.status === 'failed' && is2FAKey(rec.two_factor)) {
                                 const btn = document.createElement('button');
@@ -283,6 +283,47 @@
                                         showToast('网络错误，无法重新提交');
                                         btn.disabled = false;
                                         btn.textContent = '重新提交';
+                                    }
+                                };
+                                actionTd.appendChild(btn);
+                            } else if (rec.status === 'pending') {
+                                const btn = document.createElement('button');
+                                btn.type = 'button';
+                                btn.className = 'action-btn cancel-btn';
+                                btn.textContent = '取消';
+                                btn.onclick = async (e) => {
+                                    e.stopPropagation();
+                                    if (!confirm(`确定要取消账号 ${escapeHtml(rec.username)} 的订阅任务吗？`)) {
+                                        return;
+                                    }
+                                    if (btn.disabled) return;
+                                    btn.disabled = true;
+                                    btn.textContent = '取消中...';
+                                    try {
+                                        const response = await fetch('/api/query/cancel', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                card_secret: cardSecret,
+                                                username: rec.username
+                                            })
+                                        });
+                                        const result = await response.json();
+                                        if (response.ok && result.success) {
+                                            showToast('取消成功！');
+                                            setTimeout(() => {
+                                                fetchOrderDetails();
+                                            }, 1000);
+                                        } else {
+                                            showToast(result.message || '取消失败，请重试');
+                                            btn.disabled = false;
+                                            btn.textContent = '取消';
+                                        }
+                                    } catch (err) {
+                                        console.error('Cancel error:', err);
+                                        showToast('网络错误，无法取消');
+                                        btn.disabled = false;
+                                        btn.textContent = '取消';
                                     }
                                 };
                                 actionTd.appendChild(btn);

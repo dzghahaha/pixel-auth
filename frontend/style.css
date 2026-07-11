@@ -225,6 +225,43 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
+/* Password Toggle Eye styling */
+.password-toggle-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.password-toggle-wrapper input[type="password"],
+.password-toggle-wrapper input[type="text"] {
+    padding-right: 40px;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+    color: var(--text-primary);
+}
+
+.password-toggle-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
 textarea {
     min-height: 120px;
     resize: vertical;
@@ -517,6 +554,16 @@ textarea {
     background-color: var(--danger);
 }
 
+.status-cancelled {
+    background-color: rgba(71, 85, 105, 0.1);
+    color: var(--text-secondary);
+    border-color: rgba(71, 85, 105, 0.2);
+}
+
+.status-cancelled::before {
+    background-color: var(--text-secondary);
+}
+
 @keyframes pulse {
     0% { transform: scale(0.9); opacity: 0.6; }
     50% { transform: scale(1.2); opacity: 1; }
@@ -694,6 +741,18 @@ textarea {
 .action-btn:hover {
     background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
     border-color: #94a3b8;
+}
+
+.action-btn.cancel-btn {
+    border-color: rgba(239, 68, 68, 0.2);
+    background: linear-gradient(180deg, #ffffff 0%, rgba(239, 68, 68, 0.03) 100%);
+    color: var(--danger-text);
+}
+
+.action-btn.cancel-btn:hover {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.03) 0%, rgba(239, 68, 68, 0.08) 100%);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--danger);
 }
 
 .no-action {

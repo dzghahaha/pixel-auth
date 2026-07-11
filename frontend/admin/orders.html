@@ -353,6 +353,12 @@
             font-size: 12px;
         }
 
+        /* Detail Modal Responsive Width */
+        #detail-modal .modal-content {
+            max-width: 1200px;
+            width: 95%;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .search-combo {
@@ -593,6 +599,7 @@
                                     <th>账号明细</th>
                                     <th>卡密</th>
                                     <th>状态</th>
+                                    <th>执行次数</th>
                                     <th>备注/优惠链接</th>
                                     <th>提交时间</th>
                                     <th>完成时间</th>
@@ -974,7 +981,7 @@
                     if (res.ok && data.success) {
                         activeHistoryRecords = data.records || [];
                         if (activeHistoryRecords.length === 0) {
-                            historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
+                            historyTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:var(--slate-400);">无历史提交记录</td></tr>';
                             return;
                         }
 
@@ -1014,10 +1021,14 @@
                                 <td style="padding:10px 14px; line-height:1.4;">${detailsInfo}</td>
                                 <td style="padding:10px 14px; font-family: monospace; font-size: 12px; font-weight: 600; color: var(--slate-700);">${r.card_secret || '-'}</td>
                                 <td style="padding:10px 14px;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td style="padding:10px 14px; text-align: center; font-weight: 600; color: var(--slate-700);">${r.execution_count || 1}次</td>
                                 <td style="padding:10px 14px; line-height:1.3;">${commentInfo}</td>
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${formatDate(r.created_at)}</td>
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${finishTime}</td>
-                                <td style="padding:10px 14px;"><button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button></td>
+                                <td style="padding:10px 14px; white-space: nowrap;">
+                                    <button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button>
+                                    <button type="button" class="btn-detail btn-retry-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px; margin-left: 6px; background: var(--warning-light, #fef3c7); color: var(--warning, #d97706); border: 1px solid var(--warning-border, #fcd34d);">重试</button>
+                                </td>
                             `;
                             historyTableBody.appendChild(tr);
                         });
@@ -1029,12 +1040,47 @@
                                 openRecordEdit(recID);
                             });
                         });
+
+                        // Bind retry events for historical records
+                        document.querySelectorAll('.btn-retry-rec').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const recID = parseInt(e.target.getAttribute('data-rec-id'), 10);
+                                handleRecordRetry(recID);
+                            });
+                        });
                     } else {
-                        historyTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
+                        historyTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:16px; color:var(--danger-text);">${data.message || '加载历史失败'}</td></tr>`;
                     }
                 } catch (e) {
                     console.error(e);
-                    historyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
+                    historyTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:var(--danger-text);">网络错误，无法加载历史记录</td></tr>';
+                }
+            }
+
+            // Handle record retry submission
+            async function handleRecordRetry(recID) {
+                if (!confirm('确定要重试此记录吗？将重置为排队中，执行次数+1')) {
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/admin/orders/retry', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ record_id: recID })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '已成功重试并加入队列');
+                        await loadOrderHistory();
+                        loadOrders(); // Refresh main order list status
+                    } else {
+                        showToast(data.message || '重试失败', true);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法重试', true);
                 }
             }
 

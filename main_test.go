@@ -405,6 +405,12 @@ func TestVendorIntegration(t *testing.T) {
 				},
 			}
 			json.NewEncoder(w).Encode(resp)
+		} else if action == "cancel_task" {
+			resp := map[string]interface{}{
+				"success": true,
+				"message": "Task cancelled successfully",
+			}
+			json.NewEncoder(w).Encode(resp)
 		}
 	}))
 	defer mockServer.Close()
@@ -1419,6 +1425,29 @@ func TestAdminBackendFlow(t *testing.T) {
 		}
 	}
 
+	// Test Order Retry API - Run after stats checks because retry resets status to pending
+	retryPayload := fmt.Sprintf(`{"record_id": %d}`, recordID)
+	reqRetry := httptest.NewRequest(http.MethodPost, "/api/admin/orders/retry", strings.NewReader(retryPayload))
+	reqRetry.AddCookie(sessionCookie)
+	rrRetry := httptest.NewRecorder()
+	requireAdmin(handleAdminOrderRetry)(rrRetry, reqRetry)
+
+	if rrRetry.Code != http.StatusOK {
+		t.Fatalf("expected 200 for orders retry, got %d. Body: %s", rrRetry.Code, rrRetry.Body.String())
+	}
+
+	// Verify retried fields in DB
+	var dbStatusRetry, dbMessageRetry string
+	var dbExecCount int
+	err = db.QueryRow("SELECT status, message, execution_count FROM account_records WHERE id = ?", recordID).
+		Scan(&dbStatusRetry, &dbMessageRetry, &dbExecCount)
+	if err != nil {
+		t.Fatalf("failed to query retried record: %v", err)
+	}
+	if dbStatusRetry != "pending" || dbExecCount != 2 {
+		t.Errorf("record fields not retried correctly in database: status=%s, execution_count=%d", dbStatusRetry, dbExecCount)
+	}
+
 	// 7. Test Logout
 	reqLogout := httptest.NewRequest(http.MethodPost, "/api/admin/logout", nil)
 	reqLogout.AddCookie(sessionCookie)
@@ -2256,6 +2285,169 @@ func TestOpenAPIs(t *testing.T) {
 	json.Unmarshal(rrResetOn.Body.Bytes(), &resetOpenResp)
 	if !resetOpenResp.Success || len(resetOpenResp.NewKeys) != 1 {
 		t.Errorf("expected successful open reset and 1 new key, got %v", resetOpenResp)
+	}
+
+	// --- Test Open Cancel API ---
+	// 1. Test when API is OFF
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_open', 'off', ?) ON DUPLICATE KEY UPDATE setting_value='off'", time.Now())
+	reqCancelOff := httptest.NewRequest(http.MethodPost, "/api/open/cancel", strings.NewReader(`{"card_secret":"test-card", "username":"test@gmail.com"}`))
+	rrCancelOff := httptest.NewRecorder()
+	handleOpenCancel(rrCancelOff, reqCancelOff)
+	if rrCancelOff.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for open cancel when API is off, got %d", rrCancelOff.Code)
+	}
+
+	// 2. Test when API is ON
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('api_open', 'on', ?) ON DUPLICATE KEY UPDATE setting_value='on'", time.Now())
+	reqCancelOn := httptest.NewRequest(http.MethodPost, "/api/open/cancel", strings.NewReader(`{"card_secret":"test-card", "username":"test@gmail.com"}`))
+	rrCancelOn := httptest.NewRecorder()
+	handleOpenCancel(rrCancelOn, reqCancelOn)
+	// Should not be 403 (should be 404 because key/account doesn't exist, which means it passed the API open/whitelist guard check!)
+	if rrCancelOn.Code != http.StatusNotFound {
+		t.Errorf("expected 404 (not found) for open cancel with invalid params when API is on, got %d. Body: %s", rrCancelOn.Code, rrCancelOn.Body.String())
+	}
+}
+
+func TestCancelSubscription(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Setup mock vendor API server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		var reqMap map[string]interface{}
+		json.Unmarshal(bodyBytes, &reqMap)
+		action := reqMap["action"].(string)
+		w.Header().Set("Content-Type", "application/json")
+
+		if action == "cancel_task" {
+			taskID := reqMap["task_id"].(string)
+			if taskID == "TK-FAIL-CANCEL" {
+				resp := map[string]interface{}{
+					"success": false,
+					"message": "Vendor cancellation error",
+				}
+				json.NewEncoder(w).Encode(resp)
+			} else {
+				resp := map[string]interface{}{
+					"success": true,
+					"message": "Task cancelled successfully",
+				}
+				json.NewEncoder(w).Encode(resp)
+			}
+		}
+	}))
+	defer mockServer.Close()
+
+	oldVendorBaseURL := vendorBaseURL
+	vendorBaseURL = mockServer.URL
+	defer func() { vendorBaseURL = oldVendorBaseURL }()
+
+	now := time.Now()
+
+	// --- A. Self-Operated Cancel Test ---
+	// 1. Insert self-operated key
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"ck-self-cancel", "ai.deard.fun", "", "active", "ck-self-cancel", now, now)
+
+	// 2. Insert order
+	resOrder, _ := db.Exec("INSERT INTO orders (card_secret, vendor, mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		"ck-self-cancel", "ai.deard.fun", "single", now, now)
+	orderID, _ := resOrder.LastInsertId()
+
+	// 3. Insert pending account record
+	_, _ = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "ck-self-cancel", "selfuser@gmail.com", "pwd123", "2FA", "pending", "排队处理中", now, now)
+
+	// 4. Request Cancel
+	cancelReq := CancelSubscriptionRequest{
+		CardSecret: "ck-self-cancel",
+		Username:   "selfuser@gmail.com",
+	}
+	bodyBytes, _ := json.Marshal(cancelReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/query/cancel", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+	handleCancelSubscription(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected self cancel 200, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var respCancel map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &respCancel)
+	if respCancel["success"] != true {
+		t.Errorf("expected success: true, got %v", respCancel)
+	}
+
+	// Verify status in DB: should be 'cancelled'
+	var selfStatus, selfMessage string
+	db.QueryRow("SELECT status, message FROM account_records WHERE card_secret = ? AND username = ?", "ck-self-cancel", "selfuser@gmail.com").Scan(&selfStatus, &selfMessage)
+	if selfStatus != "cancelled" || selfMessage != "已取消" {
+		t.Errorf("expected status 'cancelled' and message '已取消', got '%s'/'%s'", selfStatus, selfMessage)
+	}
+
+	// --- B. Non-Self-Operated Cancel Test (Success case) ---
+	// 1. Insert non-self-operated key (pass.aisale.one)
+	_, _ = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"ck-vendor-cancel", "pass.aisale.one", "V-KEY-CANCEL-1", "active", "ck-vendor-cancel", now, now)
+
+	// 2. Insert order
+	resOrderVendor, _ := db.Exec("INSERT INTO orders (card_secret, vendor, mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		"ck-vendor-cancel", "pass.aisale.one", "single", now, now)
+	orderIDVendor, _ := resOrderVendor.LastInsertId()
+
+	// 3. Insert pending account record with task_id
+	_, _ = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderIDVendor, "ck-vendor-cancel", "vendoruser@gmail.com", "pwd123", "2FA", "pending", "排队处理中", "TK-OK-CANCEL", now, now)
+
+	// 4. Request Cancel
+	cancelReqVendor := CancelSubscriptionRequest{
+		CardSecret: "ck-vendor-cancel",
+		Username:   "vendoruser@gmail.com",
+	}
+	bodyBytesVendor, _ := json.Marshal(cancelReqVendor)
+	reqVendor := httptest.NewRequest(http.MethodPost, "/api/query/cancel", bytes.NewBuffer(bodyBytesVendor))
+	rrVendor := httptest.NewRecorder()
+	handleCancelSubscription(rrVendor, reqVendor)
+
+	if rrVendor.Code != http.StatusOK {
+		t.Errorf("expected vendor cancel 200, got %d. Body: %s", rrVendor.Code, rrVendor.Body.String())
+	}
+
+	// Verify status in DB: should be 'cancelled'
+	var vendorStatus, vendorMessage string
+	db.QueryRow("SELECT status, message FROM account_records WHERE card_secret = ? AND username = ?", "ck-vendor-cancel", "vendoruser@gmail.com").Scan(&vendorStatus, &vendorMessage)
+	if vendorStatus != "cancelled" || vendorMessage != "Task cancelled successfully" {
+		t.Errorf("expected status 'cancelled' and message 'Task cancelled successfully', got '%s' (msg: '%s')", vendorStatus, vendorMessage)
+	}
+
+	// --- C. Non-Self-Operated Cancel Test (Vendor Failure / Rollback case) ---
+	// 1. Insert pending account record with a failing task_id
+	_, _ = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderIDVendor, "ck-vendor-cancel", "vendorfailuser@gmail.com", "pwd123", "2FA", "pending", "排队处理中", "TK-FAIL-CANCEL", now, now)
+
+	// 2. Request Cancel
+	cancelReqFail := CancelSubscriptionRequest{
+		CardSecret: "ck-vendor-cancel",
+		Username:   "vendorfailuser@gmail.com",
+	}
+	bodyBytesFail, _ := json.Marshal(cancelReqFail)
+	reqFail := httptest.NewRequest(http.MethodPost, "/api/query/cancel", bytes.NewBuffer(bodyBytesFail))
+	rrFail := httptest.NewRecorder()
+	handleCancelSubscription(rrFail, reqFail)
+
+	if rrFail.Code == http.StatusOK {
+		t.Errorf("expected vendor cancel failure (non-200), got %d. Body: %s", rrFail.Code, rrFail.Body.String())
+	}
+
+	// Verify status in DB: should STILL be 'pending' (rolled back!)
+	var dbStatusFail string
+	db.QueryRow("SELECT status FROM account_records WHERE card_secret = ? AND username = ?", "ck-vendor-cancel", "vendorfailuser@gmail.com").Scan(&dbStatusFail)
+	if dbStatusFail != "pending" {
+		t.Errorf("expected status 'pending' (rolled back), got '%s'", dbStatusFail)
 	}
 }
 
