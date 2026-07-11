@@ -927,7 +927,7 @@
                                 <td class="time-td">${formatDate(o.created_at)}</td>
                                 <td>
                                     <button type="button" class="btn-detail" data-id="${o.id}">详情</button>
-                                    <button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>
+                                    ${currentUserRole === 'admin' ? `<button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>` : ''}
                                 </td>
                             `;
                             tableBody.appendChild(tr);
@@ -1040,6 +1040,11 @@
 
                             const finishTime = r.completed_at ? formatDate(r.completed_at) : '-';
 
+                            const actionBtnsHTML = (currentUserRole === 'admin') ? `
+                                <button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button>
+                                <button type="button" class="btn-detail btn-retry-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px; margin-left: 6px; background: var(--warning-light, #fef3c7); color: var(--warning, #d97706); border: 1px solid var(--warning-border, #fcd34d);">重试</button>
+                            ` : '-';
+
                             tr.innerHTML = `
                                 <td style="padding:10px 14px; line-height:1.4;">${detailsInfo}</td>
                                 <td style="padding:10px 14px; font-family: monospace; font-size: 12px; font-weight: 600; color: var(--slate-700);">${r.card_secret || '-'}</td>
@@ -1049,8 +1054,7 @@
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${formatDate(r.created_at)}</td>
                                 <td style="font-size:11px; padding:10px 14px; color:var(--slate-400);">${finishTime}</td>
                                 <td style="padding:10px 14px; white-space: nowrap;">
-                                    <button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button>
-                                    <button type="button" class="btn-detail btn-retry-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px; margin-left: 6px; background: var(--warning-light, #fef3c7); color: var(--warning, #d97706); border: 1px solid var(--warning-border, #fcd34d);">重试</button>
+                                    ${actionBtnsHTML}
                                 </td>
                             `;
                             historyTableBody.appendChild(tr);

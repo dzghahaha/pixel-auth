@@ -1310,7 +1310,7 @@ func TestAdminBackendFlow(t *testing.T) {
 	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/orders/update", strings.NewReader(updatePayload))
 	reqUpdate.AddCookie(sessionCookie)
 	rrUpdate := httptest.NewRecorder()
-	requireAdmin(handleAdminOrdersUpdate)(rrUpdate, reqUpdate)
+	requireSuperAdmin(handleAdminOrdersUpdate)(rrUpdate, reqUpdate)
 
 	if rrUpdate.Code != http.StatusOK {
 		t.Fatalf("expected 200 for orders update, got %d. Body: %s", rrUpdate.Code, rrUpdate.Body.String())
@@ -1430,7 +1430,7 @@ func TestAdminBackendFlow(t *testing.T) {
 	reqRetry := httptest.NewRequest(http.MethodPost, "/api/admin/orders/retry", strings.NewReader(retryPayload))
 	reqRetry.AddCookie(sessionCookie)
 	rrRetry := httptest.NewRecorder()
-	requireAdmin(handleAdminOrderRetry)(rrRetry, reqRetry)
+	requireSuperAdmin(handleAdminOrderRetry)(rrRetry, reqRetry)
 
 	if rrRetry.Code != http.StatusOK {
 		t.Fatalf("expected 200 for orders retry, got %d. Body: %s", rrRetry.Code, rrRetry.Body.String())
@@ -2119,7 +2119,7 @@ func TestAdminOrderReplaceResubmit(t *testing.T) {
 	reqSame := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadSame))
 	reqSame.AddCookie(adminCookie)
 	rrSame := httptest.NewRecorder()
-	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrSame, reqSame)
+	requireSuperAdmin(handleAdminOrderReplaceResubmit)(rrSame, reqSame)
 	if rrSame.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for same key, got %d. Body: %s", rrSame.Code, rrSame.Body.String())
 	}
@@ -2129,7 +2129,7 @@ func TestAdminOrderReplaceResubmit(t *testing.T) {
 	reqUsed := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadUsed))
 	reqUsed.AddCookie(adminCookie)
 	rrUsed := httptest.NewRecorder()
-	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrUsed, reqUsed)
+	requireSuperAdmin(handleAdminOrderReplaceResubmit)(rrUsed, reqUsed)
 	if rrUsed.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for already used key, got %d. Body: %s", rrUsed.Code, rrUsed.Body.String())
 	}
@@ -2139,7 +2139,7 @@ func TestAdminOrderReplaceResubmit(t *testing.T) {
 	reqInvalid := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadInvalid))
 	reqInvalid.AddCookie(adminCookie)
 	rrInvalid := httptest.NewRecorder()
-	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrInvalid, reqInvalid)
+	requireSuperAdmin(handleAdminOrderReplaceResubmit)(rrInvalid, reqInvalid)
 	if rrInvalid.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for non-existent key, got %d. Body: %s", rrInvalid.Code, rrInvalid.Body.String())
 	}
@@ -2149,7 +2149,7 @@ func TestAdminOrderReplaceResubmit(t *testing.T) {
 	reqValid := httptest.NewRequest(http.MethodPost, "/api/admin/orders/replace", strings.NewReader(payloadValid))
 	reqValid.AddCookie(adminCookie)
 	rrValid := httptest.NewRecorder()
-	requirePermission("orders", handleAdminOrderReplaceResubmit)(rrValid, reqValid)
+	requireSuperAdmin(handleAdminOrderReplaceResubmit)(rrValid, reqValid)
 	if rrValid.Code != http.StatusOK {
 		t.Fatalf("expected 200 for valid replace, got %d. Body: %s", rrValid.Code, rrValid.Body.String())
 	}
