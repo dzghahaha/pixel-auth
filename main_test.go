@@ -1368,6 +1368,13 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("record fields not updated correctly in database: status=%s, message=%s, discount=%s", dbStatus, dbMessage, dbDiscount)
 	}
 
+	// Insert a test key to ensure keys query and export returns data
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"test-sys-key-export", "ai.deard.fun", "test-vendor-key", "active", 1, "test-sys-key-export", now, now)
+	if err != nil {
+		t.Fatalf("failed to insert test system key for keys listing: %v", err)
+	}
+
 	// 6.b Test Admin Keys Listing API
 	// Query keys - unauthorized (no cookie)
 	reqKeysUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/keys", nil)
@@ -1391,6 +1398,26 @@ func TestAdminBackendFlow(t *testing.T) {
 	json.Unmarshal(rrKeysAuth.Body.Bytes(), &keysResp)
 	if keysResp["success"] != true {
 		t.Errorf("expected success: true, got %v", keysResp)
+	}
+
+	// Test Keys Export API
+	reqKeysExport := httptest.NewRequest(http.MethodGet, "/api/admin/keys?export=true", nil)
+	reqKeysExport.AddCookie(sessionCookie)
+	rrKeysExport := httptest.NewRecorder()
+	requireAdmin(handleAdminKeys)(rrKeysExport, reqKeysExport)
+
+	if rrKeysExport.Code != http.StatusOK {
+		t.Fatalf("expected 200 for keys export, got %d. Body: %s", rrKeysExport.Code, rrKeysExport.Body.String())
+	}
+
+	var exportResp map[string]interface{}
+	json.Unmarshal(rrKeysExport.Body.Bytes(), &exportResp)
+	if exportResp["success"] != true {
+		t.Errorf("expected success: true for keys export, got %v", exportResp)
+	}
+	exportedKeys, ok := exportResp["keys"].([]interface{})
+	if !ok || len(exportedKeys) == 0 {
+		t.Errorf("expected exported keys list, got %v", exportResp)
 	}
 
 	// 6.c Test Admin Dashboard Stats API

@@ -99,6 +99,7 @@
                     <option value="">所有厂商</option>
                 </select>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
+                <button type="button" id="btn-export" class="btn-detail" style="height: 38px; padding: 0 16px; font-size: 13px; font-weight: 500; white-space: nowrap;">导出筛选卡密</button>
             </div>
         </div>
 
@@ -479,6 +480,58 @@
             vendorSelect.addEventListener('change', () => {
                 currentPage = 1;
                 loadKeys();
+            });
+
+            // Export events
+            const btnExport = document.getElementById('btn-export');
+            btnExport.addEventListener('click', async () => {
+                const queryVal = searchInput.value.trim();
+                const statusVal = statusSelect.value;
+                const vendorVal = vendorSelect.value;
+
+                btnExport.disabled = true;
+                const originalText = btnExport.textContent;
+                btnExport.textContent = '正在导出...';
+
+                try {
+                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        const keys = data.keys || [];
+                        if (keys.length === 0) {
+                            showToast('没有符合条件的卡密可以导出');
+                            return;
+                        }
+                        
+                        // Create text content with one key per line
+                        const textContent = keys.join('\n');
+                        
+                        // Download as txt file
+                        const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        
+                        const a = document.createElement('a');
+                        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                        a.href = blobUrl;
+                        a.download = `keys-export-${dateStr}.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(blobUrl);
+                        
+                        showToast(`已成功导出 ${keys.length} 个卡密`);
+                    } else {
+                        showToast(data.message || '导出失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，导出失败');
+                } finally {
+                    btnExport.disabled = false;
+                    btnExport.textContent = originalText;
+                }
             });
 
             // Pagination events

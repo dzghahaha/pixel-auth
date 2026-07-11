@@ -1065,6 +1065,44 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isExport := r.URL.Query().Get("export") == "true"
+	if isExport {
+		dataQuery := fmt.Sprintf(`
+			SELECT system_key
+			FROM system_keys
+			WHERE %s
+			ORDER BY id DESC`, whereSQL)
+		rows, errRows := db.Query(dataQuery, args...)
+		if errRows != nil {
+			log.Printf("Error querying system keys for export: %v\n", errRows)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "查询卡密列表失败",
+			})
+			return
+		}
+		defer rows.Close()
+
+		keys := []string{}
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err != nil {
+				log.Printf("Error scanning system key for export: %v\n", err)
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"message": "读取数据失败",
+				})
+				return
+			}
+			keys = append(keys, k)
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"keys":    keys,
+		})
+		return
+	}
+
 	dataQuery := fmt.Sprintf(`
 		SELECT id, system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note
 		FROM system_keys
