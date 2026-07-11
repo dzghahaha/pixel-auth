@@ -44,10 +44,11 @@ body {
 }
 
 .app-container {
-    max-width: 600px;
+    max-width: 1200px;
     width: 100%;
     margin: 40px auto;
     padding: 0 20px;
+    box-sizing: border-box;
 }
 
 /* Header */
@@ -149,8 +150,15 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 24px;
-    margin-bottom: 20px;
+    margin: 0 auto 20px auto;
     box-shadow: var(--shadow-sm);
+    max-width: 600px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.card.table-card {
+    max-width: 1200px;
 }
 
 .card-header {
