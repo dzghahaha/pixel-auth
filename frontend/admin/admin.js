@@ -207,3 +207,11 @@ document.addEventListener('click', () => {
         cs.classList.remove('open');
     });
 });
+
+// Reset page-loader on bfcache recovery (back-button navigation)
+window.addEventListener('pageshow', () => {
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+        loader.classList.add('fade-out');
+    }
+});

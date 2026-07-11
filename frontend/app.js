@@ -329,6 +329,14 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.classList.add('fade-out');
     }
 
+    // Un-hang loader on back button navigation (bfcache recovery)
+    window.addEventListener('pageshow', () => {
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.add('fade-out');
+        }
+    });
+
     // Toggle Password Visibility
     const passwordToggleBtn = document.getElementById('password-toggle-btn');
     if (passwordToggleBtn) {
