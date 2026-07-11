@@ -2451,3 +2451,35 @@ func TestCancelSubscription(t *testing.T) {
 	}
 }
 
+func TestInFlightLimiter(t *testing.T) {
+	initTestDB(t)
+
+	// Manually lock the key for IP 127.0.0.1 and path /api/query
+	key := "127.0.0.1:/api/query"
+	if !GlobalLimiter.TryAcquire(key) {
+		t.Fatalf("failed to acquire lock in test setup")
+	}
+	defer GlobalLimiter.Release(key)
+
+	// Now send a request to /api/query from 127.0.0.1
+	req := httptest.NewRequest(http.MethodGet, "/api/query?card_secret=test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	rr := httptest.NewRecorder()
+
+	// Run it through the wrapped handleQuery
+	limit(handleQuery)(rr, req)
+
+	if rr.Code != http.StatusTooManyRequests {
+		t.Errorf("expected status 429 Too Many Requests, got %d", rr.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp["success"] != false || resp["message"] != "请求正在处理中，请勿重复提交" {
+		t.Errorf("expected standard rate limit error message, got: %v", resp)
+	}
+}
+
