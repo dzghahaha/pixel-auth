@@ -101,6 +101,14 @@
                 <input type="text" id="input-note" placeholder="可输入卡密备注，如来源、渠道、批次等...">
             </div>
 
+            <!-- 指定创建用户 -->
+            <div class="form-group">
+                <label for="select-creator">指定创建用户（可选）</label>
+                <select id="select-creator" style="cursor: pointer;">
+                    <option value="">-- 当前登录管理员（默认） --</option>
+                </select>
+            </div>
+
             <!-- 转换按钮 -->
             <button type="button" id="btn-convert" class="submit-btn">
                 <!-- 闪电 SVG -->
@@ -196,6 +204,7 @@
                             loader.classList.add('fade-out');
                         }
                         await loadVendorsDropdown();
+                        await loadCreatorsDropdown();
                     } else {
                         window.location.href = '/admin/login.html';
                     }
@@ -224,6 +233,27 @@
                     }
                 } catch (e) {
                     console.error('Failed to load vendors dropdown:', e);
+                }
+            }
+
+            async function loadCreatorsDropdown() {
+                try {
+                    const resp = await fetch('/api/admin/users/selector');
+                    const data = await resp.json();
+                    if (data.success && data.users) {
+                        const select = document.getElementById('select-creator');
+                        if (select) {
+                            select.innerHTML = '<option value="">-- 当前登录管理员（默认） --</option>';
+                            data.users.forEach(u => {
+                                const opt = document.createElement('option');
+                                opt.value = u.id;
+                                opt.textContent = u.nickname ? `${u.nickname} (${u.username})` : u.username;
+                                select.appendChild(opt);
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load creators dropdown:', e);
                 }
             }
 
@@ -347,6 +377,9 @@
                 const vendor = selectVendor.value;
                 const multiplier = parseInt(inputMultiplier.value, 10);
                 const note = inputNote.value.trim();
+                
+                const selectCreator = document.getElementById('select-creator');
+                const creatorIDVal = selectCreator && selectCreator.value ? parseInt(selectCreator.value, 10) : null;
 
                 if (isNaN(multiplier) || multiplier <= 0) {
                     showToast(vendor === 'ai.deard.fun' ? '请输入有效的生成数量' : '请输入有效的生成乘数');
@@ -385,7 +418,8 @@
                             vendor: vendor,
                             vendor_keys: vendorKeys,
                             multiplier: multiplier,
-                            note: note
+                            note: note,
+                            creator_id: creatorIDVal
                         })
                     });
 

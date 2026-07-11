@@ -81,6 +81,7 @@ func main() {
 	http.HandleFunc("/api/admin/users/create", limit(requireSuperAdmin(handleAdminUsersCreate)))
 	http.HandleFunc("/api/admin/users/update", limit(requireSuperAdmin(handleAdminUsersUpdate)))
 	http.HandleFunc("/api/admin/users/delete", limit(requireSuperAdmin(handleAdminUsersDelete)))
+	http.HandleFunc("/api/admin/users/selector", limit(requireAdmin(handleAdminUsersSelector)))
 
 	// Start background worker for periodic status sync and key invalidation
 	go startBackgroundSync(5 * time.Minute)

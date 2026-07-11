@@ -60,6 +60,7 @@ type ConvertKeysRequest struct {
 	VendorKeys []string `json:"vendor_keys"`
 	Multiplier int      `json:"multiplier"`
 	Note       string   `json:"note"`
+	CreatorID  *int64   `json:"creator_id,omitempty"`
 }
 
 // ConvertKeysResponse represents response parameters for keys conversion
@@ -317,6 +318,20 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 	var creatorID interface{} = nil
 	if ok {
 		creatorID = adminID
+	}
+
+	if req.CreatorID != nil {
+		var exists bool
+		err := db.QueryRow("SELECT COUNT(*) > 0 FROM admins WHERE id = ?", *req.CreatorID).Scan(&exists)
+		if err == nil && exists {
+			creatorID = *req.CreatorID
+		} else {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "指定的创建用户不存在",
+			})
+			return
+		}
 	}
 
 	tx, err := db.Begin()

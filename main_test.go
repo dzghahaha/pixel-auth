@@ -557,6 +557,47 @@ func TestConvertKeys(t *testing.T) {
 	if noteCount != 4 {
 		t.Errorf("expected 4 rows in DB with note = 'test-note-123', got %d", noteCount)
 	}
+
+	// Insert mock user to test creator_id override
+	var mockUserID int64
+	resOverride, errInsertAdmin := db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES ('mockcreator', 'hash', 'user', NOW(), NOW())")
+	if errInsertAdmin != nil {
+		t.Fatalf("failed to insert mock admin: %v", errInsertAdmin)
+	}
+	mockUserID, _ = resOverride.LastInsertId()
+
+	// Test Convert Keys with CreatorID override
+	convReqOverride := ConvertKeysRequest{
+		Vendor:     "pass.aisale.one",
+		VendorKeys: []string{"override-key"},
+		Multiplier: 1,
+		Note:       "override-test",
+		CreatorID:  &mockUserID,
+	}
+	bodyOverrideBytes, _ := json.Marshal(convReqOverride)
+	reqOverride := httptest.NewRequest(http.MethodPost, "/api/convert_keys", bytes.NewBuffer(bodyOverrideBytes))
+	rrOverride := httptest.NewRecorder()
+	handleConvertKeys(rrOverride, reqOverride)
+
+	if rrOverride.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for override convert, got %d. Body: %s", rrOverride.Code, rrOverride.Body.String())
+	}
+
+	var respOverride ConvertKeysResponse
+	json.Unmarshal(rrOverride.Body.Bytes(), &respOverride)
+	if len(respOverride.SystemKeys) != 1 {
+		t.Fatalf("expected 1 system key generated, got %d", len(respOverride.SystemKeys))
+	}
+
+	// Verify creator_id in database
+	var dbCreatorID int64
+	errQueryCreator := db.QueryRow("SELECT creator_id FROM system_keys WHERE system_key = ?", respOverride.SystemKeys[0]).Scan(&dbCreatorID)
+	if errQueryCreator != nil {
+		t.Fatalf("failed to query creator_id for system key: %v", errQueryCreator)
+	}
+	if dbCreatorID != mockUserID {
+		t.Errorf("expected creator_id to be %d, got %d", mockUserID, dbCreatorID)
+	}
 }
 
 func TestResetKeys(t *testing.T) {

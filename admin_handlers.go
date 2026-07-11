@@ -2289,3 +2289,45 @@ func handleAdminVendorsDelete(w http.ResponseWriter, r *http.Request) {
 		"message": "删除合作厂商成功",
 	})
 }
+
+func handleAdminUsersSelector(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	rows, err := db.Query("SELECT id, username, nickname FROM admins ORDER BY id ASC")
+	if err != nil {
+		log.Printf("Error querying admins for selector: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "获取用户列表失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type UserItem struct {
+		ID       int64  `json:"id"`
+		Username string `json:"username"`
+		Nickname string `json:"nickname"`
+	}
+
+	var users []UserItem
+	for rows.Next() {
+		var u UserItem
+		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname); err != nil {
+			log.Printf("Error scanning admin row for selector: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "读取用户数据失败",
+			})
+			return
+		}
+		users = append(users, u)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"users":   users,
+	})
+}
