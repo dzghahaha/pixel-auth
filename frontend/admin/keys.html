@@ -99,6 +99,9 @@
                 <select id="filter-vendor" class="status-select admin-only">
                     <option value="">所有厂商</option>
                 </select>
+                <select id="filter-creator" class="status-select admin-only">
+                    <option value="">所有创建人</option>
+                </select>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
                 <button type="button" id="btn-export" class="btn-detail" style="height: 38px; padding: 0 16px; font-size: 13px; font-weight: 500; white-space: nowrap;">导出筛选卡密</button>
             </div>
@@ -170,6 +173,7 @@
             const searchInput = document.getElementById('search-query');
             const statusSelect = document.getElementById('filter-status');
             const vendorSelect = document.getElementById('filter-vendor');
+            const creatorSelect = document.getElementById('filter-creator');
             const btnSearch = document.getElementById('btn-search');
 
             const btnPrev = document.getElementById('btn-prev-page');
@@ -249,6 +253,9 @@
                         });
 
                         applyRoleUI();
+                        if (role === 'admin') {
+                            await loadCreators();
+                        }
                         await loadKeys();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
@@ -260,6 +267,29 @@
                 } catch (e) {
                     console.error(e);
                     window.location.href = '/admin/login.html';
+                }
+            }
+
+            async function loadCreators() {
+                try {
+                    const res = await fetch('/api/admin/users/selector');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        const users = data.users || [];
+                        const selectedCreator = creatorSelect.value;
+                        creatorSelect.innerHTML = '<option value="">所有创建人</option>';
+                        users.forEach(u => {
+                            const opt = document.createElement('option');
+                            opt.value = u.id;
+                            opt.textContent = u.nickname || u.username;
+                            if (u.id.toString() === selectedCreator) {
+                                opt.selected = true;
+                            }
+                            creatorSelect.appendChild(opt);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to load creators:', e);
                 }
             }
 
@@ -277,9 +307,10 @@
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
                 const vendorVal = vendorSelect.value;
+                const creatorVal = creatorSelect.value;
 
                 try {
-                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}`;
+                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -483,6 +514,10 @@
                 currentPage = 1;
                 loadKeys();
             });
+            creatorSelect.addEventListener('change', () => {
+                currentPage = 1;
+                loadKeys();
+            });
 
             // Export events
             const btnExport = document.getElementById('btn-export');
@@ -490,13 +525,14 @@
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
                 const vendorVal = vendorSelect.value;
+                const creatorVal = creatorSelect.value;
 
                 btnExport.disabled = true;
                 const originalText = btnExport.textContent;
                 btnExport.textContent = '正在导出...';
 
                 try {
-                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}`;
+                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 

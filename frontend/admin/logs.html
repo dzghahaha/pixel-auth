@@ -41,12 +41,53 @@
             font-family: var(--font-mono, "JetBrains Mono", Menlo, Monaco, monospace);
             font-size: 12px;
         }
-        .message-cell {
+        .message-cell-clickable {
             font-family: var(--font-mono, "JetBrains Mono", Menlo, Monaco, monospace);
             font-size: 12px;
-            white-space: pre-wrap;
-            word-break: break-all;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             max-width: 500px;
+            cursor: pointer;
+            color: #0369a1;
+            transition: color 0.15s ease;
+            text-align: left;
+        }
+        .message-cell-clickable:hover {
+            color: #0284c7;
+            text-decoration: underline;
+        }
+
+        /* Search Combo layout matching keys.html */
+        .search-combo {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 16px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+        }
+        .status-select {
+            min-width: 150px;
+            cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            .search-combo {
+                padding: 12px;
+                gap: 8px;
+            }
+            .status-select {
+                flex: 1;
+            }
+        }
+        @media (max-width: 480px) {
+            .search-combo {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
     </style>
 </head>
@@ -95,7 +136,7 @@
         <!-- 搜索过滤卡片 -->
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
-                <input type="text" id="search-task-id" class="search-input" style="max-width: 200px;" placeholder="筛选任务ID (Task ID)...">
+                <input type="text" id="search-task-id" class="search-input" style="max-width: 220px;" placeholder="按任务ID筛选 (Task ID)...">
                 <input type="text" id="search-query" class="search-input" placeholder="输入日志内容搜索...">
                 <select id="filter-level" class="status-select">
                     <option value="">所有级别</option>
@@ -116,8 +157,8 @@
                             <th style="width: 80px;">ID</th>
                             <th style="width: 170px;">时间</th>
                             <th style="width: 100px;">级别</th>
-                            <th style="width: 160px;">任务ID</th>
-                            <th>日志详情</th>
+                            <th style="width: 180px;">任务ID</th>
+                            <th>日志详情 (点击查看完整内容)</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
@@ -147,6 +188,31 @@
         </div>
     </div>
 
+    <!-- 日志详情弹窗 -->
+    <div id="log-detail-modal" class="modal hidden" style="z-index: 1100;">
+        <div class="modal-content" style="max-width: 800px; width: 95%;">
+            <div class="modal-header">
+                <span>日志详情</span>
+                <span id="close-detail-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 16px; max-height: 500px; overflow-y: auto;">
+                <div style="margin-bottom: 16px; display: flex; gap: 16px; font-size: 13px; color: var(--slate-500); font-weight: 500; flex-wrap: wrap;">
+                    <span>日志ID: <strong id="modal-log-id" style="color:var(--slate-800);">-</strong></span>
+                    <span>级别: <span id="modal-log-level">-</span></span>
+                    <span>时间: <strong id="modal-log-time" style="color:var(--slate-800);">-</strong></span>
+                    <span>任务ID: <strong id="modal-log-task-id" style="color:var(--slate-800); font-family: monospace;">-</strong></span>
+                </div>
+                <div style="background: var(--slate-50, #f8fafc); border: 1px solid var(--slate-200, #e2e8f0); border-radius: 8px; padding: 16px; font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: var(--slate-800);" id="modal-log-message">
+                    <!-- 完整日志内容 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-copy-log" class="btn-detail" style="padding: 8px 16px; font-size: 13px; margin-right: auto; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;">复制日志</button>
+                <button type="button" id="btn-close-detail" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 弹窗提示组件 -->
     <div id="toast" class="toast hidden"></div>
 
@@ -169,9 +235,23 @@
             const totalPagesSpan = document.getElementById('span-total-pages');
             const totalCountSpan = document.getElementById('span-total-count');
 
+            // Detail modal elements
+            const logDetailModal = document.getElementById('log-detail-modal');
+            const closeDetailModal = document.getElementById('close-detail-modal');
+            const btnCloseDetail = document.getElementById('btn-close-detail');
+            const btnCopyLog = document.getElementById('btn-copy-log');
+
+            const modalLogId = document.getElementById('modal-log-id');
+            const modalLogLevel = document.getElementById('modal-log-level');
+            const modalLogTime = document.getElementById('modal-log-time');
+            const modalLogTaskId = document.getElementById('modal-log-task-id');
+            const modalLogMessage = document.getElementById('modal-log-message');
+
             let currentPage = 1;
             let totalPages = 1;
             const pageSize = 20;
+            let currentLogs = [];
+            let activeLogMessage = '';
 
             function showToast(msg) {
                 toast.textContent = msg;
@@ -252,6 +332,7 @@
 
                     if (res.ok && data.success) {
                         const logs = data.records || [];
+                        currentLogs = logs;
                         const total = data.total || 0;
                         totalPages = Math.ceil(total / pageSize) || 1;
 
@@ -267,7 +348,7 @@
                         }
 
                         tableBody.innerHTML = '';
-                        logs.forEach(log => {
+                        logs.forEach((log, index) => {
                             const tr = document.createElement('tr');
                             
                             let levelBadgeClass = 'badge-info';
@@ -278,15 +359,35 @@
                                 levelBadgeClass = 'badge-warn';
                             }
 
+                            // Truncate log message for preview
+                            const msg = log.message || '';
+                            let previewMsg = msg;
+                            if (msg.length > 90) {
+                                previewMsg = msg.slice(0, 90) + '...';
+                            }
+
                             tr.innerHTML = `
                                 <td>${log.id}</td>
                                 <td>${formatDate(log.created_at)}</td>
                                 <td><span class="${levelBadgeClass}">${log.level}</span></td>
                                 <td class="mono-text">${log.task_id || '-'}</td>
-                                <td class="message-cell">${log.message || ''}</td>
+                                <td>
+                                    <div class="message-cell-clickable" data-index="${index}" title="点击查看完整日志">
+                                        ${previewMsg}
+                                    </div>
+                                </td>
                             `;
                             tableBody.appendChild(tr);
                         });
+
+                        // Bind click to view log details
+                        document.querySelectorAll('.message-cell-clickable').forEach(el => {
+                            el.addEventListener('click', (e) => {
+                                const idx = parseInt(e.currentTarget.getAttribute('data-index'), 10);
+                                openLogDetail(currentLogs[idx]);
+                            });
+                        });
+
                     } else {
                         tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
                     }
@@ -296,7 +397,61 @@
                 }
             }
 
-            // Event Listeners
+            function openLogDetail(log) {
+                if (!log) return;
+                modalLogId.textContent = log.id;
+                modalLogTime.textContent = formatDate(log.created_at);
+                modalLogTaskId.textContent = log.task_id || '-';
+                modalLogMessage.textContent = log.message || '';
+                activeLogMessage = log.message || '';
+
+                // Level Badge
+                let levelBadgeClass = 'badge-info';
+                const lowerLevel = (log.level || '').toLowerCase();
+                if (lowerLevel === 'error') {
+                    levelBadgeClass = 'badge-error';
+                } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
+                    levelBadgeClass = 'badge-warn';
+                }
+                modalLogLevel.className = levelBadgeClass;
+                modalLogLevel.textContent = log.level;
+
+                logDetailModal.classList.remove('hidden');
+            }
+
+            function closeDetail() {
+                logDetailModal.classList.add('hidden');
+                activeLogMessage = '';
+            }
+
+            closeDetailModal.addEventListener('click', closeDetail);
+            btnCloseDetail.addEventListener('click', closeDetail);
+
+            btnCopyLog.addEventListener('click', () => {
+                if (!activeLogMessage) return;
+                navigator.clipboard.writeText(activeLogMessage).then(() => {
+                    showToast('日志内容已成功复制到剪贴板');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    showToast('复制失败，请手动选择复制');
+                });
+            });
+
+            // Close modal on clicking outside content
+            window.addEventListener('click', (e) => {
+                if (e.target === logDetailModal) {
+                    closeDetail();
+                }
+            });
+
+            // Close modal on ESC press
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeDetail();
+                }
+            });
+
+            // Search events
             btnSearch.addEventListener('click', () => {
                 currentPage = 1;
                 loadLogs();
@@ -331,7 +486,7 @@
             });
 
             inputPageNum.addEventListener('change', () => {
-                let page = parseInt(inputPageNum.value);
+                let page = parseInt(inputPageNum.value, 10);
                 if (isNaN(page) || page < 1) {
                     page = 1;
                 }
@@ -340,6 +495,23 @@
                 }
                 currentPage = page;
                 loadLogs();
+            });
+
+            // Smooth navigation transition
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
             });
 
             btnLogout.addEventListener('click', async (e) => {

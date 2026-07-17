@@ -1008,6 +1008,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	searchTerm := r.URL.Query().Get("query")
 	statusFilter := r.URL.Query().Get("status")
 	vendorFilter := r.URL.Query().Get("vendor")
+	creatorFilter := r.URL.Query().Get("creator_id")
 
 	adminID, ok := getAdminID(r)
 	if !ok {
@@ -1031,7 +1032,12 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	whereClauses := []string{"1=1"}
 	var args []interface{}
 
-	if role == "user" {
+	if role == "admin" {
+		if creatorFilter != "" {
+			whereClauses = append(whereClauses, "creator_id = ?")
+			args = append(args, creatorFilter)
+		}
+	} else if role == "user" {
 		whereClauses = append(whereClauses, "creator_id = ?")
 		args = append(args, adminID)
 	}
