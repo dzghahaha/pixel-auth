@@ -273,8 +273,10 @@ func createTables() {
 		level VARCHAR(20) NOT NULL,
 		message TEXT NOT NULL,
 		task_id VARCHAR(128) NOT NULL DEFAULT '',
+		serial VARCHAR(64) NOT NULL DEFAULT '',
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		KEY idx_task_id (task_id)
+		KEY idx_task_id (task_id),
+		KEY idx_serial (serial)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
@@ -563,6 +565,25 @@ func createTables() {
 		} else {
 			if _, err := db.Exec("ALTER TABLE orchestrator_logs ADD KEY idx_task_id (task_id)"); err != nil {
 				log.Printf("Warning: failed to add idx_task_id index to orchestrator_logs: %v\n", err)
+			}
+		}
+	}
+
+	var hasSerial bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'orchestrator_logs' 
+		  AND COLUMN_NAME = 'serial'
+	`).Scan(&hasSerial)
+	if errCheck == nil && !hasSerial {
+		log.Println("Adding 'serial' column to 'orchestrator_logs' table...")
+		if _, err := db.Exec("ALTER TABLE orchestrator_logs ADD COLUMN serial VARCHAR(64) NOT NULL DEFAULT ''"); err != nil {
+			log.Printf("Warning: failed to add serial column to orchestrator_logs: %v\n", err)
+		} else {
+			if _, err := db.Exec("ALTER TABLE orchestrator_logs ADD KEY idx_serial (serial)"); err != nil {
+				log.Printf("Warning: failed to add idx_serial index to orchestrator_logs: %v\n", err)
 			}
 		}
 	}

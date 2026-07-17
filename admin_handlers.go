@@ -2418,6 +2418,7 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 	taskID := r.URL.Query().Get("task_id")
 	level := r.URL.Query().Get("level")
 	searchTerm := r.URL.Query().Get("query")
+	serial := r.URL.Query().Get("serial")
 
 	whereClauses := []string{"1=1"}
 	var args []interface{}
@@ -2433,6 +2434,10 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 	if searchTerm != "" {
 		whereClauses = append(whereClauses, "message LIKE ?")
 		args = append(args, "%"+searchTerm+"%")
+	}
+	if serial != "" {
+		whereClauses = append(whereClauses, "serial = ?")
+		args = append(args, serial)
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")
@@ -2450,7 +2455,7 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT id, level, message, task_id, created_at 
+		SELECT id, level, message, task_id, serial, created_at 
 		FROM orchestrator_logs 
 		WHERE %s 
 		ORDER BY id DESC 
@@ -2473,13 +2478,14 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 		Level     string    `json:"level"`
 		Message   string    `json:"message"`
 		TaskID    string    `json:"task_id"`
+		Serial    string    `json:"serial"`
 		CreatedAt time.Time `json:"created_at"`
 	}
 
 	var logs []OrchestratorLog
 	for rows.Next() {
 		var row OrchestratorLog
-		if err := rows.Scan(&row.ID, &row.Level, &row.Message, &row.TaskID, &row.CreatedAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.Level, &row.Message, &row.TaskID, &row.Serial, &row.CreatedAt); err != nil {
 			log.Printf("Error scanning orchestrator log row: %v\n", err)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,

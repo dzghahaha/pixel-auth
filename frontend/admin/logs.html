@@ -47,7 +47,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 500px;
+            max-width: 450px;
             cursor: pointer;
             color: #0369a1;
             transition: color 0.15s ease;
@@ -136,7 +136,8 @@
         <!-- 搜索过滤卡片 -->
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
-                <input type="text" id="search-task-id" class="search-input" style="max-width: 220px;" placeholder="按任务ID筛选 (Task ID)...">
+                <input type="text" id="search-task-id" class="search-input" style="max-width: 180px;" placeholder="按任务ID筛选...">
+                <input type="text" id="search-serial" class="search-input" style="max-width: 180px;" placeholder="按序列号 (serial) 筛选...">
                 <input type="text" id="search-query" class="search-input" placeholder="输入日志内容搜索...">
                 <select id="filter-level" class="status-select">
                     <option value="">所有级别</option>
@@ -157,13 +158,14 @@
                             <th style="width: 80px;">ID</th>
                             <th style="width: 170px;">时间</th>
                             <th style="width: 100px;">级别</th>
-                            <th style="width: 180px;">任务ID</th>
+                            <th style="width: 160px;">任务ID</th>
+                            <th style="width: 160px;">序列号 (serial)</th>
                             <th>日志详情 (点击查看完整内容)</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="5" style="padding: 48px 0; text-align: center;">
+                            <td colspan="6" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载日志数据...</span>
@@ -201,6 +203,7 @@
                     <span>级别: <span id="modal-log-level">-</span></span>
                     <span>时间: <strong id="modal-log-time" style="color:var(--slate-800);">-</strong></span>
                     <span>任务ID: <strong id="modal-log-task-id" style="color:var(--slate-800); font-family: monospace;">-</strong></span>
+                    <span>序列号: <strong id="modal-log-serial" style="color:var(--slate-800); font-family: monospace;">-</strong></span>
                 </div>
                 <div style="background: var(--slate-50, #f8fafc); border: 1px solid var(--slate-200, #e2e8f0); border-radius: 8px; padding: 16px; font-family: var(--font-mono, monospace); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: var(--slate-800);" id="modal-log-message">
                     <!-- 完整日志内容 -->
@@ -223,6 +226,7 @@
             const toast = document.getElementById('toast');
             
             const searchTaskId = document.getElementById('search-task-id');
+            const searchSerial = document.getElementById('search-serial');
             const searchInput = document.getElementById('search-query');
             const levelSelect = document.getElementById('filter-level');
             const btnSearch = document.getElementById('btn-search');
@@ -245,6 +249,7 @@
             const modalLogLevel = document.getElementById('modal-log-level');
             const modalLogTime = document.getElementById('modal-log-time');
             const modalLogTaskId = document.getElementById('modal-log-task-id');
+            const modalLogSerial = document.getElementById('modal-log-serial');
             const modalLogMessage = document.getElementById('modal-log-message');
 
             let currentPage = 1;
@@ -320,13 +325,14 @@
 
             // Fetch and render logs
             async function loadLogs() {
-                tableBody.innerHTML = getTableLoadingHTML(5, '正在读取日志数据...');
+                tableBody.innerHTML = getTableLoadingHTML(6, '正在读取日志数据...');
                 const taskVal = searchTaskId.value.trim();
+                const serialVal = searchSerial.value.trim();
                 const queryVal = searchInput.value.trim();
                 const levelVal = levelSelect.value;
 
                 try {
-                    const url = `/api/admin/logs?page=${currentPage}&page_size=${pageSize}&task_id=${encodeURIComponent(taskVal)}&query=${encodeURIComponent(queryVal)}&level=${levelVal}`;
+                    const url = `/api/admin/logs?page=${currentPage}&page_size=${pageSize}&task_id=${encodeURIComponent(taskVal)}&serial=${encodeURIComponent(serialVal)}&query=${encodeURIComponent(queryVal)}&level=${levelVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -343,7 +349,7 @@
                         btnNext.disabled = currentPage >= totalPages;
 
                         if (logs.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的日志记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的日志记录</td></tr>';
                             return;
                         }
 
@@ -371,6 +377,7 @@
                                 <td>${formatDate(log.created_at)}</td>
                                 <td><span class="${levelBadgeClass}">${log.level}</span></td>
                                 <td class="mono-text">${log.task_id || '-'}</td>
+                                <td class="mono-text">${log.serial || '-'}</td>
                                 <td>
                                     <div class="message-cell-clickable" data-index="${index}" title="点击查看完整日志">
                                         ${previewMsg}
@@ -389,11 +396,11 @@
                         });
 
                     } else {
-                        tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
+                        tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
                     }
                 } catch (error) {
                     console.error(error);
-                    tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--danger);">请求失败，请检查网络连接</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 32px; color: var(--danger);">请求失败，请检查网络连接</td></tr>`;
                 }
             }
 
@@ -402,6 +409,7 @@
                 modalLogId.textContent = log.id;
                 modalLogTime.textContent = formatDate(log.created_at);
                 modalLogTaskId.textContent = log.task_id || '-';
+                modalLogSerial.textContent = log.serial || '-';
                 modalLogMessage.textContent = log.message || '';
                 activeLogMessage = log.message || '';
 
@@ -457,7 +465,7 @@
                 loadLogs();
             });
 
-            [searchTaskId, searchInput].forEach(input => {
+            [searchTaskId, searchSerial, searchInput].forEach(input => {
                 input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         currentPage = 1;
