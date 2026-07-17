@@ -1532,6 +1532,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"api_open":                getSetting("api_open", "off"),
 				"api_base_url":            getSetting("api_base_url", ""),
 				"api_whitelist":           getSetting("api_whitelist", ""),
+				"deard_convert_open":      getSetting("deard_convert_open", "off"),
+				"log_cleanup_open":        getSetting("log_cleanup_open", "off"),
+				"log_cleanup_days":        getSetting("log_cleanup_days", "30"),
 			},
 		})
 	} else if r.Method == http.MethodPost {
@@ -1546,6 +1549,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			APIOpen              string `json:"api_open"`
 			APIBaseURL           string `json:"api_base_url"`
 			APIWhitelist         string `json:"api_whitelist"`
+			DeardConvertOpen     string `json:"deard_convert_open"`
+			LogCleanupOpen       string `json:"log_cleanup_open"`
+			LogCleanupDays       string `json:"log_cleanup_days"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -1565,6 +1571,8 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		oldPrice := getSetting("key_price", "9.99")
 		oldAPIOpen := getSetting("api_open", "off")
 		oldAPIBaseURL := getSetting("api_base_url", "")
+		oldLogCleanupOpen := getSetting("log_cleanup_open", "off")
+		oldLogCleanupDays := getSetting("log_cleanup_days", "30")
 
 		if req.TwoFactorTutorialURL == "" {
 			req.TwoFactorTutorialURL = oldTutorial
@@ -1593,6 +1601,12 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		if req.APIBaseURL == "" {
 			req.APIBaseURL = oldAPIBaseURL
 		}
+		if req.LogCleanupOpen == "" {
+			req.LogCleanupOpen = oldLogCleanupOpen
+		}
+		if req.LogCleanupDays == "" {
+			req.LogCleanupDays = oldLogCleanupDays
+		}
 		// Allow saving empty whitelist
 		if r.Body != nil && !strings.Contains(r.URL.RawQuery, "partial") {
 			// Do not override if not present in request body, but allow explicit empty
@@ -1610,6 +1624,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"api_open":                req.APIOpen,
 			"api_base_url":            req.APIBaseURL,
 			"api_whitelist":           req.APIWhitelist,
+			"deard_convert_open":      req.DeardConvertOpen,
+			"log_cleanup_open":        req.LogCleanupOpen,
+			"log_cleanup_days":        req.LogCleanupDays,
 		}
 		for k, v := range settingsToSave {
 			_, err := db.Exec(`
@@ -2369,3 +2386,110 @@ func handleAdminUsersSelector(w http.ResponseWriter, r *http.Request) {
 		"users":   users,
 	})
 }
+
+func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	page := 1
+	pageSize := 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		fmt.Sscanf(p, "%d", &page)
+	}
+	if ps := r.URL.Query().Get("page_size"); ps != "" {
+		fmt.Sscanf(ps, "%d", &pageSize)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+	taskID := r.URL.Query().Get("task_id")
+	level := r.URL.Query().Get("level")
+	searchTerm := r.URL.Query().Get("query")
+
+	whereClauses := []string{"1=1"}
+	var args []interface{}
+
+	if taskID != "" {
+		whereClauses = append(whereClauses, "task_id = ?")
+		args = append(args, taskID)
+	}
+	if level != "" {
+		whereClauses = append(whereClauses, "level = ?")
+		args = append(args, level)
+	}
+	if searchTerm != "" {
+		whereClauses = append(whereClauses, "message LIKE ?")
+		args = append(args, "%"+searchTerm+"%")
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var totalCount int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM orchestrator_logs WHERE %s", whereSQL)
+	errCount := db.QueryRow(countQuery, args...).Scan(&totalCount)
+	if errCount != nil {
+		log.Printf("Error counting orchestrator logs: %v\n", errCount)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询总数失败",
+		})
+		return
+	}
+
+	dataQuery := fmt.Sprintf(`
+		SELECT id, level, message, task_id, created_at 
+		FROM orchestrator_logs 
+		WHERE %s 
+		ORDER BY id DESC 
+		LIMIT ? OFFSET ?`, whereSQL)
+
+	dataArgs := append(args, pageSize, offset)
+	rows, errRows := db.Query(dataQuery, dataArgs...)
+	if errRows != nil {
+		log.Printf("Error querying orchestrator logs: %v\n", errRows)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询日志列表失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	type OrchestratorLog struct {
+		ID        int       `json:"id"`
+		Level     string    `json:"level"`
+		Message   string    `json:"message"`
+		TaskID    string    `json:"task_id"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	var logs []OrchestratorLog
+	for rows.Next() {
+		var row OrchestratorLog
+		if err := rows.Scan(&row.ID, &row.Level, &row.Message, &row.TaskID, &row.CreatedAt); err != nil {
+			log.Printf("Error scanning orchestrator log row: %v\n", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "解析日志数据失败",
+			})
+			return
+		}
+		logs = append(logs, row)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"total":     totalCount,
+		"page":      page,
+		"page_size": pageSize,
+		"records":   logs,
+	})
+}
+

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -189,6 +190,74 @@ func queryTaskFromVendor(cardSecret, taskID string) (*VendorQueryResponse, error
 	}
 
 	return &vendorResp, nil
+}
+
+func checkAisaleBalance(cdkey string) (float64, error) {
+	reqBody := map[string]string{
+		"action": "get_balance",
+		"cdkey":  cdkey,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return 0, err
+	}
+
+	apiURL := "https://pass.aisale.one/gateway.php"
+	var dbAPIURL string
+	errVal := db.QueryRow("SELECT api_url FROM key_vendors WHERE name = 'pass.aisale.one'").Scan(&dbAPIURL)
+	if errVal == nil && dbAPIURL != "" {
+		apiURL = dbAPIURL
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var balanceResp struct {
+		Success       bool        `json:"success"`
+		RemainingUses interface{} `json:"remaining_uses"`
+		TotalUses     interface{} `json:"total_uses"`
+		Message       string      `json:"message"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &balanceResp); err != nil {
+		return 0, err
+	}
+
+	if !balanceResp.Success {
+		return 0, fmt.Errorf("API error: %s", balanceResp.Message)
+	}
+
+	var remaining float64
+	switch val := balanceResp.RemainingUses.(type) {
+	case string:
+		r, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse remaining_uses string %q: %v", val, err)
+		}
+		remaining = r
+	case float64:
+		remaining = val
+	case float32:
+		remaining = float64(val)
+	case int:
+		remaining = float64(val)
+	case int64:
+		remaining = float64(val)
+	default:
+		return 0, fmt.Errorf("unexpected remaining_uses type: %T", val)
+	}
+
+	return remaining, nil
 }
 
 // VendorCancelRequest represents request payload to cancel task from vendor

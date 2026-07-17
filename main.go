@@ -75,6 +75,7 @@ func main() {
 	http.HandleFunc("/api/admin/vendors/delete", limit(requirePermission("vendors", handleAdminVendorsDelete)))
 	http.HandleFunc("/api/admin/dashboard/stats", limit(requirePermission("dashboard", handleAdminDashboardStats)))
 	http.HandleFunc("/api/admin/settings", limit(requirePermission("settings", handleAdminSettings)))
+	http.HandleFunc("/api/admin/logs", limit(requirePermission("logs", handleAdminLogs)))
 
 	// User Management APIs (Super Admin protected)
 	http.HandleFunc("/api/admin/users", limit(requireSuperAdmin(handleAdminUsersList)))

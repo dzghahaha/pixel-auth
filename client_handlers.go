@@ -99,6 +99,85 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Intercept deard vendor card conversions if enabled
+	if vendor == "ai.deard.fun" && getSetting("deard_convert_open", "off") == "on" {
+		rows, errRows := db.Query(`
+			SELECT system_key, vendor_key 
+			FROM system_keys 
+			WHERE vendor = 'pass.aisale.one' AND status = 'active' 
+			ORDER BY id ASC`)
+		if errRows != nil {
+			log.Printf("Error querying active pass.aisale.one keys: %v\n", errRows)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "数据库服务故障，请稍后重试",
+			})
+			return
+		}
+		defer rows.Close()
+
+		var targetVKey string
+		var found bool
+
+		for rows.Next() {
+			var sysKey string
+			var vKey string
+			if errScan := rows.Scan(&sysKey, &vKey); errScan != nil {
+				log.Printf("Error scanning pass.aisale.one key: %v\n", errScan)
+				continue
+			}
+
+			// Call balance query API
+			remaining, errBal := checkAisaleBalance(vKey)
+			if errBal != nil {
+				log.Printf("Error checking balance for cdkey %s: %v\n", vKey, errBal)
+				if strings.Contains(errBal.Error(), "API error") {
+					log.Printf("Invalidating key %s due to API error: %v\n", sysKey, errBal)
+					db.Exec("UPDATE system_keys SET status = 'inactive', updated_at = ? WHERE system_key = ?", time.Now(), sysKey)
+				}
+				continue
+			}
+
+			if remaining >= 1.0 {
+				targetVKey = vKey
+				found = true
+				break
+			} else {
+				log.Printf("Invalidating key %s due to low balance: %f\n", sysKey, remaining)
+				_, errInactivate := db.Exec("UPDATE system_keys SET status = 'inactive', updated_at = ? WHERE system_key = ?", time.Now(), sysKey)
+				if errInactivate != nil {
+					log.Printf("Failed to inactivate system key %s: %v\n", sysKey, errInactivate)
+				}
+			}
+		}
+
+		if !found {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "第三方服务积分不足或卡密无效，暂无法使用该卡密激活",
+			})
+			return
+		}
+
+		// Update the user's submitted card key in system_keys to become a pass.aisale.one key
+		_, errUpdateUserKey := db.Exec(`
+			UPDATE system_keys 
+			SET vendor = 'pass.aisale.one', vendor_key = ?, updated_at = ? 
+			WHERE system_key = ?`, targetVKey, time.Now(), req.CardSecret)
+		if errUpdateUserKey != nil {
+			log.Printf("Failed to update user system key: %v\n", errUpdateUserKey)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "转换卡密失败，请稍后重试",
+			})
+			return
+		}
+
+		vendor = "pass.aisale.one"
+		vendorKey = targetVKey
+		log.Printf("[Deard Conversion] Converted user key %s to pass.aisale.one key with vendor_key %s\n", req.CardSecret, targetVKey)
+	}
+
 	// Check if there is an existing order for this card key that is still queuing or executing
 	var activeCount int
 	errCheckActive := db.QueryRow(`

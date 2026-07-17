@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -174,4 +175,32 @@ func syncPendingAndInvalidate() {
 	} else {
 		log.Printf("Background sync: failed to query expired pending orders: %v\n", errExpired)
 	}
+
+	// 4. Clean up orchestrator logs
+	cleanOrchestratorLogs()
 }
+
+func cleanOrchestratorLogs() {
+	enabled := getSetting("log_cleanup_open", "off")
+	if enabled != "on" {
+		return
+	}
+
+	daysStr := getSetting("log_cleanup_days", "30")
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days <= 0 {
+		days = 30
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -days)
+	res, err := db.Exec("DELETE FROM orchestrator_logs WHERE created_at < ?", cutoff)
+	if err != nil {
+		log.Printf("Background sync: failed to clean orchestrator logs: %v\n", err)
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Background sync: cleaned %d orchestrator logs older than %d days\n", rowsAffected, days)
+	}
+}
+

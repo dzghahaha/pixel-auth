@@ -386,8 +386,45 @@
             .details-grid {
                 grid-template-columns: 1fr;
             }
-        }
-    </style>
+            }
+
+            .badge-info {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            }
+            .badge-error {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            }
+            .badge-warn {
+            background-color: #fef3c7;
+            color: #b45309;
+            border: 1px solid #fde68a;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            }
+            .message-cell {
+            font-family: var(--font-mono, "JetBrains Mono", Menlo, Monaco, monospace);
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            }
+            </style>
 </head>
 <body>
     <!-- 页面加载过渡动画 -->
@@ -407,6 +444,7 @@
             <a href="/admin/buy.html" class="nav-item">购买卡密</a>
             <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
             <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -686,6 +724,35 @@
         </div>
     </div>
 
+    <!-- 任务日志查看弹窗 -->
+    <div id="task-logs-modal" class="modal hidden" style="z-index: 1100;">
+        <div class="modal-content" style="max-width: 800px; width: 95%;">
+            <div class="modal-header">
+                <span>任务执行日志 (任务ID: <span id="log-task-id-title">-</span>)</span>
+                <span id="close-logs-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 16px; max-height: 480px; overflow-y: auto;">
+                <div class="table-container" style="border: 1px solid var(--slate-200); border-radius: 8px;">
+                    <table class="inner-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 170px;">时间</th>
+                                <th style="width: 85px;">级别</th>
+                                <th>日志内容</th>
+                            </tr>
+                        </thead>
+                        <tbody id="task-logs-table-body">
+                            <!-- 动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-close-logs-modal" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 确认操作弹窗 (Beautified Custom Confirm Modal) -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content" style="max-width: 400px; padding: 24px; text-align: center; border-radius: 12px; gap: 16px; display: flex; flex-direction: column; border: 1px solid var(--border-color); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); background-color: var(--bg-card);">
@@ -812,6 +879,7 @@
                             '/admin/buy.html': 'buy',
                             '/admin/buy_records.html': 'buy',
                             '/admin/vendors.html': 'vendors',
+                            '/admin/logs.html': 'logs',
                             '/admin/convert.html': 'convert',
                             '/admin/reset.html': 'reset',
                             '/admin/settings.html': 'settings',
@@ -1040,9 +1108,15 @@
 
                             const finishTime = r.completed_at ? formatDate(r.completed_at) : '-';
 
+                            let logBtnHTML = '';
+                            if (r.task_id) {
+                                logBtnHTML = `<button type="button" class="btn-detail btn-view-logs" data-task-id="${r.task_id}" style="padding:4px 10px; font-size:11px; margin-left: 6px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">日志</button>`;
+                            }
+
                             const actionBtnsHTML = (currentUserRole === 'admin') ? `
                                 <button type="button" class="btn-detail btn-edit-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px;">编辑</button>
                                 <button type="button" class="btn-detail btn-retry-rec" data-rec-id="${r.id}" style="padding:4px 10px; font-size:11px; margin-left: 6px; background: var(--warning-light, #fef3c7); color: var(--warning, #d97706); border: 1px solid var(--warning-border, #fcd34d);">重试</button>
+                                ${logBtnHTML}
                             ` : '-';
 
                             tr.innerHTML = `
@@ -1073,6 +1147,14 @@
                             btn.addEventListener('click', (e) => {
                                 const recID = parseInt(e.target.getAttribute('data-rec-id'), 10);
                                 handleRecordRetry(recID);
+                            });
+                        });
+
+                        // Bind log view events for historical records
+                        document.querySelectorAll('.btn-view-logs').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const taskID = e.target.getAttribute('data-task-id');
+                                openTaskLogsModal(taskID);
                             });
                         });
                     } else {
@@ -1271,7 +1353,69 @@
                 if (e.target === replaceModal) {
                     closeReplaceModalAction();
                 }
+                if (e.target === taskLogsModal) {
+                    closeLogsModalAction();
+                }
             });
+
+            // Task logs modal elements
+            const taskLogsModal = document.getElementById('task-logs-modal');
+            const closeLogsModal = document.getElementById('close-logs-modal');
+            const btnCloseLogsModal = document.getElementById('btn-close-logs-modal');
+            const logTaskIdTitle = document.getElementById('log-task-id-title');
+            const taskLogsTableBody = document.getElementById('task-logs-table-body');
+
+            async function openTaskLogsModal(taskID) {
+                if (!taskID) return;
+                logTaskIdTitle.textContent = taskID;
+                taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载日志...</td></tr>';
+                taskLogsModal.classList.remove('hidden');
+
+                try {
+                    const res = await fetch(`/api/admin/logs?page=1&page_size=100&task_id=${encodeURIComponent(taskID)}`);
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        const logs = data.records || [];
+                        if (logs.length === 0) {
+                            taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--slate-400);">无运行日志</td></tr>';
+                            return;
+                        }
+
+                        taskLogsTableBody.innerHTML = '';
+                        logs.forEach(log => {
+                            const tr = document.createElement('tr');
+                            
+                            let levelBadgeClass = 'badge-info';
+                            const lowerLevel = (log.level || '').toLowerCase();
+                            if (lowerLevel === 'error') {
+                                levelBadgeClass = 'badge-error';
+                            } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
+                                levelBadgeClass = 'badge-warn';
+                            }
+
+                            tr.innerHTML = `
+                                <td style="font-size:11px; padding:8px 12px; color:var(--slate-400);">${formatDate(log.created_at)}</td>
+                                <td style="padding:8px 12px;"><span class="${levelBadgeClass}">${log.level}</span></td>
+                                <td class="message-cell" style="padding:8px 12px; font-size:12px;">${log.message || ''}</td>
+                            `;
+                            taskLogsTableBody.appendChild(tr);
+                        });
+                    } else {
+                        taskLogsTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--danger);">${data.message || '加载失败'}</td></tr>`;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--danger);">网络错误，加载失败</td></tr>';
+                }
+            }
+
+            function closeLogsModalAction() {
+                taskLogsModal.classList.add('hidden');
+                taskLogsTableBody.innerHTML = '';
+            }
+
+            closeLogsModal.addEventListener('click', closeLogsModalAction);
+            btnCloseLogsModal.addEventListener('click', closeLogsModalAction);
 
             // Premium Custom Calendar Datepicker Logic
             const datepickerWrapper = document.getElementById('datepicker-wrapper');

@@ -2551,3 +2551,178 @@ func TestInFlightLimiter(t *testing.T) {
 	}
 }
 
+func TestDeardCardConversion(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Start a mock HTTP server representing the pass.aisale.one gateway
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]interface{}
+		json.Unmarshal(body, &req)
+
+		action := req["action"].(string)
+		w.Header().Set("Content-Type", "application/json")
+
+		if action == "get_balance" {
+			cdkey := req["cdkey"].(string)
+			if cdkey == "DEPLETED-KEY" {
+				// A key with no balance
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success":        true,
+					"remaining_uses": "0.0",
+					"total_uses":     "10.0",
+				})
+			} else if cdkey == "INVALID-KEY" {
+				// A key that is invalid
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": "CDKey is invalid",
+				})
+			} else if cdkey == "GOOD-KEY" {
+				// A key with balance
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success":        true,
+					"remaining_uses": "15.5",
+					"total_uses":     "20.0",
+				})
+			} else {
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": "unknown key",
+				})
+			}
+		} else if action == "submit_task" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"task_id": "TK-MOCK-CONV-123",
+				"message": "提交成功",
+			})
+		}
+	}))
+	defer mockServer.Close()
+
+	// Direct vendor Base URL to the mock server
+	oldVendorBaseURL := vendorBaseURL
+	vendorBaseURL = mockServer.URL
+	defer func() { vendorBaseURL = oldVendorBaseURL }()
+
+	// 2. Configure the db key_vendors to direct pass.aisale.one queries to our mock server
+	_, err := db.Exec("INSERT INTO key_vendors (name, display_name, api_url, created_at, updated_at) VALUES ('pass.aisale.one', 'aisale', ?, NOW(), NOW()) ON DUPLICATE KEY UPDATE api_url = ?", mockServer.URL, mockServer.URL)
+	if err != nil {
+		t.Fatalf("failed to insert/update key vendor: %v", err)
+	}
+
+	// 3. Set the deard_convert_open setting to 'on'
+	_, err = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('deard_convert_open', 'on', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'on'")
+	if err != nil {
+		t.Fatalf("failed to set deard_convert_open: %v", err)
+	}
+
+	// 4. Insert some third-party keys (one invalid, one depleted, one good) in system_keys
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, 'pass.aisale.one', ?, 'active', ?, NOW(), NOW())",
+		"sys-invalid", "INVALID-KEY", "sys-invalid")
+	if err != nil {
+		t.Fatalf("failed to insert invalid system key: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, 'pass.aisale.one', ?, 'active', ?, NOW(), NOW())",
+		"sys-depleted", "DEPLETED-KEY", "sys-depleted")
+	if err != nil {
+		t.Fatalf("failed to insert depleted system key: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, 'pass.aisale.one', ?, 'active', ?, NOW(), NOW())",
+		"sys-good", "GOOD-KEY", "sys-good")
+	if err != nil {
+		t.Fatalf("failed to insert good system key: %v", err)
+	}
+
+	// 5. Insert a user's submitted deard card key
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, 'ai.deard.fun', '', 'active', ?, NOW(), NOW())",
+		"DEARD-USER-KEY", "DEARD-USER-KEY")
+	if err != nil {
+		t.Fatalf("failed to insert deard key: %v", err)
+	}
+
+	// 6. Submit a request using the deard key
+	subReq := SubmitRequest{
+		CardSecret: "DEARD-USER-KEY",
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "testuser@gmail.com",
+		Password:  "pass123",
+		TwoFactor: "2FA",
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusOK {
+		var errResp map[string]interface{}
+		json.Unmarshal(rrSubmit.Body.Bytes(), &errResp)
+		t.Fatalf("expected submit status 200, got %d, body: %v", rrSubmit.Code, errResp)
+	}
+
+	// 7. Verify database updates
+	// A. The user's system key "DEARD-USER-KEY" should have been converted to pass.aisale.one with vendor_key = "GOOD-KEY"
+	var updatedVendor, updatedVKey string
+	err = db.QueryRow("SELECT vendor, vendor_key FROM system_keys WHERE system_key = 'DEARD-USER-KEY'").Scan(&updatedVendor, &updatedVKey)
+	if err != nil {
+		t.Fatalf("failed to query updated deard key: %v", err)
+	}
+	if updatedVendor != "pass.aisale.one" || updatedVKey != "GOOD-KEY" {
+		t.Errorf("expected deard key vendor to be 'pass.aisale.one' and vendor_key to be 'GOOD-KEY', got vendor: %s, key: %s", updatedVendor, updatedVKey)
+	}
+
+	// B. The invalid and depleted keys should have been marked as 'inactive'
+	var invalidStatus string
+	err = db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'sys-invalid'").Scan(&invalidStatus)
+	if err != nil {
+		t.Fatalf("failed to query sys-invalid status: %v", err)
+	}
+	if invalidStatus != "inactive" {
+		t.Errorf("expected sys-invalid to be 'inactive', got %s", invalidStatus)
+	}
+
+	var depletedStatus string
+	err = db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'sys-depleted'").Scan(&depletedStatus)
+	if err != nil {
+		t.Fatalf("failed to query sys-depleted status: %v", err)
+	}
+	if depletedStatus != "inactive" {
+		t.Errorf("expected sys-depleted to be 'inactive', got %s", depletedStatus)
+	}
+
+	// C. The good key should still be 'active'
+	var goodStatus string
+	err = db.QueryRow("SELECT status FROM system_keys WHERE system_key = 'sys-good'").Scan(&goodStatus)
+	if err != nil {
+		t.Fatalf("failed to query sys-good status: %v", err)
+	}
+	if goodStatus != "active" {
+		t.Errorf("expected sys-good to be 'active', got %s", goodStatus)
+	}
+
+	// D. The order created should have vendor = 'pass.aisale.one'
+	var orderVendor string
+	err = db.QueryRow("SELECT vendor FROM orders WHERE card_secret = 'DEARD-USER-KEY'").Scan(&orderVendor)
+	if err != nil {
+		t.Fatalf("failed to query created order vendor: %v", err)
+	}
+	if orderVendor != "pass.aisale.one" {
+		t.Errorf("expected created order vendor to be 'pass.aisale.one', got %s", orderVendor)
+	}
+}
+
+
+

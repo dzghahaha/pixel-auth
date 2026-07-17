@@ -97,6 +97,7 @@
             <a href="/admin/buy.html" class="nav-item active">购买卡密</a>
             <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
             <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -129,7 +130,7 @@
                 <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">单价 &amp; 库存</label>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px; color: var(--text-secondary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; background-color: var(--bg-main);">
                     <span>售价: <strong id="price-val" style="color: var(--primary); font-size: 16px;">--</strong> 元/张</span>
-                    <span>系统库存: <strong id="stock-val" style="color: var(--text-primary); font-size: 16px;">--</strong> 张</span>
+                    <span>系统库存: <strong id="stock-val" style="color: var(--text-primary); font-size: 16px;">--</strong></span>
                 </div>
 
                 <label for="quantity" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">购买数量 (张)</label>
@@ -294,6 +295,7 @@
                             '/admin/buy.html': 'buy',
                             '/admin/buy_records.html': 'buy',
                             '/admin/vendors.html': 'vendors',
+                            '/admin/logs.html': 'logs',
                             '/admin/settings.html': 'settings',
                             '/admin/users.html': 'users'
                         };
@@ -411,7 +413,13 @@
                         stock = parseInt(data.stock);
                         
                         priceVal.textContent = keyPrice.toFixed(2);
-                        stockVal.textContent = stock;
+                        if (stock > 100) {
+                            stockVal.textContent = '充足';
+                            stockVal.style.color = 'var(--success)';
+                        } else {
+                            stockVal.textContent = '稀缺';
+                            stockVal.style.color = 'var(--danger)';
+                        }
                         
                         updateTotalPrice();
 

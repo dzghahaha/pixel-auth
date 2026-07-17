@@ -267,6 +267,16 @@ func createTables() {
 		UNIQUE KEY idx_name (name)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
+	orchestratorLogsDDL := `
+	CREATE TABLE IF NOT EXISTS orchestrator_logs (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		level VARCHAR(20) NOT NULL,
+		message TEXT NOT NULL,
+		task_id VARCHAR(128) NOT NULL DEFAULT '',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		KEY idx_task_id (task_id)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
 		log.Fatalf("Error creating admin_sessions table: %v", err)
 	}
@@ -285,6 +295,10 @@ func createTables() {
 
 	if _, err := db.Exec(keyVendorsDDL); err != nil {
 		log.Fatalf("Error creating key_vendors table: %v", err)
+	}
+
+	if _, err := db.Exec(orchestratorLogsDDL); err != nil {
+		log.Fatalf("Error creating orchestrator_logs table: %v", err)
 	}
 
 	// Migration: Add pay_type to key_orders if it doesn't exist (ignores error if column exists)
@@ -325,6 +339,9 @@ func createTables() {
 		"epay_wx_channel":         "201906181353",
 		"epay_alipay_channel":     "",
 		"key_price":               "9.99",
+		"deard_convert_open":      "off",
+		"log_cleanup_open":        "off",
+		"log_cleanup_days":        "30",
 	}
 	for k, v := range defaultSettings {
 		var countSettings int
@@ -528,6 +545,25 @@ func createTables() {
 		log.Println("Adding 'execution_count' column to 'account_records' table...")
 		if _, err := db.Exec("ALTER TABLE account_records ADD COLUMN execution_count INT UNSIGNED NOT NULL DEFAULT 1"); err != nil {
 			log.Printf("Warning: failed to add execution_count column: %v\n", err)
+		}
+	}
+
+	var hasTaskIDLog bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'orchestrator_logs' 
+		  AND COLUMN_NAME = 'task_id'
+	`).Scan(&hasTaskIDLog)
+	if errCheck == nil && !hasTaskIDLog {
+		log.Println("Adding 'task_id' column to 'orchestrator_logs' table...")
+		if _, err := db.Exec("ALTER TABLE orchestrator_logs ADD COLUMN task_id VARCHAR(128) NOT NULL DEFAULT ''"); err != nil {
+			log.Printf("Warning: failed to add task_id column to orchestrator_logs: %v\n", err)
+		} else {
+			if _, err := db.Exec("ALTER TABLE orchestrator_logs ADD KEY idx_task_id (task_id)"); err != nil {
+				log.Printf("Warning: failed to add idx_task_id index to orchestrator_logs: %v\n", err)
+			}
 		}
 	}
 
