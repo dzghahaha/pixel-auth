@@ -136,6 +136,13 @@ type adminStaticServer struct {
 }
 
 func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Disable caching for HTML files to avoid cache issues when code is updated
+	if strings.HasSuffix(r.URL.Path, ".html") {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+	}
+
 	path := r.URL.Path
 	if path == "/convert.html" {
 		http.Error(w, "Forbidden", http.StatusForbidden)

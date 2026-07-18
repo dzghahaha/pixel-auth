@@ -49,6 +49,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	noteFilter := r.URL.Query().Get("note")
 	startTimeParam := r.URL.Query().Get("start_time")
 	endTimeParam := r.URL.Query().Get("end_time")
+	creatorIDFilter := r.URL.Query().Get("creator_id")
 
 	adminID, ok := getAdminID(r)
 	if !ok {
@@ -75,6 +76,12 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	if role == "user" {
 		whereClauses = append(whereClauses, "o.creator_id = ?")
 		args = append(args, adminID)
+	} else if creatorIDFilter != "" {
+		var cid int64
+		if _, err := fmt.Sscanf(creatorIDFilter, "%d", &cid); err == nil {
+			whereClauses = append(whereClauses, "o.creator_id = ?")
+			args = append(args, cid)
+		}
 	}
 
 	if searchTerm != "" {

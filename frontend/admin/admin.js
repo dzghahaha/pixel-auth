@@ -75,7 +75,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Skip if already processed
         if (select.parentNode.classList.contains('custom-select')) return;
         
-        initCustomSelect(select);
+        try {
+            initCustomSelect(select);
+        } catch (e) {
+            console.error("Failed to wrap custom select dropdown:", select, e);
+        }
     });
 });
 
@@ -84,11 +88,18 @@ function initCustomSelect(select) {
 
     // Create wrapper
     const wrapper = document.createElement('div');
-    wrapper.className = 'custom-select';
-    if (select.className) {
-        wrapper.classList.add(select.className);
-    }
+    wrapper.className = 'custom-select ' + (select.className || '');
     wrapper.style.minWidth = select.style.minWidth || '150px';
+
+    // Handle full-width selects inside forms dynamically
+    const isFullWidth = select.style.width === '100%' || 
+                         select.classList.contains('form-select') ||
+                         select.classList.contains('form-input') ||
+                         select.closest('.form-group') !== null;
+    if (isFullWidth) {
+        wrapper.style.width = '100%';
+        wrapper.style.display = 'block';
+    }
 
     // Hide original select
     select.style.display = 'none';
@@ -179,26 +190,32 @@ function initCustomSelect(select) {
     });
 
     // Sync wrapper state if value is modified programmatically
-    const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
-    Object.defineProperty(select, 'value', {
-        get: function() {
-            return originalVal.get.call(this);
-        },
-        set: function(val) {
-            originalVal.set.call(this, val);
-            const opt = Array.from(select.options).find(o => o.value === val);
-            if (opt) {
-                trigger.querySelector('span').textContent = opt.textContent;
-                optionsContainer.querySelectorAll('.custom-option').forEach(co => {
-                    if (co.getAttribute('data-value') === val) {
-                        co.classList.add('selected');
-                    } else {
-                        co.classList.remove('selected');
+    try {
+        const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+        if (originalVal && typeof originalVal.get === 'function') {
+            Object.defineProperty(select, 'value', {
+                get: function() {
+                    return originalVal.get.call(this);
+                },
+                set: function(val) {
+                    originalVal.set.call(this, val);
+                    const opt = Array.from(select.options).find(o => o.value === val);
+                    if (opt) {
+                        trigger.querySelector('span').textContent = opt.textContent;
+                        optionsContainer.querySelectorAll('.custom-option').forEach(co => {
+                            if (co.getAttribute('data-value') === val) {
+                                co.classList.add('selected');
+                            } else {
+                                co.classList.remove('selected');
+                            }
+                        });
                     }
-                });
-            }
+                }
+            });
         }
-    });
+    } catch (err) {
+        console.warn("Failed to intercept select value property:", err);
+    }
 }
 
 // Close all custom dropdowns on clicking outside
