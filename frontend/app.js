@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 username: username,
                 password: password,
                 two_factor: twoFactor,
-                error: '2FA格式不正确，必须为32位密钥或8位备用码'
+                error: '2FA格式不正确，请输入32位密钥或备用验证码'
             };
         }
 
@@ -202,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (!isValid2FA(twoFactor)) {
-                showToast('2FA格式不正确，必须为32位密钥或8位备用码');
+                showToast('2FA格式不正确，请输入32位密钥或备用验证码');
                 return;
             }
 

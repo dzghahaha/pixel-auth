@@ -2455,7 +2455,7 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT id, level, message, task_id, serial, created_at 
+		SELECT id, level, message, COALESCE(task_id, ''), COALESCE(serial, ''), created_at 
 		FROM orchestrator_logs 
 		WHERE %s 
 		ORDER BY id DESC 

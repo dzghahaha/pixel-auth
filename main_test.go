@@ -185,7 +185,7 @@ func TestHandleSubmitAndQueryAPI(t *testing.T) {
 	}{
 		Username:  "user@example.com",
 		Password:  "password",
-		TwoFactor: "2FASECRET",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes, _ := json.Marshal(subReq)
@@ -248,7 +248,7 @@ func TestInvalidSubmitRequests(t *testing.T) {
 	}{
 		Username:  "user@example.com",
 		Password:  "password",
-		TwoFactor: "2FASECRET",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes, _ := json.Marshal(subReq)
@@ -313,7 +313,7 @@ func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
 	}{
 		Username:  "user1@example.com",
 		Password:  "password",
-		TwoFactor: "2FASECRET",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes, _ := json.Marshal(subReq)
@@ -338,7 +338,7 @@ func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
 	}{
 		Username:  "user2@example.com",
 		Password:  "password",
-		TwoFactor: "2FASECRET",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes2, _ := json.Marshal(subReq2)
@@ -352,6 +352,56 @@ func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
 
 	if !strings.Contains(rrSubmit2.Body.String(), "该卡密对应的订单已经在排队或执行中") {
 		t.Errorf("expected error message about active orders, got %s", rrSubmit2.Body.String())
+	}
+}
+
+func TestConcurrentSubmitLock(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Create active system key
+	sysKey := "CONCURRENT-LOCK-KEY"
+	_, errDbInsert := db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		sysKey, "mock", "MOCK-VENDOR-KEY", "active", sysKey, time.Now(), time.Now())
+	if errDbInsert != nil {
+		t.Fatalf("failed to insert mock system key: %v", errDbInsert)
+	}
+
+	// 2. Submit concurrent requests
+	// We manually lock the key in activeSubmissions first to simulate another request processing it
+	activeSubmissions.Store(sysKey, struct{}{})
+	defer activeSubmissions.Delete(sysKey)
+
+	// Now try to submit the same key. It should fail immediately with the locking message.
+	subReq := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "user@example.com",
+		Password:  "password",
+		TwoFactor: "12345678901234567890123456789012",
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusBadRequest {
+		t.Errorf("expected concurrent submit status 400, got %d", rrSubmit.Code)
+	}
+
+	if !strings.Contains(rrSubmit.Body.String(), "该卡密正在处理中，请勿重复提交") {
+		t.Errorf("expected error message about processing key, got %s", rrSubmit.Body.String())
 	}
 }
 
@@ -440,7 +490,7 @@ func TestVendorIntegration(t *testing.T) {
 	}{
 		Username:  "vendor_test@example.com",
 		Password:  "password",
-		TwoFactor: "2FASECRET",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes, _ := json.Marshal(subReq)
@@ -651,7 +701,7 @@ func TestResetKeys(t *testing.T) {
 	}{
 		Username:  "reset_test_user@gmail.com",
 		Password:  "pass123",
-		TwoFactor: "2FA",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 	bodyBytesSub, _ := json.Marshal(subReq)
 	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytesSub))
@@ -808,7 +858,7 @@ func TestResetKeysPreventWhenRunning(t *testing.T) {
 	}{
 		Username:  "running_test_user@gmail.com",
 		Password:  "pass123",
-		TwoFactor: "2FA",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 	bodyBytesSub, _ := json.Marshal(subReq)
 	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytesSub))
@@ -1065,7 +1115,7 @@ func TestOriginalKeyFlow(t *testing.T) {
 	}{
 		Username:  "orig_user1@gmail.com",
 		Password:  "pass123",
-		TwoFactor: "2FA",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 	bodyBytesSub, _ := json.Marshal(subReq)
 	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytesSub))
@@ -2659,7 +2709,7 @@ func TestDeardCardConversion(t *testing.T) {
 	}{
 		Username:  "testuser@gmail.com",
 		Password:  "pass123",
-		TwoFactor: "2FA",
+		TwoFactor: "12345678901234567890123456789012",
 	})
 
 	bodyBytes, _ := json.Marshal(subReq)
@@ -2721,6 +2771,84 @@ func TestDeardCardConversion(t *testing.T) {
 	}
 	if orderVendor != "pass.aisale.one" {
 		t.Errorf("expected created order vendor to be 'pass.aisale.one', got %s", orderVendor)
+	}
+}
+
+func Test2FAValidation(t *testing.T) {
+	// 1. Test isValid2FA helper function directly
+	validCases := []string{
+		"12345678901234567890123456789012", // 32 digits (alphanumeric, length 32)
+		"JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", // 32 letters/digits (length 32)
+		"JBSW Y3DP EHPK 3PXP JBSW Y3DP EHPK 3PXP", // 32 chars with spaces
+		"12345678",                         // 8 digits (8 % 8 == 0)
+		"1234-5678",                        // 8 digits with dash
+		"12345678 87654321",                // 16 digits (16 % 8 == 0)
+		"12345678,87654321,11223344",       // 24 digits (24 % 8 == 0)
+	}
+
+	for _, tc := range validCases {
+		if !isValid2FA(tc) {
+			t.Errorf("expected 2FA string %q to be valid, but got invalid", tc)
+		}
+	}
+
+	invalidCases := []string{
+		"",
+		"   ",
+		"1234567",                          // 7 digits
+		"123456789",                        // 9 digits
+		"JBSWY3DPEHPK3PXP",                 // 16 alphanumeric chars (neither 32 chars nor pure digits)
+		"12345678A",                        // contains letter 'A', length 9
+		"1234-5678-9",                      // 9 digits
+	}
+
+	for _, tc := range invalidCases {
+		if isValid2FA(tc) {
+			t.Errorf("expected 2FA string %q to be invalid, but got valid", tc)
+		}
+	}
+
+	// 2. Test submit API with invalid 2FA
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// Create a mock active system key
+	sysKey := "2FA-TEST-KEY"
+	_, errDbInsert := db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		sysKey, "mock", "MOCK-VENDOR-KEY", "active", sysKey, time.Now(), time.Now())
+	if errDbInsert != nil {
+		t.Fatalf("failed to insert mock system key: %v", errDbInsert)
+	}
+
+	subReq := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "user@example.com",
+		Password:  "password",
+		TwoFactor: "1234567", // Invalid 7-digit 2FA
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 Bad Request for invalid 2FA, got %d", rrSubmit.Code)
+	}
+
+	if !strings.Contains(rrSubmit.Body.String(), "2FA格式不正确，请输入32位密钥或备用验证码") {
+		t.Errorf("expected error message containing '2FA格式不正确，请输入32位密钥或备用验证码', got: %s", rrSubmit.Body.String())
 	}
 }
 

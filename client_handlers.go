@@ -25,6 +25,8 @@ type SubmitRequest struct {
 	} `json:"accounts"`
 }
 
+var activeSubmissions sync.Map
+
 func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -68,12 +70,37 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		req.CardSecret = currentCardSecret
 	}
 
+	// Lock the card secret to prevent concurrent duplicate submissions
+	if _, loaded := activeSubmissions.LoadOrStore(req.CardSecret, struct{}{}); loaded {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该卡密正在处理中，请勿重复提交",
+		})
+		return
+	}
+	defer activeSubmissions.Delete(req.CardSecret)
+
 	if len(req.Accounts) == 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "账号列表不能为空",
 		})
 		return
+	}
+
+	// Validate 2FA for all submitted accounts
+	for idx, acc := range req.Accounts {
+		if !isValid2FA(acc.TwoFactor) {
+			errMsg := "2FA格式不正确，请输入32位密钥或备用验证码"
+			if len(req.Accounts) > 1 {
+				errMsg = fmt.Sprintf("第 %d 行账号 2FA格式不正确，请输入32位密钥或备用验证码", idx+1)
+			}
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": errMsg,
+			})
+			return
+		}
 	}
 
 	// Retrieve vendor mapping from system_keys table
@@ -1048,4 +1075,50 @@ func handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "取消成功",
 	})
+}
+
+// isValid2FA validates if 2FA key/code is either a 32-character key or digits with count as a multiple of 8
+func isValid2FA(twoFactor string) bool {
+	twoFactor = strings.TrimSpace(twoFactor)
+	if twoFactor == "" {
+		return false
+	}
+
+	// Case 1: 32-character key after removing whitespace
+	cleanKey := strings.ReplaceAll(twoFactor, " ", "")
+	cleanKey = strings.ReplaceAll(cleanKey, "\t", "")
+	cleanKey = strings.ReplaceAll(cleanKey, "\r", "")
+	cleanKey = strings.ReplaceAll(cleanKey, "\n", "")
+	if len(cleanKey) == 32 {
+		isAlphaNumeric := true
+		for _, ch := range cleanKey {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+				isAlphaNumeric = false
+				break
+			}
+		}
+		if isAlphaNumeric {
+			return true
+		}
+	}
+
+	// Case 2: Digits where total digit count is a multiple of 8
+	var digitCount int
+	hasOnlyDigitsAndSeparators := true
+	for _, ch := range twoFactor {
+		if ch >= '0' && ch <= '9' {
+			digitCount++
+		} else if ch == ' ' || ch == '-' || ch == ',' || ch == '\t' || ch == '\r' || ch == '\n' {
+			continue
+		} else {
+			hasOnlyDigitsAndSeparators = false
+			break
+		}
+	}
+
+	if hasOnlyDigitsAndSeparators && digitCount > 0 && digitCount%8 == 0 {
+		return true
+	}
+
+	return false
 }
