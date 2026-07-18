@@ -225,10 +225,16 @@ document.addEventListener('click', () => {
     });
 });
 
-// Reset page-loader on bfcache recovery (back-button navigation)
-window.addEventListener('pageshow', () => {
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-        loader.classList.add('fade-out');
+// Reset page-loader and reload page on bfcache recovery (back-button navigation)
+window.addEventListener('pageshow', (event) => {
+    const isBackNavigation = event.persisted || 
+        (window.performance && window.performance.navigation.type === 2);
+    if (isBackNavigation) {
+        window.location.reload();
+    } else {
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.add('fade-out');
+        }
     }
 });
