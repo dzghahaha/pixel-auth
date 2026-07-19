@@ -1519,10 +1519,12 @@
             async function fetchLogsForModal(taskID, isAutoRefresh = false) {
                 if (!taskID) return;
                 try {
+                    console.log('fetchLogsForModal called:', { taskID, isAutoRefresh });
                     const res = await fetch(`/api/admin/logs?page=1&page_size=100&task_id=${encodeURIComponent(taskID)}`);
                     const data = await res.json();
                     if (res.ok && data.success) {
                         const records = data.records || [];
+                        console.log('fetchLogsForModal success, records count:', records.length);
                         
                         if (isAutoRefresh) {
                             const newRecords = records.filter(log => log.id > maxLogId);
@@ -1558,6 +1560,7 @@
                             taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">无运行日志</div>';
                             maxLogId = 0;
                             hasMoreLogs = false;
+                            console.log('No records found, hasMoreLogs set to false');
                             return;
                         }
 
@@ -1567,6 +1570,7 @@
                         } else {
                             hasMoreLogs = true;
                         }
+                        console.log('Initial load completed, maxLogId:', maxLogId, 'hasMoreLogs:', hasMoreLogs);
 
                         const logs = records.slice().reverse();
                         logs.forEach(log => {
@@ -1576,7 +1580,11 @@
                             taskLogsConsole.appendChild(lineDiv);
                         });
 
-                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                        // Use requestAnimationFrame to ensure layout is complete before setting scrollTop
+                        requestAnimationFrame(() => {
+                            taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                            console.log('Initial scroll set to bottom:', taskLogsConsole.scrollTop, 'scrollHeight:', taskLogsConsole.scrollHeight);
+                        });
                     } else {
                         if (!isAutoRefresh || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('无运行日志')) {
                             taskLogsConsole.innerHTML = `<div style="text-align:center; padding:16px; color:var(--danger);">${data.message || '加载失败'}</div>`;
@@ -1591,6 +1599,7 @@
             }
 
             async function loadOlderLogs(taskID) {
+                console.log('loadOlderLogs called:', { taskID, currentLogsPage, hasMoreLogs, isLoadingLogs });
                 if (!taskID || !hasMoreLogs || isLoadingLogs) return;
                 isLoadingLogs = true;
 
@@ -1606,6 +1615,7 @@
 
                 try {
                     const nextPage = currentLogsPage + 1;
+                    console.log('Fetching older logs for page:', nextPage);
                     const res = await fetch(`/api/admin/logs?page=${nextPage}&page_size=100&task_id=${encodeURIComponent(taskID)}`);
                     const data = await res.json();
                     
@@ -1616,8 +1626,10 @@
 
                     if (res.ok && data.success) {
                         const records = data.records || [];
+                        console.log('loadOlderLogs page', nextPage, 'returned records:', records.length);
                         if (records.length === 0) {
                             hasMoreLogs = false;
+                            console.log('No more records returned from page', nextPage, 'hasMoreLogs set to false');
                             
                             // Prepend a "no more historical logs" indicator
                             const endIndicator = document.createElement('div');
@@ -1633,6 +1645,7 @@
                         currentLogsPage = nextPage;
                         if (records.length < 100) {
                             hasMoreLogs = false;
+                            console.log('Returned records less than 100, hasMoreLogs set to false');
                             // Prepend "no more historical logs" indicator
                             const endIndicator = document.createElement('div');
                             endIndicator.style.textAlign = 'center';
@@ -1661,6 +1674,7 @@
 
                         // Adjust scroll position to keep the user's view stable
                         taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight - oldScrollHeight;
+                        console.log('Prepend older logs success. oldScrollHeight:', oldScrollHeight, 'newScrollHeight:', taskLogsConsole.scrollHeight, 'newScrollTop:', taskLogsConsole.scrollTop);
                     } else {
                         showToast(data.message || '加载历史日志失败');
                     }
@@ -1672,6 +1686,7 @@
                     showToast('网络错误，无法加载历史日志');
                 } finally {
                     isLoadingLogs = false;
+                    console.log('loadOlderLogs finished. isLoadingLogs set to false');
                 }
             }
 
