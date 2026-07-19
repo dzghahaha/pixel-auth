@@ -183,7 +183,7 @@ func TestHandleSubmitAndQueryAPI(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user@example.com",
+		Username:  "user@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -226,8 +226,8 @@ func TestHandleSubmitAndQueryAPI(t *testing.T) {
 	}
 
 	rec := records2[0].(map[string]interface{})
-	if rec["username"] != "user@example.com" {
-		t.Errorf("expected username 'user@example.com', got '%s'", rec["username"])
+	if rec["username"] != "user@gmail.com" {
+		t.Errorf("expected username 'user@gmail.com', got '%s'", rec["username"])
 	}
 	if rec["status"] != "pending" {
 		t.Errorf("expected status 'pending', got '%s'", rec["status"])
@@ -246,7 +246,7 @@ func TestInvalidSubmitRequests(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user@example.com",
+		Username:  "user@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -311,7 +311,7 @@ func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user1@example.com",
+		Username:  "user1@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -336,7 +336,7 @@ func TestDuplicateSubmitPreventedWhenQueuingOrRunning(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user2@example.com",
+		Username:  "user2@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -386,7 +386,7 @@ func TestConcurrentSubmitLock(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user@example.com",
+		Username:  "user@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -488,7 +488,7 @@ func TestVendorIntegration(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "vendor_test@example.com",
+		Username:  "vendor_test@gmail.com",
 		Password:  "password",
 		TwoFactor: "12345678901234567890123456789012",
 	})
@@ -950,7 +950,7 @@ func TestQuerySyncInvalidatesKey(t *testing.T) {
 
 	// 4. Insert pending account record
 	_, err = db.Exec("INSERT INTO account_records (order_id, username, password, two_factor, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		orderID, "sync_user@example.com", "pwd", "2fa", "pending", "处理中", "TK-SYNC-SUCCESS-1", time.Now(), time.Now())
+		orderID, "sync_user@gmail.com", "pwd", "2fa", "pending", "处理中", "TK-SYNC-SUCCESS-1", time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("failed to insert account record: %v", err)
 	}
@@ -1021,7 +1021,7 @@ func TestBackgroundSyncInvalidatesKeys(t *testing.T) {
 
 	// 4. Insert pending account record
 	_, err = db.Exec("INSERT INTO account_records (order_id, username, password, two_factor, status, message, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		orderID, "bg_user@example.com", "pwd", "2fa", "pending", "处理中", "TK-BG-SUCCESS-2", time.Now(), time.Now())
+		orderID, "bg_user@gmail.com", "pwd", "2fa", "pending", "处理中", "TK-BG-SUCCESS-2", time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("failed to insert account record: %v", err)
 	}
@@ -2229,7 +2229,7 @@ func TestAdminOrderReplaceResubmit(t *testing.T) {
 
 	// 4. Create account records for the first order
 	_, _ = db.Exec("INSERT INTO account_records (order_id, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		orderID, "user@example.com", "pass123", "twofa123", "running", "正在处理中", now, now)
+		orderID, "user@gmail.com", "pass123", "twofa123", "running", "正在处理中", now, now)
 
 	// 5. Test Replace & Resubmit requests
 	// Case A: Replace with the same key
@@ -2833,7 +2833,7 @@ func Test2FAValidation(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "user@example.com",
+		Username:  "user@gmail.com",
 		Password:  "password",
 		TwoFactor: "1234567", // Invalid 7-digit 2FA
 	})
@@ -2849,6 +2849,112 @@ func Test2FAValidation(t *testing.T) {
 
 	if !strings.Contains(rrSubmit.Body.String(), "2FA格式不正确，请输入32位密钥或备用验证码") {
 		t.Errorf("expected error message containing '2FA格式不正确，请输入32位密钥或备用验证码', got: %s", rrSubmit.Body.String())
+	}
+}
+
+func TestEmailValidation(t *testing.T) {
+	// 1. Test isPersonalGoogleEmail helper function directly
+	validEmails := []string{
+		"test@gmail.com",
+		"test@googlemail.com",
+		"test@qq.com",
+		"test@foxmail.com",
+		"test@163.com",
+		"test@126.com",
+		"test@yeah.net",
+		"test@sina.com",
+		"test@sina.cn",
+		"test@sohu.com",
+		"test@aliyun.com",
+		"test@139.com",
+		"test@189.cn",
+		"test@wo.cn",
+		"test@outlook.com",
+		"test@hotmail.com",
+		"test@live.com",
+		"test@live.cn",
+		"test@msn.com",
+		"test@icloud.com",
+		"test@me.com",
+		"test@mac.com",
+		"test@yahoo.com",
+		"test@ymail.com",
+		"test@proton.me",
+		"test@protonmail.com",
+		"test@protonmail.ch",
+		"test@aol.com",
+		"test@gmx.com",
+		"test@gmx.net",
+		"test@mail.com",
+		"test@yandex.com",
+		"test@yandex.ru",
+		"test@zoho.com",
+		"test@vip.qq.com",
+		"test@vip.163.com",
+		"not-an-email", // non-emails should be allowed (e.g. system accounts if any)
+	}
+
+	for _, email := range validEmails {
+		if !isPersonalGoogleEmail(email) {
+			t.Errorf("expected email %q to be classified as a personal email", email)
+		}
+	}
+
+	invalidEmails := []string{
+		"test@example.com",
+		"test@company.com",
+		"test@google.com",
+		"test@microsoft.com",
+		"test@github.com",
+	}
+
+	for _, email := range invalidEmails {
+		if isPersonalGoogleEmail(email) {
+			t.Errorf("expected email %q to be classified as a corporate email", email)
+		}
+	}
+
+	// 2. Test submit API with invalid corporate email
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	sysKey := "EMAIL-TEST-KEY"
+	_, errDbInsert := db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		sysKey, "mock", "MOCK-VENDOR-KEY", "active", sysKey, time.Now(), time.Now())
+	if errDbInsert != nil {
+		t.Fatalf("failed to insert mock system key: %v", errDbInsert)
+	}
+
+	subReq := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "user@company.com",
+		Password:  "password",
+		TwoFactor: "12345678901234567890123456789012", // Valid 2FA
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 Bad Request for corporate email, got %d", rrSubmit.Code)
+	}
+
+	expectedErr := "必须使用Google个人账号，企业组织等账号不可以订阅Google One"
+	if !strings.Contains(rrSubmit.Body.String(), expectedErr) {
+		t.Errorf("expected error message containing %q, got: %s", expectedErr, rrSubmit.Body.String())
 	}
 }
 

@@ -88,12 +88,24 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate 2FA for all submitted accounts
+	// Validate 2FA and email domain for all submitted accounts
 	for idx, acc := range req.Accounts {
 		if !isValid2FA(acc.TwoFactor) {
 			errMsg := "2FA格式不正确，请输入32位密钥或备用验证码"
 			if len(req.Accounts) > 1 {
 				errMsg = fmt.Sprintf("第 %d 行账号 2FA格式不正确，请输入32位密钥或备用验证码", idx+1)
+			}
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": errMsg,
+			})
+			return
+		}
+
+		if strings.Contains(acc.Username, "@") && !isPersonalGoogleEmail(acc.Username) {
+			errMsg := "必须使用Google个人账号，企业组织等账号不可以订阅Google One"
+			if len(req.Accounts) > 1 {
+				errMsg = fmt.Sprintf("第 %d 行账号必须使用Google个人账号，企业组织等账号不可以订阅Google One", idx+1)
 			}
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 				"success": false,
@@ -1120,5 +1132,36 @@ func isValid2FA(twoFactor string) bool {
 		return true
 	}
 
+	return false
+}
+
+// isPersonalGoogleEmail checks if the email is a personal Google email
+func isPersonalGoogleEmail(email string) bool {
+	email = strings.TrimSpace(email)
+	if !strings.Contains(email, "@") {
+		return true
+	}
+	lower := strings.ToLower(email)
+	personalDomains := []string{
+		"gmail.com", "googlemail.com",
+		"qq.com", "foxmail.com",
+		"163.com", "126.com", "yeah.net",
+		"sina.com", "sina.cn", "sohu.com",
+		"aliyun.com",
+		"139.com", "189.cn", "wo.cn",
+		"outlook.com", "hotmail.com", "live.com", "live.cn", "msn.com",
+		"icloud.com", "me.com", "mac.com",
+		"yahoo.com", "ymail.com",
+		"proton.me", "protonmail.com", "protonmail.ch",
+		"aol.com",
+		"gmx.com", "gmx.net", "mail.com",
+		"yandex.com", "yandex.ru",
+		"zoho.com",
+	}
+	for _, domain := range personalDomains {
+		if strings.HasSuffix(lower, "@"+domain) || strings.HasSuffix(lower, "."+domain) {
+			return true
+		}
+	}
 	return false
 }
