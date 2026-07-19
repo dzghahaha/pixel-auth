@@ -1536,6 +1536,7 @@
                                 const isNearBottom = taskLogsConsole.scrollHeight - taskLogsConsole.clientHeight - taskLogsConsole.scrollTop < 50;
                                 
                                 const newLogs = newRecords.slice().reverse();
+                                const fragment = document.createDocumentFragment();
                                 newLogs.forEach(log => {
                                     if (renderedLogIds.has(log.id)) return;
                                     renderedLogIds.add(log.id);
@@ -1543,11 +1544,15 @@
                                         maxLogId = log.id;
                                     }
                                     const lineDiv = createLogLineElement(log);
-                                    taskLogsConsole.appendChild(lineDiv);
+                                    fragment.appendChild(lineDiv);
                                 });
 
+                                taskLogsConsole.appendChild(fragment);
+
                                 if (isNearBottom) {
-                                    taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                                    requestAnimationFrame(() => {
+                                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                                    });
                                 }
                             }
                             return;
@@ -1573,12 +1578,14 @@
                         console.log('Initial load completed, maxLogId:', maxLogId, 'hasMoreLogs:', hasMoreLogs);
 
                         const logs = records.slice().reverse();
+                        const fragment = document.createDocumentFragment();
                         logs.forEach(log => {
                             if (renderedLogIds.has(log.id)) return;
                             renderedLogIds.add(log.id);
                             const lineDiv = createLogLineElement(log);
-                            taskLogsConsole.appendChild(lineDiv);
+                            fragment.appendChild(lineDiv);
                         });
+                        taskLogsConsole.appendChild(fragment);
 
                         // Use requestAnimationFrame to ensure layout is complete before setting scrollTop
                         requestAnimationFrame(() => {
