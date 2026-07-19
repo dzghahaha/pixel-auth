@@ -1482,6 +1482,39 @@
             const logsRefreshStatus = document.getElementById('logs-refresh-status');
             let logsRefreshInterval = null;
             let currentLogsTaskId = null;
+            let currentLogsPage = 1;
+            let hasMoreLogs = true;
+            let isLoadingLogs = false;
+            let maxLogId = 0;
+            const renderedLogIds = new Set();
+
+            function createLogLineElement(log) {
+                let levelColor = '#38bdf8'; // Default Info (Light blue)
+                const lowerLevel = (log.level || '').toLowerCase();
+                if (lowerLevel === 'error') {
+                    levelColor = '#f87171'; // Red
+                } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
+                    levelColor = '#facc15'; // Yellow
+                } else if (lowerLevel === 'success') {
+                    levelColor = '#4ade80'; // Green
+                }
+
+                const lineDiv = document.createElement('div');
+                lineDiv.style.marginBottom = '6px';
+                lineDiv.style.whiteSpace = 'pre-wrap';
+                lineDiv.style.wordBreak = 'break-all';
+                lineDiv.style.display = 'flex';
+                lineDiv.style.gap = '8px';
+                lineDiv.style.alignItems = 'flex-start';
+
+                lineDiv.innerHTML = `
+                    <span style="color: #64748b; flex-shrink: 0; user-select: none;">[${formatDate(log.created_at)}]</span>
+                    <span style="color: ${levelColor}; font-weight: bold; flex-shrink: 0; user-select: none;">[${log.level}]</span>
+                    <span style="color: #e2e8f0;"></span>
+                `;
+                lineDiv.querySelector('span:last-child').textContent = log.message || '';
+                return lineDiv;
+            }
 
             async function fetchLogsForModal(taskID, isAutoRefresh = false) {
                 if (!taskID) return;
@@ -1489,47 +1522,61 @@
                     const res = await fetch(`/api/admin/logs?page=1&page_size=100&task_id=${encodeURIComponent(taskID)}`);
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        const logs = (data.records || []).slice().reverse(); // Show chronologically (oldest first)
-                        if (logs.length === 0) {
-                            taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">无运行日志</div>';
+                        const records = data.records || [];
+                        
+                        if (isAutoRefresh) {
+                            const newRecords = records.filter(log => log.id > maxLogId);
+                            if (newRecords.length > 0) {
+                                if (taskLogsConsole.innerHTML.includes('无运行日志') || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('加载失败')) {
+                                    taskLogsConsole.innerHTML = '';
+                                }
+
+                                const isNearBottom = taskLogsConsole.scrollHeight - taskLogsConsole.clientHeight - taskLogsConsole.scrollTop < 50;
+                                
+                                const newLogs = newRecords.slice().reverse();
+                                newLogs.forEach(log => {
+                                    if (renderedLogIds.has(log.id)) return;
+                                    renderedLogIds.add(log.id);
+                                    if (log.id > maxLogId) {
+                                        maxLogId = log.id;
+                                    }
+                                    const lineDiv = createLogLineElement(log);
+                                    taskLogsConsole.appendChild(lineDiv);
+                                });
+
+                                if (isNearBottom) {
+                                    taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                                }
+                            }
                             return;
                         }
 
-                        // Check scroll position before rendering
-                        const isNearBottom = taskLogsConsole.scrollHeight - taskLogsConsole.clientHeight - taskLogsConsole.scrollTop < 50;
-
+                        // Initial load
                         taskLogsConsole.innerHTML = '';
+                        renderedLogIds.clear();
+                        if (records.length === 0) {
+                            taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">无运行日志</div>';
+                            maxLogId = 0;
+                            hasMoreLogs = false;
+                            return;
+                        }
+
+                        maxLogId = records[0].id;
+                        if (records.length < 100) {
+                            hasMoreLogs = false;
+                        } else {
+                            hasMoreLogs = true;
+                        }
+
+                        const logs = records.slice().reverse();
                         logs.forEach(log => {
-                            let levelColor = '#38bdf8'; // Default Info (Light blue)
-                            const lowerLevel = (log.level || '').toLowerCase();
-                            if (lowerLevel === 'error') {
-                                levelColor = '#f87171'; // Red
-                            } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
-                                levelColor = '#facc15'; // Yellow
-                            } else if (lowerLevel === 'success') {
-                                levelColor = '#4ade80'; // Green
-                            }
-
-                            const lineDiv = document.createElement('div');
-                            lineDiv.style.marginBottom = '6px';
-                            lineDiv.style.whiteSpace = 'pre-wrap';
-                            lineDiv.style.wordBreak = 'break-all';
-                            lineDiv.style.display = 'flex';
-                            lineDiv.style.gap = '8px';
-                            lineDiv.style.alignItems = 'flex-start';
-
-                            lineDiv.innerHTML = `
-                                <span style="color: #64748b; flex-shrink: 0; user-select: none;">[${formatDate(log.created_at)}]</span>
-                                <span style="color: ${levelColor}; font-weight: bold; flex-shrink: 0; user-select: none;">[${log.level}]</span>
-                                <span style="color: #e2e8f0;">${log.message || ''}</span>
-                            `;
+                            if (renderedLogIds.has(log.id)) return;
+                            renderedLogIds.add(log.id);
+                            const lineDiv = createLogLineElement(log);
                             taskLogsConsole.appendChild(lineDiv);
                         });
 
-                        // Smart auto-scroll
-                        if (isNearBottom || !isAutoRefresh) {
-                            taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
-                        }
+                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
                     } else {
                         if (!isAutoRefresh || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('无运行日志')) {
                             taskLogsConsole.innerHTML = `<div style="text-align:center; padding:16px; color:var(--danger);">${data.message || '加载失败'}</div>`;
@@ -1543,6 +1590,91 @@
                 }
             }
 
+            async function loadOlderLogs(taskID) {
+                if (!taskID || !hasMoreLogs || isLoadingLogs) return;
+                isLoadingLogs = true;
+
+                // Create a temporary loading indicator and prepend it to console
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.id = 'logs-loading-older';
+                loadingIndicator.style.textAlign = 'center';
+                loadingIndicator.style.padding = '8px';
+                loadingIndicator.style.color = '#64748b';
+                loadingIndicator.style.fontSize = '12px';
+                loadingIndicator.textContent = '正在加载历史日志...';
+                taskLogsConsole.insertBefore(loadingIndicator, taskLogsConsole.firstChild);
+
+                try {
+                    const nextPage = currentLogsPage + 1;
+                    const res = await fetch(`/api/admin/logs?page=${nextPage}&page_size=100&task_id=${encodeURIComponent(taskID)}`);
+                    const data = await res.json();
+                    
+                    // Remove loading indicator
+                    if (document.getElementById('logs-loading-older')) {
+                        loadingIndicator.remove();
+                    }
+
+                    if (res.ok && data.success) {
+                        const records = data.records || [];
+                        if (records.length === 0) {
+                            hasMoreLogs = false;
+                            
+                            // Prepend a "no more historical logs" indicator
+                            const endIndicator = document.createElement('div');
+                            endIndicator.style.textAlign = 'center';
+                            endIndicator.style.padding = '8px';
+                            endIndicator.style.color = '#475569';
+                            endIndicator.style.fontSize = '11px';
+                            endIndicator.textContent = '已加载全部历史日志';
+                            taskLogsConsole.insertBefore(endIndicator, taskLogsConsole.firstChild);
+                            return;
+                        }
+
+                        currentLogsPage = nextPage;
+                        if (records.length < 100) {
+                            hasMoreLogs = false;
+                            // Prepend "no more historical logs" indicator
+                            const endIndicator = document.createElement('div');
+                            endIndicator.style.textAlign = 'center';
+                            endIndicator.style.padding = '8px';
+                            endIndicator.style.color = '#475569';
+                            endIndicator.style.fontSize = '11px';
+                            endIndicator.textContent = '已加载全部历史日志';
+                            taskLogsConsole.insertBefore(endIndicator, taskLogsConsole.firstChild);
+                        }
+
+                        // Save the old scroll height to adjust scroll position later
+                        const oldScrollHeight = taskLogsConsole.scrollHeight;
+
+                        // Insert older logs
+                        const olderLogs = records.slice().reverse();
+                        const fragment = document.createDocumentFragment();
+                        olderLogs.forEach(log => {
+                            if (renderedLogIds.has(log.id)) return;
+                            renderedLogIds.add(log.id);
+                            const lineDiv = createLogLineElement(log);
+                            fragment.appendChild(lineDiv);
+                        });
+
+                        // Insert fragment at the top
+                        taskLogsConsole.insertBefore(fragment, taskLogsConsole.firstChild);
+
+                        // Adjust scroll position to keep the user's view stable
+                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight - oldScrollHeight;
+                    } else {
+                        showToast(data.message || '加载历史日志失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    if (document.getElementById('logs-loading-older')) {
+                        loadingIndicator.remove();
+                    }
+                    showToast('网络错误，无法加载历史日志');
+                } finally {
+                    isLoadingLogs = false;
+                }
+            }
+
             async function openTaskLogsModal(taskID) {
                 if (!taskID) return;
                 currentLogsTaskId = taskID;
@@ -1551,6 +1683,13 @@
                 logTaskIdTitle.textContent = taskID;
                 taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">正在加载日志...</div>';
                 taskLogsModal.classList.remove('hidden');
+
+                // Reset pagination variables
+                currentLogsPage = 1;
+                hasMoreLogs = true;
+                isLoadingLogs = false;
+                maxLogId = 0;
+                renderedLogIds.clear();
 
                 await fetchLogsForModal(taskID, false);
             }
@@ -1585,11 +1724,19 @@
 
             logsRefreshToggle.addEventListener('change', handleLogsRefreshChange);
 
+            taskLogsConsole.addEventListener('scroll', async () => {
+                // If scroll to top and there's more logs and we're not currently loading
+                if (taskLogsConsole.scrollTop <= 5 && hasMoreLogs && !isLoadingLogs) {
+                    await loadOlderLogs(currentLogsTaskId);
+                }
+            });
+
             function closeLogsModalAction() {
                 stopLogsRefresh();
                 taskLogsModal.classList.add('hidden');
                 taskLogsConsole.innerHTML = '';
                 currentLogsTaskId = null;
+                renderedLogIds.clear();
             }
 
             closeLogsModal.addEventListener('click', closeLogsModalAction);
