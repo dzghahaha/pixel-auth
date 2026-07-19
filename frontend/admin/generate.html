@@ -247,8 +247,7 @@
                         });
 
                         // Proceed to load stats and vendors dropdown
-                        await loadVendorsDropdown();
-                        await loadStats();
+                        await Promise.all([loadVendorsDropdown(), loadStats()]);
 
                         const loader = document.getElementById('page-loader');
                         if (loader) {

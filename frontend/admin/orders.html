@@ -966,10 +966,11 @@
                         });
 
                         applyRoleUI();
+                        const initPromises = [loadOrders()];
                         if (currentUserRole === 'admin') {
-                            await loadCreatorSelector();
+                            initPromises.push(loadCreatorSelector());
                         }
-                        await loadOrders();
+                        await Promise.all(initPromises);
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');

@@ -201,12 +201,11 @@
                             }
                         });
 
+                        await Promise.all([loadVendorsDropdown(), loadCreatorsDropdown()]);
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
                         }
-                        await loadVendorsDropdown();
-                        await loadCreatorsDropdown();
                     } else {
                         window.location.href = '/admin/login.html';
                     }

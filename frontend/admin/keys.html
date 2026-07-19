@@ -253,10 +253,11 @@
                         });
 
                         applyRoleUI();
+                        const initPromises = [loadKeys()];
                         if (role === 'admin') {
-                            await loadCreators();
+                            initPromises.push(loadCreators());
                         }
-                        await loadKeys();
+                        await Promise.all(initPromises);
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
