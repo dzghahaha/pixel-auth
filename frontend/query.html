@@ -51,6 +51,105 @@
         input:checked + .slider-round:before {
             transform: translateX(16px);
         }
+
+        /* Modal Dialog Box */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.hidden {
+            display: none !important;
+        }
+
+        .modal-content {
+            background-color: var(--bg-card);
+            width: 95%;
+            max-width: 520px;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            border: 1px solid var(--border-color);
+            animation: modalSlideUp 0.2s ease-out;
+        }
+
+        @keyframes modalSlideUp {
+            from { transform: translateY(10px) scale(0.98); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--text-primary);
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header .close-btn {
+            cursor: pointer;
+            font-size: 24px;
+            color: var(--text-secondary);
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .modal-header .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 12px;
+        }
+
+        /* Result interactive element styling */
+        .clickable-result {
+            display: inline-block;
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            color: var(--primary);
+            font-weight: 600;
+            border-bottom: 1.5px dotted var(--primary);
+            padding-bottom: 1px;
+            transition: all 0.2s ease;
+            vertical-align: middle;
+        }
+
+        .clickable-result:hover {
+            color: var(--primary-hover);
+            border-bottom-style: solid;
+        }
     </style>
 </head>
 <body>
@@ -140,6 +239,58 @@
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <span class="info-bar-text">如果显示“排队中”，系统会在后台持续为您处理，请稍后刷新</span>
+        </div>
+    </div>
+
+    <!-- 结果详情弹窗 -->
+    <div id="result-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>处理结果详情</span>
+                <span id="close-result-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- 账号和状态 -->
+                <div class="result-details-row" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-highlight); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div>
+                        <span style="font-size: 12px; color: var(--text-secondary); display: block; font-weight: 600; margin-bottom: 2px;">查询账号</span>
+                        <span id="result-modal-username" style="font-weight: 700; font-size: 14px; color: var(--text-primary);">-</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 12px; color: var(--text-secondary); display: block; font-weight: 600; text-align: right; margin-bottom: 2px;">订单状态</span>
+                        <div id="result-modal-status" style="text-align: right;">-</div>
+                    </div>
+                </div>
+
+                <!-- 完整结果内容 -->
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">完整返回结果：</span>
+                    <div id="result-modal-message-container" style="background: var(--bg-highlight); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; font-family: var(--font-mono, 'JetBrains Mono', Courier New, monospace); font-size: 13px; line-height: 1.6; word-break: break-all; white-space: pre-wrap; color: var(--text-primary); max-height: 200px; overflow-y: auto;">
+                        -
+                    </div>
+                </div>
+
+                <!-- 提取的兑换/激活链接 (如果有的话) -->
+                <div id="result-modal-url-section" style="display: none; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 12px; color: var(--success-text); font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                        <!-- 警告图标 SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--success); margin: 0;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        检测到激活/兑换链接：
+                    </span>
+                    <div style="display: flex; gap: 8px; align-items: center; background: var(--success-bg); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 16px;">
+                        <a id="result-modal-url" href="#" target="_blank" style="color: var(--success-text); font-weight: 600; text-decoration: underline; font-size: 13px; word-break: break-all; flex: 1; text-underline-offset: 3px;">-</a>
+                        <button type="button" id="btn-copy-result-url" class="action-btn" style="flex-shrink: 0; background: var(--success); color: #fff; border: none; padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;">复制链接</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" id="btn-copy-result-all" class="action-btn" style="background: var(--primary); color: white; border: 1px solid var(--primary); padding: 8px 16px; font-size: 13px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;">复制完整信息</button>
+                <button type="button" id="btn-close-result-modal" class="back-link-btn" style="margin: 0; padding: 8px 16px; font-size: 13px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; height: auto;">关闭</button>
+            </div>
         </div>
     </div>
 
@@ -337,12 +488,25 @@
                             const finishTime = rec.completed_at ? new Date(rec.completed_at).toLocaleString() : (rec.status === 'cancelled' ? '已取消' : '等待中');
 
                             tr.innerHTML = `
-                                <td class="account-td"><span class="clickable-copy" onclick="copyText(event, '${escapeHtml(rec.username)}')" style="max-width: 120px;">${escapeHtml(rec.username)}</span></td>
+                                <td class="account-td"><span class="clickable-copy" data-copy-text="${escapeHtml(rec.username)}" style="max-width: 120px;">${escapeHtml(rec.username)}</span></td>
                                 <td>${statusTag}</td>
-                                <td class="message-td"><span class="clickable-copy" onclick="copyText(event, '${escapeHtml(rec.message || '-')}')" style="max-width: 180px;">${escapeHtml(rec.message || '-')}</span></td>
+                                <td class="message-td"><span class="clickable-result" style="max-width: 180px;">${escapeHtml(rec.message || '-')}</span></td>
                                 <td class="time-td">${submitTime}</td>
                                 <td class="time-td">${finishTime}</td>
                             `;
+
+                            // Bind username copy click
+                            tr.querySelector('.clickable-copy').addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const text = e.currentTarget.getAttribute('data-copy-text');
+                                copyText(e, text);
+                            });
+
+                            // Bind result modal click
+                            tr.querySelector('.clickable-result').addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                openResultModal(rec.username, rec.status, rec.message || '-', rec.discount_url || '');
+                            });
 
                             // Operations cell (resubmit button for failed 2FA key submissions, cancel button for pending)
                             const actionTd = document.createElement('td');
@@ -494,6 +658,90 @@
                     });
                 }
             });
+
+            // Modal closing actions
+            const resultModal = document.getElementById('result-modal');
+            const closeResultModal = document.getElementById('close-result-modal');
+            const btnCloseResultModal = document.getElementById('btn-close-result-modal');
+
+            function closeResultModalAction() {
+                resultModal.classList.add('hidden');
+            }
+
+            closeResultModal.addEventListener('click', closeResultModalAction);
+            btnCloseResultModal.addEventListener('click', closeResultModalAction);
+
+            window.addEventListener('click', (e) => {
+                if (e.target === resultModal) {
+                    closeResultModalAction();
+                }
+            });
+
+            // Close on ESC
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !resultModal.classList.contains('hidden')) {
+                    closeResultModalAction();
+                }
+            });
+
+            // Extract URL from string
+            function extractUrl(text) {
+                if (!text) return null;
+                const match = text.match(/https?:\/\/[^\s，。；\)\"\']+/i);
+                return match ? match[0] : null;
+            }
+
+            // Open Result Modal
+            window.openResultModal = (username, status, message, discountUrl) => {
+                document.getElementById('result-modal-username').textContent = username;
+                
+                // Status Tag
+                let statusClass = 'status-pending';
+                let statusLabel = '排队中';
+                if (status === 'running') {
+                    statusClass = 'status-running';
+                    statusLabel = '进行中';
+                } else if (status === 'success') {
+                    statusClass = 'status-success';
+                    statusLabel = '成功';
+                } else if (status === 'failed') {
+                    statusClass = 'status-failed';
+                    statusLabel = '失败';
+                } else if (status === 'cancelled') {
+                    statusClass = 'status-cancelled';
+                    statusLabel = '已取消';
+                }
+                document.getElementById('result-modal-status').innerHTML = `<span class="result-status ${statusClass}">${statusLabel}</span>`;
+
+                document.getElementById('result-modal-message-container').textContent = message;
+
+                // URL section
+                const extracted = discountUrl || extractUrl(message);
+                const urlSection = document.getElementById('result-modal-url-section');
+                const urlLink = document.getElementById('result-modal-url');
+                const btnCopyUrl = document.getElementById('btn-copy-result-url');
+
+                if (extracted) {
+                    urlSection.style.display = 'flex';
+                    urlLink.href = extracted;
+                    urlLink.textContent = extracted;
+                    btnCopyUrl.onclick = (e) => {
+                        e.stopPropagation();
+                        copyText(null, extracted);
+                    };
+                } else {
+                    urlSection.style.display = 'none';
+                }
+
+                // Copy all
+                const btnCopyAll = document.getElementById('btn-copy-result-all');
+                btnCopyAll.onclick = (e) => {
+                    e.stopPropagation();
+                    copyText(null, message);
+                };
+
+                resultModal.classList.remove('hidden');
+            };
 
             // Prevent XSS
             function escapeHtml(str) {
