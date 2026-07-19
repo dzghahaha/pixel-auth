@@ -798,7 +798,7 @@
                 <span id="close-logs-modal" class="close-btn">&times;</span>
             </div>
             <div class="modal-body" style="padding: 16px;">
-                <div id="task-logs-console" style="background: #0f172a; color: #e2e8f0; font-family: var(--font-mono, 'JetBrains Mono', Courier New, monospace); padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; overflow-y: auto; height: 420px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.8); border: 1px solid #1e293b;">
+                <div id="task-logs-console" style="background: #0f172a; color: #e2e8f0; font-family: var(--font-mono, 'JetBrains Mono', Courier New, monospace); padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; overflow-y: auto; height: 420px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.8); border: 1px solid #1e293b; overflow-anchor: none;">
                     <!-- 动态加载 -->
                 </div>
             </div>
@@ -1741,7 +1741,7 @@
 
             taskLogsConsole.addEventListener('scroll', async () => {
                 // If scroll to top and there's more logs and we're not currently loading
-                if (taskLogsConsole.scrollTop <= 5 && hasMoreLogs && !isLoadingLogs) {
+                if (taskLogsConsole.scrollTop <= 50 && hasMoreLogs && !isLoadingLogs) {
                     await loadOlderLogs(currentLogsTaskId);
                 }
             });
