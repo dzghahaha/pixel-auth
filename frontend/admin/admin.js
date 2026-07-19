@@ -36,38 +36,9 @@ window.hidePageLoader = function() {
     }
 };
 
-// Global Fetch Interceptor for progress spinner overlay
+// Global Fetch Interceptor (disabled page-loader overlay on queries to prevent double spinners)
 (function() {
-    const originalFetch = window.fetch;
-    let activeRequestsCount = 0;
-
-    window.fetch = async function(...args) {
-        const url = args[0];
-        const isBackground = typeof url === 'string' && (
-            url.includes('/api/pay/query') || 
-            url.includes('/api/admin/check') ||
-            url.includes('/api/admin/logs')
-        );
-
-        if (!isBackground) {
-            activeRequestsCount++;
-            window.showPageLoader();
-        }
-
-        try {
-            return await originalFetch(...args);
-        } catch (error) {
-            throw error;
-        } finally {
-            if (!isBackground) {
-                activeRequestsCount--;
-                if (activeRequestsCount <= 0) {
-                    activeRequestsCount = 0;
-                    window.hidePageLoader();
-                }
-            }
-        }
-    };
+    // Custom global fetch interception can be placed here if needed in the future
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
