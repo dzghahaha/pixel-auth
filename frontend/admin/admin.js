@@ -45,7 +45,8 @@ window.hidePageLoader = function() {
         const url = args[0];
         const isBackground = typeof url === 'string' && (
             url.includes('/api/pay/query') || 
-            url.includes('/api/admin/check')
+            url.includes('/api/admin/check') ||
+            url.includes('/api/admin/logs')
         );
 
         if (!isBackground) {
