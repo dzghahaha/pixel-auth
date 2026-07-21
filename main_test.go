@@ -2852,5 +2852,39 @@ func Test2FAValidation(t *testing.T) {
 	}
 }
 
+func TestKeyTierPricesCalculation(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Set key_price and key_tier_prices in DB
+	now := time.Now()
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('key_price', '10.00', ?) ON DUPLICATE KEY UPDATE setting_value = '10.00'", now)
+	tierJSON := `[{"min_qty":10,"price":8.50},{"min_qty":50,"price":7.00}]`
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('key_tier_prices', ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?", tierJSON, now, tierJSON)
+
+	// 2. Test calculateKeyUnitPrice logic
+	if price := calculateKeyUnitPrice(1); price != 10.00 {
+		t.Errorf("expected price 10.00 for qty=1, got %.2f", price)
+	}
+	if price := calculateKeyUnitPrice(5); price != 10.00 {
+		t.Errorf("expected price 10.00 for qty=5, got %.2f", price)
+	}
+	if price := calculateKeyUnitPrice(10); price != 8.50 {
+		t.Errorf("expected price 8.50 for qty=10, got %.2f", price)
+	}
+	if price := calculateKeyUnitPrice(30); price != 8.50 {
+		t.Errorf("expected price 8.50 for qty=30, got %.2f", price)
+	}
+	if price := calculateKeyUnitPrice(50); price != 7.00 {
+		t.Errorf("expected price 7.00 for qty=50, got %.2f", price)
+	}
+	if price := calculateKeyUnitPrice(100); price != 7.00 {
+		t.Errorf("expected price 7.00 for qty=100, got %.2f", price)
+	}
+}
+
 
 

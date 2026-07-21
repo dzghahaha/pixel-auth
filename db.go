@@ -341,6 +341,7 @@ func createTables() {
 		"epay_wx_channel":         "201906181353",
 		"epay_alipay_channel":     "",
 		"key_price":               "9.99",
+		"key_tier_prices":         "[]",
 		"deard_convert_open":      "off",
 		"log_cleanup_open":        "off",
 		"log_cleanup_days":        "30",

@@ -65,10 +65,6 @@
                     <input type="text" id="setting-two-factor-url" placeholder="请输入教程 URL 链接" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
                 </div>
                 <div>
-                    <label for="setting-key-price" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">卡密销售单价 (元)</label>
-                    <input type="number" step="0.01" min="0.01" id="setting-key-price" placeholder="请输入卡密单价，例如：9.99" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                </div>
-                <div>
                     <label for="setting-deard-convert-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">deard 卡密自动转换开关</label>
                     <select id="setting-deard-convert-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
                         <option value="on">开启 (ON)</option>
@@ -77,6 +73,43 @@
                     <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">开启后，用户提交 deard (ai.deard.fun) 厂商卡密时，系统将自动从数据库挑选一个有积分的 pass.aisale.one 第三方卡密并转换绑定。</span>
                 </div>
                 <button type="button" id="btn-save-settings" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存配置</button>
+            </div>
+        </div>
+
+        <!-- 卡密价格与阶梯梯度设置 -->
+        <div class="card settings-container" style="margin-top: 20px;">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+                <div class="card-title-group">
+                    <span class="card-title">卡密价格设置</span>
+                    <span class="card-subtitle">设置卡密的基础售卖单价与按购买数量梯度的阶梯优惠价格</span>
+                </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label for="setting-key-price" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">基础卡密单价 (元/张)</label>
+                    <input type="number" step="0.01" min="0.01" id="setting-key-price" placeholder="请输入卡密基础单价，例如：9.99" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">未达到任何阶梯门槛时的默认单价。</span>
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary);">阶梯价格配置 (按购买数量优惠)</label>
+                        <button type="button" id="btn-add-tier-row" style="padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--primary); background: var(--primary-light); border: 1px dashed var(--primary); border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            添加价格阶梯
+                        </button>
+                    </div>
+                    
+                    <div id="tier-prices-wrapper" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                        <div id="tier-prices-empty" style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 12px 0;">
+                            暂未设置阶梯价格（默认全部按基础单价计费）
+                        </div>
+                        <div id="tier-prices-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                    </div>
+                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; display: block;">规则说明：用户购买数量 ≥ 门槛张数时，享有对应优惠单价。系统将自动匹配满足条件的最大门槛。</span>
+                </div>
+
+                <button type="button" id="btn-save-price-settings" class="btn-submit" style="white-space: nowrap; width: 140px; align-self: flex-end;">保存价格配置</button>
             </div>
         </div>
 
@@ -195,6 +228,71 @@
             const settingLogCleanupDays = document.getElementById('setting-log-cleanup-days');
             const btnSaveLogCleanup = document.getElementById('btn-save-log-cleanup');
 
+            const btnSavePriceSettings = document.getElementById('btn-save-price-settings');
+            const btnAddTierRow = document.getElementById('btn-add-tier-row');
+            const tierPricesEmpty = document.getElementById('tier-prices-empty');
+            const tierPricesList = document.getElementById('tier-prices-list');
+
+            let tierPricesData = [];
+
+            function renderTierPrices() {
+                if (!tierPricesList) return;
+                tierPricesList.innerHTML = '';
+                if (!tierPricesData || tierPricesData.length === 0) {
+                    if (tierPricesEmpty) tierPricesEmpty.style.display = 'block';
+                    return;
+                }
+                if (tierPricesEmpty) tierPricesEmpty.style.display = 'none';
+
+                tierPricesData.sort((a, b) => a.min_qty - b.min_qty);
+
+                tierPricesData.forEach((item, index) => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display: flex; align-items: center; gap: 10px; background: #ffffff; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);';
+                    row.innerHTML = `
+                        <span style="font-size: 13px; color: var(--text-secondary); white-space: nowrap; font-weight: 500;">购买数量 ≥</span>
+                        <input type="number" min="1" class="tier-min-qty" value="${item.min_qty}" placeholder="如 10" style="padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100px;">
+                        <span style="font-size: 13px; color: var(--text-secondary); white-space: nowrap;">张 时，单价：</span>
+                        <input type="number" step="0.01" min="0.01" class="tier-price" value="${item.price}" placeholder="如 8.50" style="padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100px;">
+                        <span style="font-size: 13px; color: var(--text-secondary); white-space: nowrap;">元/张</span>
+                        <button type="button" class="btn-remove-tier" data-index="${index}" style="margin-left: auto; padding: 4px 10px; font-size: 12px; color: var(--danger); background: transparent; border: 1px solid var(--danger); border-radius: 4px; cursor: pointer; transition: all 0.2s;">删除</button>
+                    `;
+
+                    row.querySelector('.tier-min-qty').addEventListener('input', (e) => {
+                        const val = parseInt(e.target.value);
+                        tierPricesData[index].min_qty = isNaN(val) ? 0 : val;
+                    });
+                    row.querySelector('.tier-price').addEventListener('input', (e) => {
+                        const val = parseFloat(e.target.value);
+                        tierPricesData[index].price = isNaN(val) ? 0 : val;
+                    });
+                    row.querySelector('.btn-remove-tier').addEventListener('click', () => {
+                        tierPricesData.splice(index, 1);
+                        renderTierPrices();
+                    });
+
+                    tierPricesList.appendChild(row);
+                });
+            }
+
+            if (btnAddTierRow) {
+                btnAddTierRow.addEventListener('click', () => {
+                    let nextQty = 10;
+                    if (tierPricesData.length > 0) {
+                        const maxQty = Math.max(...tierPricesData.map(t => t.min_qty));
+                        nextQty = maxQty >= 10 ? maxQty + 10 : 10;
+                    }
+                    tierPricesData.push({ min_qty: nextQty, price: 8.50 });
+                    renderTierPrices();
+                });
+            }
+
+            function getSerializedTierPrices() {
+                const valid = tierPricesData.filter(t => t.min_qty > 0 && t.price > 0);
+                valid.sort((a, b) => a.min_qty - b.min_qty);
+                return JSON.stringify(valid);
+            }
+
             // Toast helper
             function showToast(message, duration = 2000) {
                 toast.textContent = message;
@@ -274,6 +372,18 @@
 
                         settingLogCleanupOpen.value = data.settings.log_cleanup_open || 'off';
                         settingLogCleanupDays.value = data.settings.log_cleanup_days || '30';
+
+                        if (data.settings.key_tier_prices) {
+                            try {
+                                tierPricesData = JSON.parse(data.settings.key_tier_prices);
+                                if (!Array.isArray(tierPricesData)) tierPricesData = [];
+                            } catch (e) {
+                                tierPricesData = [];
+                            }
+                        } else {
+                            tierPricesData = [];
+                        }
+                        renderTierPrices();
                     } else {
                         showToast(data.message || '获取配置失败');
                     }
@@ -287,6 +397,7 @@
             async function saveAllSettings() {
                 const tutorialVal = settingTwoFactorUrl.value.trim();
                 const keyPriceVal = settingKeyPrice.value.trim();
+                const tierPricesJson = getSerializedTierPrices();
                 const deardConvertOpenVal = settingDeardConvertOpen.value;
                 const epayUrlVal = settingEpayUrl.value.trim();
                 const epayPidVal = settingEpayPid.value.trim();
@@ -326,11 +437,13 @@
 
                 btnSaveSettings.disabled = true;
                 btnSaveEpay.disabled = true;
+                if (btnSavePriceSettings) btnSavePriceSettings.disabled = true;
                 if (btnSaveApi) btnSaveApi.disabled = true;
                 if (btnSaveLogCleanup) btnSaveLogCleanup.disabled = true;
                 
                 btnSaveSettings.textContent = '保存中...';
                 btnSaveEpay.textContent = '保存中...';
+                if (btnSavePriceSettings) btnSavePriceSettings.textContent = '保存中...';
                 if (btnSaveApi) btnSaveApi.textContent = '保存中...';
                 if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存中...';
 
@@ -341,6 +454,7 @@
                         body: JSON.stringify({
                             two_factor_tutorial_url: tutorialVal,
                             key_price: keyPriceVal,
+                            key_tier_prices: tierPricesJson,
                             deard_convert_open: deardConvertOpenVal,
                             epay_url: epayUrlVal,
                             epay_pid: epayPidVal,
@@ -366,11 +480,13 @@
                 } finally {
                     btnSaveSettings.disabled = false;
                     btnSaveEpay.disabled = false;
+                    if (btnSavePriceSettings) btnSavePriceSettings.disabled = false;
                     if (btnSaveApi) btnSaveApi.disabled = false;
                     if (btnSaveLogCleanup) btnSaveLogCleanup.disabled = false;
                     
                     btnSaveSettings.textContent = '保存配置';
                     btnSaveEpay.textContent = '保存支付配置';
+                    if (btnSavePriceSettings) btnSavePriceSettings.textContent = '保存价格配置';
                     if (btnSaveApi) btnSaveApi.textContent = '保存 API 配置';
                     if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存日志配置';
                 }
@@ -379,6 +495,9 @@
             // Save settings events
             if (btnSaveSettings) {
                 btnSaveSettings.addEventListener('click', saveAllSettings);
+            }
+            if (btnSavePriceSettings) {
+                btnSavePriceSettings.addEventListener('click', saveAllSettings);
             }
             if (btnSaveEpay) {
                 btnSaveEpay.addEventListener('click', saveAllSettings);

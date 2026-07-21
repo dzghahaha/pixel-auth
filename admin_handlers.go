@@ -1535,6 +1535,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"epay_wx_channel":         getSetting("epay_wx_channel", "201906181353"),
 				"epay_alipay_channel":     getSetting("epay_alipay_channel", ""),
 				"key_price":               getSetting("key_price", "9.99"),
+				"key_tier_prices":         getSetting("key_tier_prices", "[]"),
 				"api_open":                getSetting("api_open", "off"),
 				"api_base_url":            getSetting("api_base_url", ""),
 				"api_whitelist":           getSetting("api_whitelist", ""),
@@ -1552,6 +1553,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			EpayWxChannel        string `json:"epay_wx_channel"`
 			EpayAlipayChannel    string `json:"epay_alipay_channel"`
 			KeyPrice             string `json:"key_price"`
+			KeyTierPrices        string `json:"key_tier_prices"`
 			APIOpen              string `json:"api_open"`
 			APIBaseURL           string `json:"api_base_url"`
 			APIWhitelist         string `json:"api_whitelist"`
@@ -1575,6 +1577,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		oldWx := getSetting("epay_wx_channel", "201906181353")
 		oldAlipay := getSetting("epay_alipay_channel", "")
 		oldPrice := getSetting("key_price", "9.99")
+		oldTierPrices := getSetting("key_tier_prices", "[]")
 		oldAPIOpen := getSetting("api_open", "off")
 		oldAPIBaseURL := getSetting("api_base_url", "")
 		oldLogCleanupOpen := getSetting("log_cleanup_open", "off")
@@ -1600,6 +1603,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.KeyPrice == "" {
 			req.KeyPrice = oldPrice
+		}
+		if req.KeyTierPrices == "" {
+			req.KeyTierPrices = oldTierPrices
 		}
 		if req.APIOpen == "" {
 			req.APIOpen = oldAPIOpen
@@ -1627,6 +1633,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"epay_wx_channel":         req.EpayWxChannel,
 			"epay_alipay_channel":     req.EpayAlipayChannel,
 			"key_price":               req.KeyPrice,
+			"key_tier_prices":         req.KeyTierPrices,
 			"api_open":                req.APIOpen,
 			"api_base_url":            req.APIBaseURL,
 			"api_whitelist":           req.APIWhitelist,

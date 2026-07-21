@@ -294,6 +294,46 @@ func releaseKeysForOrder(outTradeNo string) error {
 	return tx.Commit()
 }
 
+type KeyTierPrice struct {
+	MinQty int     `json:"min_qty"`
+	Price  float64 `json:"price"`
+}
+
+func getKeyTierPrices() []KeyTierPrice {
+	tierPricesStr := getSetting("key_tier_prices", "[]")
+	var tiers []KeyTierPrice
+	if err := json.Unmarshal([]byte(tierPricesStr), &tiers); err != nil {
+		return nil
+	}
+	var validTiers []KeyTierPrice
+	for _, t := range tiers {
+		if t.MinQty > 0 && t.Price > 0 {
+			validTiers = append(validTiers, t)
+		}
+	}
+	sort.Slice(validTiers, func(i, j int) bool {
+		return validTiers[i].MinQty > validTiers[j].MinQty
+	})
+	return validTiers
+}
+
+func calculateKeyUnitPrice(qty int) float64 {
+	basePriceStr := getSetting("key_price", "9.99")
+	var basePrice float64
+	fmt.Sscanf(basePriceStr, "%f", &basePrice)
+	if basePrice <= 0 {
+		basePrice = 9.99
+	}
+
+	tiers := getKeyTierPrices()
+	for _, t := range tiers {
+		if qty >= t.MinQty {
+			return t.Price
+		}
+	}
+	return basePrice
+}
+
 func handleGetPayConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -308,10 +348,13 @@ func handleGetPayConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		stock = 0
 	}
-	
+
+	tiers := getKeyTierPrices()
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":             true,
 		"key_price":           keyPrice,
+		"key_tier_prices":     tiers,
 		"stock":               stock,
 		"epay_wx_channel":     wxChannel,
 		"epay_alipay_channel": alipayChannel,
@@ -365,13 +408,8 @@ func handlePayBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	priceStr := getSetting("key_price", "9.99")
-	var price float64
-	fmt.Sscanf(priceStr, "%f", &price)
-	if price <= 0 {
-		price = 9.99
-	}
-	totalAmount := price * float64(req.Quantity)
+	unitPrice := calculateKeyUnitPrice(req.Quantity)
+	totalAmount := unitPrice * float64(req.Quantity)
 	totalAmountStr := fmt.Sprintf("%.2f", totalAmount)
 
 	outTradeNo := fmt.Sprintf("KP%d%04d", time.Now().Unix(), time.Now().Nanosecond()%10000)
@@ -422,7 +460,7 @@ func handlePayBuy(w http.ResponseWriter, r *http.Request) {
 	res, errInsert := tx.Exec(`
 		INSERT INTO key_orders (out_trade_no, status, quantity, price, total_amount, pay_type, creator_id, created_at, updated_at) 
 		VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
-		outTradeNo, req.Quantity, price, totalAmountStr, req.Type, adminID, now, now)
+		outTradeNo, req.Quantity, unitPrice, totalAmountStr, req.Type, adminID, now, now)
 	if errInsert != nil {
 		log.Printf("Failed to insert key_order: %v\n", errInsert)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
