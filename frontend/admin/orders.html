@@ -5,8 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台订单管理 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css?v=1.0.2">
-    <script src="./admin.js?v=1.0.2"></script>
+    <script src="./admin.js?v=1.0.7"></script>
     <style>
+        /* Force hide native selects inside custom wrappers */
+        .custom-select select {
+            display: none !important;
+        }
+
+        /* Switch Toggle */
+        .switch-toggle {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+
+        .switch-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-round {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-color, #cbd5e1);
+            transition: .3s;
+            border-radius: 20px;
+        }
+
+        .slider-round:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+
+        input:checked + .slider-round {
+            background-color: var(--primary, #4f46e5);
+        }
+
+        input:checked + .slider-round:before {
+            transform: translateX(16px);
+        }
+
+        /* Pulse Animation */
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
         /* Search Panel */
         .search-combo {
             display: flex;
@@ -480,6 +536,9 @@
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
                 </select>
+                <select id="filter-creator" class="status-select admin-only">
+                    <option value="">所有创建人</option>
+                </select>
                 <!-- Premium Custom Datepicker Component -->
                 <div class="datepicker-wrapper" id="datepicker-wrapper">
                     <!-- The Trigger (displays current selection) -->
@@ -738,24 +797,24 @@
                 <span>任务执行日志 (任务ID: <span id="log-task-id-title">-</span>)</span>
                 <span id="close-logs-modal" class="close-btn">&times;</span>
             </div>
-            <div class="modal-body" style="padding: 16px; max-height: 480px; overflow-y: auto;">
-                <div class="table-container" style="border: 1px solid var(--slate-200); border-radius: 8px;">
-                    <table class="inner-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 170px;">时间</th>
-                                <th style="width: 85px;">级别</th>
-                                <th>日志内容</th>
-                            </tr>
-                        </thead>
-                        <tbody id="task-logs-table-body">
-                            <!-- 动态加载 -->
-                        </tbody>
-                    </table>
+            <div class="modal-body" style="padding: 16px;">
+                <div id="task-logs-console" style="background: #0f172a; color: #e2e8f0; font-family: var(--font-mono, 'JetBrains Mono', Courier New, monospace); padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; overflow-y: auto; height: 420px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.8); border: 1px solid #1e293b; overflow-anchor: none;">
+                    <!-- 动态加载 -->
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" id="btn-close-logs-modal" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">关闭</button>
+            <div class="modal-footer" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+                <span id="logs-refresh-status" style="font-size: 11px; color: var(--success); font-weight: 600; display: none; align-items: center; gap: 4px; margin-right: auto;">
+                    <span style="display: inline-block; width: 6px; height: 6px; background-color: var(--success); border-radius: 50%; animation: pulse 1.5s infinite;"></span>
+                    正在实时查询...
+                </span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">实时查询</span>
+                    <label class="switch-toggle">
+                        <input type="checkbox" id="logs-refresh-toggle">
+                        <span class="slider-round"></span>
+                    </label>
+                </div>
+                <button type="button" id="btn-close-logs-modal" class="btn-cancel" style="padding: 8px 16px; font-size: 13px; margin-left: 8px;">关闭</button>
             </div>
         </div>
     </div>
@@ -793,6 +852,7 @@
             const searchOriginalKey = document.getElementById('search-original-key');
             const searchNote = document.getElementById('search-note');
             const statusSelect = document.getElementById('filter-status');
+            const creatorSelect = document.getElementById('filter-creator');
             const filterStartTime = document.getElementById('filter-start-time');
             const filterEndTime = document.getElementById('filter-end-time');
             const btnSearch = document.getElementById('btn-search');
@@ -906,7 +966,11 @@
                         });
 
                         applyRoleUI();
-                        await loadOrders();
+                        const initPromises = [loadOrders()];
+                        if (currentUserRole === 'admin') {
+                            initPromises.push(loadCreatorSelector());
+                        }
+                        await Promise.all(initPromises);
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -917,6 +981,27 @@
                 } catch (e) {
                     console.error(e);
                     window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Load admin users list for filter selector (only for admin role)
+            async function loadCreatorSelector() {
+                if (currentUserRole !== 'admin') return;
+                try {
+                    const res = await fetch('/api/admin/users/selector');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        creatorSelect.innerHTML = '<option value="">所有创建人</option>';
+                        const users = data.users || [];
+                        users.forEach(u => {
+                            const option = document.createElement('option');
+                            option.value = u.id;
+                            option.textContent = u.nickname ? `${u.nickname} (${u.username})` : u.username;
+                            creatorSelect.appendChild(option);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to load creators list for filter selector:', e);
                 }
             }
 
@@ -935,6 +1020,7 @@
                 const originalKeyVal = searchOriginalKey.value.trim();
                 const noteVal = searchNote.value.trim();
                 const statusVal = statusSelect.value;
+                const creatorVal = creatorSelect ? creatorSelect.value : '';
 
                 let startTimeVal = '';
                 let endTimeVal = '';
@@ -953,7 +1039,7 @@
                 }
 
                 try {
-                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}&start_time=${startTimeVal}&end_time=${endTimeVal}`;
+                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}&start_time=${startTimeVal}&end_time=${endTimeVal}&creator_id=${creatorVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -1392,55 +1478,288 @@
             const closeLogsModal = document.getElementById('close-logs-modal');
             const btnCloseLogsModal = document.getElementById('btn-close-logs-modal');
             const logTaskIdTitle = document.getElementById('log-task-id-title');
-            const taskLogsTableBody = document.getElementById('task-logs-table-body');
+            const taskLogsConsole = document.getElementById('task-logs-console');
+            const logsRefreshToggle = document.getElementById('logs-refresh-toggle');
+            const logsRefreshStatus = document.getElementById('logs-refresh-status');
+            let logsRefreshInterval = null;
+            let currentLogsTaskId = null;
+            let currentLogsPage = 1;
+            let hasMoreLogs = true;
+            let isLoadingLogs = false;
+            let maxLogId = 0;
+            const renderedLogIds = new Set();
 
-            async function openTaskLogsModal(taskID) {
+            function createLogLineElement(log) {
+                let levelColor = '#38bdf8'; // Default Info (Light blue)
+                const lowerLevel = (log.level || '').toLowerCase();
+                if (lowerLevel === 'error') {
+                    levelColor = '#f87171'; // Red
+                } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
+                    levelColor = '#facc15'; // Yellow
+                } else if (lowerLevel === 'success') {
+                    levelColor = '#4ade80'; // Green
+                }
+
+                const lineDiv = document.createElement('div');
+                lineDiv.style.marginBottom = '6px';
+                lineDiv.style.whiteSpace = 'pre-wrap';
+                lineDiv.style.wordBreak = 'break-all';
+                lineDiv.style.display = 'flex';
+                lineDiv.style.gap = '8px';
+                lineDiv.style.alignItems = 'flex-start';
+
+                lineDiv.innerHTML = `
+                    <span style="color: #64748b; flex-shrink: 0; user-select: none;">[${formatDate(log.created_at)}]</span>
+                    <span style="color: ${levelColor}; font-weight: bold; flex-shrink: 0; user-select: none;">[${log.level}]</span>
+                    <span style="color: #e2e8f0;"></span>
+                `;
+                lineDiv.querySelector('span:last-child').textContent = log.message || '';
+                return lineDiv;
+            }
+
+            async function fetchLogsForModal(taskID, isAutoRefresh = false) {
                 if (!taskID) return;
-                logTaskIdTitle.textContent = taskID;
-                taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--slate-400);">正在加载日志...</td></tr>';
-                taskLogsModal.classList.remove('hidden');
-
                 try {
+                    console.log('fetchLogsForModal called:', { taskID, isAutoRefresh });
                     const res = await fetch(`/api/admin/logs?page=1&page_size=100&task_id=${encodeURIComponent(taskID)}`);
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        const logs = data.records || [];
-                        if (logs.length === 0) {
-                            taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--slate-400);">无运行日志</td></tr>';
+                        const records = data.records || [];
+                        console.log('fetchLogsForModal success, records count:', records.length);
+                        
+                        if (isAutoRefresh) {
+                            const newRecords = records.filter(log => log.id > maxLogId);
+                            if (newRecords.length > 0) {
+                                if (taskLogsConsole.innerHTML.includes('无运行日志') || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('加载失败')) {
+                                    taskLogsConsole.innerHTML = '';
+                                }
+
+                                const isNearBottom = taskLogsConsole.scrollHeight - taskLogsConsole.clientHeight - taskLogsConsole.scrollTop < 50;
+                                
+                                const newLogs = newRecords.slice().reverse();
+                                const fragment = document.createDocumentFragment();
+                                newLogs.forEach(log => {
+                                    if (renderedLogIds.has(log.id)) return;
+                                    renderedLogIds.add(log.id);
+                                    if (log.id > maxLogId) {
+                                        maxLogId = log.id;
+                                    }
+                                    const lineDiv = createLogLineElement(log);
+                                    fragment.appendChild(lineDiv);
+                                });
+
+                                taskLogsConsole.appendChild(fragment);
+
+                                if (isNearBottom) {
+                                    requestAnimationFrame(() => {
+                                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                                    });
+                                }
+                            }
                             return;
                         }
 
-                        taskLogsTableBody.innerHTML = '';
-                        logs.forEach(log => {
-                            const tr = document.createElement('tr');
-                            
-                            let levelBadgeClass = 'badge-info';
-                            const lowerLevel = (log.level || '').toLowerCase();
-                            if (lowerLevel === 'error') {
-                                levelBadgeClass = 'badge-error';
-                            } else if (lowerLevel === 'warn' || lowerLevel === 'warning') {
-                                levelBadgeClass = 'badge-warn';
-                            }
+                        // Initial load
+                        taskLogsConsole.innerHTML = '';
+                        renderedLogIds.clear();
+                        if (records.length === 0) {
+                            taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">无运行日志</div>';
+                            maxLogId = 0;
+                            hasMoreLogs = false;
+                            console.log('No records found, hasMoreLogs set to false');
+                            return;
+                        }
 
-                            tr.innerHTML = `
-                                <td style="font-size:11px; padding:8px 12px; color:var(--slate-400);">${formatDate(log.created_at)}</td>
-                                <td style="padding:8px 12px;"><span class="${levelBadgeClass}">${log.level}</span></td>
-                                <td class="message-cell" style="padding:8px 12px; font-size:12px;">${log.message || ''}</td>
-                            `;
-                            taskLogsTableBody.appendChild(tr);
+                        maxLogId = records[0].id;
+                        if (records.length < 100) {
+                            hasMoreLogs = false;
+                        } else {
+                            hasMoreLogs = true;
+                        }
+                        console.log('Initial load completed, maxLogId:', maxLogId, 'hasMoreLogs:', hasMoreLogs);
+
+                        const logs = records.slice().reverse();
+                        const fragment = document.createDocumentFragment();
+                        logs.forEach(log => {
+                            if (renderedLogIds.has(log.id)) return;
+                            renderedLogIds.add(log.id);
+                            const lineDiv = createLogLineElement(log);
+                            fragment.appendChild(lineDiv);
+                        });
+                        taskLogsConsole.appendChild(fragment);
+
+                        // Use requestAnimationFrame to ensure layout is complete before setting scrollTop
+                        requestAnimationFrame(() => {
+                            taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight;
+                            console.log('Initial scroll set to bottom:', taskLogsConsole.scrollTop, 'scrollHeight:', taskLogsConsole.scrollHeight);
                         });
                     } else {
-                        taskLogsTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--danger);">${data.message || '加载失败'}</td></tr>`;
+                        if (!isAutoRefresh || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('无运行日志')) {
+                            taskLogsConsole.innerHTML = `<div style="text-align:center; padding:16px; color:var(--danger);">${data.message || '加载失败'}</div>`;
+                        }
                     }
                 } catch (e) {
                     console.error(e);
-                    taskLogsTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--danger);">网络错误，加载失败</td></tr>';
+                    if (!isAutoRefresh || taskLogsConsole.innerHTML.includes('正在加载') || taskLogsConsole.innerHTML.includes('无运行日志')) {
+                        taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:var(--danger);">网络错误，加载失败</div>';
+                    }
                 }
             }
 
+            async function loadOlderLogs(taskID) {
+                console.log('loadOlderLogs called:', { taskID, currentLogsPage, hasMoreLogs, isLoadingLogs });
+                if (!taskID || !hasMoreLogs || isLoadingLogs) return;
+                isLoadingLogs = true;
+
+                // Create a temporary loading indicator and prepend it to console
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.id = 'logs-loading-older';
+                loadingIndicator.style.textAlign = 'center';
+                loadingIndicator.style.padding = '8px';
+                loadingIndicator.style.color = '#64748b';
+                loadingIndicator.style.fontSize = '12px';
+                loadingIndicator.textContent = '正在加载历史日志...';
+                taskLogsConsole.insertBefore(loadingIndicator, taskLogsConsole.firstChild);
+
+                try {
+                    const nextPage = currentLogsPage + 1;
+                    console.log('Fetching older logs for page:', nextPage);
+                    const res = await fetch(`/api/admin/logs?page=${nextPage}&page_size=100&task_id=${encodeURIComponent(taskID)}`);
+                    const data = await res.json();
+                    
+                    // Remove loading indicator
+                    if (document.getElementById('logs-loading-older')) {
+                        loadingIndicator.remove();
+                    }
+
+                    if (res.ok && data.success) {
+                        const records = data.records || [];
+                        console.log('loadOlderLogs page', nextPage, 'returned records:', records.length);
+                        if (records.length === 0) {
+                            hasMoreLogs = false;
+                            console.log('No more records returned from page', nextPage, 'hasMoreLogs set to false');
+                            
+                            // Prepend a "no more historical logs" indicator
+                            const endIndicator = document.createElement('div');
+                            endIndicator.style.textAlign = 'center';
+                            endIndicator.style.padding = '8px';
+                            endIndicator.style.color = '#475569';
+                            endIndicator.style.fontSize = '11px';
+                            endIndicator.textContent = '已加载全部历史日志';
+                            taskLogsConsole.insertBefore(endIndicator, taskLogsConsole.firstChild);
+                            return;
+                        }
+
+                        currentLogsPage = nextPage;
+                        if (records.length < 100) {
+                            hasMoreLogs = false;
+                            console.log('Returned records less than 100, hasMoreLogs set to false');
+                            // Prepend "no more historical logs" indicator
+                            const endIndicator = document.createElement('div');
+                            endIndicator.style.textAlign = 'center';
+                            endIndicator.style.padding = '8px';
+                            endIndicator.style.color = '#475569';
+                            endIndicator.style.fontSize = '11px';
+                            endIndicator.textContent = '已加载全部历史日志';
+                            taskLogsConsole.insertBefore(endIndicator, taskLogsConsole.firstChild);
+                        }
+
+                        // Save the old scroll height to adjust scroll position later
+                        const oldScrollHeight = taskLogsConsole.scrollHeight;
+
+                        // Insert older logs
+                        const olderLogs = records.slice().reverse();
+                        const fragment = document.createDocumentFragment();
+                        olderLogs.forEach(log => {
+                            if (renderedLogIds.has(log.id)) return;
+                            renderedLogIds.add(log.id);
+                            const lineDiv = createLogLineElement(log);
+                            fragment.appendChild(lineDiv);
+                        });
+
+                        // Insert fragment at the top
+                        taskLogsConsole.insertBefore(fragment, taskLogsConsole.firstChild);
+
+                        // Adjust scroll position to keep the user's view stable
+                        taskLogsConsole.scrollTop = taskLogsConsole.scrollHeight - oldScrollHeight;
+                        console.log('Prepend older logs success. oldScrollHeight:', oldScrollHeight, 'newScrollHeight:', taskLogsConsole.scrollHeight, 'newScrollTop:', taskLogsConsole.scrollTop);
+                    } else {
+                        showToast(data.message || '加载历史日志失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    if (document.getElementById('logs-loading-older')) {
+                        loadingIndicator.remove();
+                    }
+                    showToast('网络错误，无法加载历史日志');
+                } finally {
+                    isLoadingLogs = false;
+                    console.log('loadOlderLogs finished. isLoadingLogs set to false');
+                }
+            }
+
+            async function openTaskLogsModal(taskID) {
+                if (!taskID) return;
+                currentLogsTaskId = taskID;
+                stopLogsRefresh();
+                
+                logTaskIdTitle.textContent = taskID;
+                taskLogsConsole.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">正在加载日志...</div>';
+                taskLogsModal.classList.remove('hidden');
+
+                // Reset pagination variables
+                currentLogsPage = 1;
+                hasMoreLogs = true;
+                isLoadingLogs = false;
+                maxLogId = 0;
+                renderedLogIds.clear();
+
+                await fetchLogsForModal(taskID, false);
+            }
+
+            function startLogsRefresh(taskID) {
+                if (!taskID) return;
+                logsRefreshToggle.checked = true;
+                logsRefreshStatus.style.display = 'inline-flex';
+                
+                fetchLogsForModal(taskID, true);
+                logsRefreshInterval = setInterval(() => {
+                    fetchLogsForModal(taskID, true);
+                }, 3000);
+            }
+
+            function stopLogsRefresh() {
+                if (logsRefreshInterval) {
+                    clearInterval(logsRefreshInterval);
+                    logsRefreshInterval = null;
+                }
+                logsRefreshToggle.checked = false;
+                logsRefreshStatus.style.display = 'none';
+            }
+
+            function handleLogsRefreshChange() {
+                if (logsRefreshToggle.checked) {
+                    startLogsRefresh(currentLogsTaskId);
+                } else {
+                    stopLogsRefresh();
+                }
+            }
+
+            logsRefreshToggle.addEventListener('change', handleLogsRefreshChange);
+
+            taskLogsConsole.addEventListener('scroll', async () => {
+                // If scroll to top and there's more logs and we're not currently loading
+                if (taskLogsConsole.scrollTop <= 50 && hasMoreLogs && !isLoadingLogs) {
+                    await loadOlderLogs(currentLogsTaskId);
+                }
+            });
+
             function closeLogsModalAction() {
+                stopLogsRefresh();
                 taskLogsModal.classList.add('hidden');
-                taskLogsTableBody.innerHTML = '';
+                taskLogsConsole.innerHTML = '';
+                currentLogsTaskId = null;
+                renderedLogIds.clear();
             }
 
             closeLogsModal.addEventListener('click', closeLogsModalAction);

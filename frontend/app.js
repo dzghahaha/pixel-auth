@@ -113,6 +113,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
+    // Check if the Google account email is a personal Google account
+    function isPersonalGoogleEmail(email) {
+        if (!email) return false;
+        const trimmed = email.trim();
+        if (!trimmed.includes('@')) {
+            return true;
+        }
+        const lower = trimmed.toLowerCase();
+        const personalDomains = [
+            'gmail.com', 'googlemail.com',
+            'qq.com', 'foxmail.com',
+            '163.com', '126.com', 'yeah.net',
+            'sina.com', 'sina.cn', 'sohu.com',
+            'aliyun.com',
+            '139.com', '189.cn', 'wo.cn',
+            'outlook.com', 'hotmail.com', 'live.com', 'live.cn', 'msn.com',
+            'icloud.com', 'me.com', 'mac.com',
+            'yahoo.com', 'ymail.com',
+            'proton.me', 'protonmail.com', 'protonmail.ch',
+            'aol.com',
+            'gmx.com', 'gmx.net', 'mail.com',
+            'yandex.com', 'yandex.ru',
+            'zoho.com'
+        ];
+        return personalDomains.some(domain => lower.endsWith('@' + domain) || lower.endsWith('.' + domain));
+    }
+
     // Parse batch line
     function parseBatchLine(line) {
         line = line.trim();
@@ -165,6 +192,15 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
+        if (username.includes('@') && !isPersonalGoogleEmail(username)) {
+            return {
+                username: username,
+                password: password,
+                two_factor: twoFactor,
+                error: '必须使用Google个人账号，企业组织等账号不可以订阅Google One'
+            };
+        }
+
         if (parts.length === 3) {
             return {
                 username: username,
@@ -203,6 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!isValid2FA(twoFactor)) {
                 showToast('2FA格式不正确，请输入32位密钥或备用验证码');
+                return;
+            }
+
+            if (username.includes('@') && !isPersonalGoogleEmail(username)) {
+                showToast('必须使用Google个人账号，企业组织等账号不可以订阅Google One');
                 return;
             }
 

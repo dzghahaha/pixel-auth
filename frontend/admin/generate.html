@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>生成卡密 - Pixel 订阅管理</title>
     <link rel="stylesheet" href="./admin.css?v=1.0.2">
-    <script src="./admin.js?v=1.0.2"></script>
+    <script src="./admin.js?v=1.0.7"></script>
     <style>
         .stats-grid {
             display: grid;
@@ -247,8 +247,7 @@
                         });
 
                         // Proceed to load stats and vendors dropdown
-                        await loadVendorsDropdown();
-                        await loadStats();
+                        await Promise.all([loadVendorsDropdown(), loadStats()]);
 
                         const loader = document.getElementById('page-loader');
                         if (loader) {

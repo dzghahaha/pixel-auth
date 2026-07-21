@@ -36,37 +36,9 @@ window.hidePageLoader = function() {
     }
 };
 
-// Global Fetch Interceptor for progress spinner overlay
+// Global Fetch Interceptor (disabled page-loader overlay on queries to prevent double spinners)
 (function() {
-    const originalFetch = window.fetch;
-    let activeRequestsCount = 0;
-
-    window.fetch = async function(...args) {
-        const url = args[0];
-        const isBackground = typeof url === 'string' && (
-            url.includes('/api/pay/query') || 
-            url.includes('/api/admin/check')
-        );
-
-        if (!isBackground) {
-            activeRequestsCount++;
-            window.showPageLoader();
-        }
-
-        try {
-            return await originalFetch(...args);
-        } catch (error) {
-            throw error;
-        } finally {
-            if (!isBackground) {
-                activeRequestsCount--;
-                if (activeRequestsCount <= 0) {
-                    activeRequestsCount = 0;
-                    window.hidePageLoader();
-                }
-            }
-        }
-    };
+    // Custom global fetch interception can be placed here if needed in the future
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -75,7 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Skip if already processed
         if (select.parentNode.classList.contains('custom-select')) return;
         
-        initCustomSelect(select);
+        try {
+            initCustomSelect(select);
+        } catch (e) {
+            console.error("Failed to wrap custom select dropdown:", select, e);
+        }
     });
 });
 
@@ -84,11 +60,18 @@ function initCustomSelect(select) {
 
     // Create wrapper
     const wrapper = document.createElement('div');
-    wrapper.className = 'custom-select';
-    if (select.className) {
-        wrapper.classList.add(select.className);
-    }
+    wrapper.className = 'custom-select ' + (select.className || '');
     wrapper.style.minWidth = select.style.minWidth || '150px';
+
+    // Handle full-width selects inside forms dynamically
+    const isFullWidth = select.style.width === '100%' || 
+                         select.classList.contains('form-select') ||
+                         select.classList.contains('form-input') ||
+                         select.closest('.form-group') !== null;
+    if (isFullWidth) {
+        wrapper.style.width = '100%';
+        wrapper.style.display = 'block';
+    }
 
     // Hide original select
     select.style.display = 'none';
@@ -179,26 +162,32 @@ function initCustomSelect(select) {
     });
 
     // Sync wrapper state if value is modified programmatically
-    const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
-    Object.defineProperty(select, 'value', {
-        get: function() {
-            return originalVal.get.call(this);
-        },
-        set: function(val) {
-            originalVal.set.call(this, val);
-            const opt = Array.from(select.options).find(o => o.value === val);
-            if (opt) {
-                trigger.querySelector('span').textContent = opt.textContent;
-                optionsContainer.querySelectorAll('.custom-option').forEach(co => {
-                    if (co.getAttribute('data-value') === val) {
-                        co.classList.add('selected');
-                    } else {
-                        co.classList.remove('selected');
+    try {
+        const originalVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+        if (originalVal && typeof originalVal.get === 'function') {
+            Object.defineProperty(select, 'value', {
+                get: function() {
+                    return originalVal.get.call(this);
+                },
+                set: function(val) {
+                    originalVal.set.call(this, val);
+                    const opt = Array.from(select.options).find(o => o.value === val);
+                    if (opt) {
+                        trigger.querySelector('span').textContent = opt.textContent;
+                        optionsContainer.querySelectorAll('.custom-option').forEach(co => {
+                            if (co.getAttribute('data-value') === val) {
+                                co.classList.add('selected');
+                            } else {
+                                co.classList.remove('selected');
+                            }
+                        });
                     }
-                });
-            }
+                }
+            });
         }
-    });
+    } catch (err) {
+        console.warn("Failed to intercept select value property:", err);
+    }
 }
 
 // Close all custom dropdowns on clicking outside
@@ -208,10 +197,16 @@ document.addEventListener('click', () => {
     });
 });
 
-// Reset page-loader on bfcache recovery (back-button navigation)
-window.addEventListener('pageshow', () => {
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-        loader.classList.add('fade-out');
+// Reset page-loader and reload page on bfcache recovery (back-button navigation)
+window.addEventListener('pageshow', (event) => {
+    const isBackNavigation = event.persisted || 
+        (window.performance && window.performance.navigation.type === 2);
+    if (isBackNavigation) {
+        window.location.reload();
+    } else {
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.add('fade-out');
+        }
     }
 });

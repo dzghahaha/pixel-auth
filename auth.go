@@ -137,6 +137,17 @@ type adminStaticServer struct {
 
 func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+
+	// Disable caching for HTML files to avoid cache issues when code is updated
+	if strings.HasSuffix(path, ".html") {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+	} else if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".svg") || strings.HasSuffix(path, ".png") || strings.HasSuffix(path, ".ico") {
+		// Enable strong caching for static assets (JS, CSS, images) since we use query versioning (?v=...)
+		w.Header().Set("Cache-Control", "public, max-age=604800") // Cache for 7 days
+	}
+
 	if path == "/convert.html" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
