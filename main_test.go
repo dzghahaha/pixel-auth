@@ -313,14 +313,21 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	}
 	orderID, _ := res.LastInsertId()
 
-	// 1. Insert a failed record with "请输入正确的密码"
+	// 1. Insert a failed record with "请输入正确的密码" for test_user@gmail.com
 	_, err = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		orderID, "PREV-CARD-SECRET", "test_user@gmail.com", "wrong_pass123", "12345678901234567890123456789012", "failed", "请输入正确的密码", time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("failed to insert failed account record: %v", err)
 	}
 
-	// 2. Submit with the exact same username and password -> Should fail with "请输入正确的密码"
+	// 2. Insert a failed record with "请输入正确的邮箱账号" for bad_email@gmail.com
+	_, err = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "PREV-CARD-SECRET", "bad_email@gmail.com", "pass123", "12345678901234567890123456789012", "failed", "请输入正确的邮箱账号", time.Now(), time.Now())
+	if err != nil {
+		t.Fatalf("failed to insert failed account record: %v", err)
+	}
+
+	// 3. Submit with the same username (test_user@gmail.com) but DIFFERENT password -> Should STILL fail with "请输入正确的密码" (since it only checks username/email now)
 	subReq := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -332,7 +339,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
 		Username:  "test_user@gmail.com",
-		Password:  "wrong_pass123",
+		Password:  "new_pass_456", // different password!
 		TwoFactor: "12345678901234567890123456789012",
 	})
 
@@ -350,7 +357,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		t.Errorf("expected error message '请输入正确的密码', got '%v'", resp["message"])
 	}
 
-	// 3. Submit with same username but different password -> Should succeed (returns 200)
+	// 4. Submit with bad_email@gmail.com -> Should fail with "请输入正确的邮箱账号"
 	subReq2 := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -361,8 +368,8 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		TwoFactor  string `json:"two_factor"`
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
-		Username:  "test_user@gmail.com",
-		Password:  "new_pass_456",
+		Username:  "bad_email@gmail.com",
+		Password:  "pass123",
 		TwoFactor: "12345678901234567890123456789012",
 	})
 
@@ -371,8 +378,38 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	rrSubmit2 := httptest.NewRecorder()
 	handleSubmit(rrSubmit2, reqSubmit2)
 
-	if rrSubmit2.Code != http.StatusOK {
-		t.Errorf("expected status 200 for new password submission, got %d. Body: %s", rrSubmit2.Code, rrSubmit2.Body.String())
+	if rrSubmit2.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d. Body: %s", rrSubmit2.Code, rrSubmit2.Body.String())
+	}
+	var resp2 map[string]interface{}
+	json.Unmarshal(rrSubmit2.Body.Bytes(), &resp2)
+	if resp2["message"] != "请输入正确的邮箱账号" {
+		t.Errorf("expected error message '请输入正确的邮箱账号', got '%v'", resp2["message"])
+	}
+
+	// 5. Submit with clean_user@gmail.com (which has no failed history) -> Should succeed (returns 200)
+	subReq3 := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq3.Accounts = append(subReq3.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "clean_user@gmail.com",
+		Password:  "pass123",
+		TwoFactor: "12345678901234567890123456789012",
+	})
+
+	bodyBytes3, _ := json.Marshal(subReq3)
+	reqSubmit3 := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes3))
+	rrSubmit3 := httptest.NewRecorder()
+	handleSubmit(rrSubmit3, reqSubmit3)
+
+	if rrSubmit3.Code != http.StatusOK {
+		t.Errorf("expected status 200 for clean submission, got %d. Body: %s", rrSubmit3.Code, rrSubmit3.Body.String())
 	}
 }
 
