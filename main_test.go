@@ -3196,7 +3196,7 @@ func TestXunhuPayFlow(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
 		if r.URL.Path == "/payment/do.html" {
-			w.Write([]byte(`{"errcode":0,"errmsg":"success","data":{"url":"http://mock-payment-url","open_order_id":"12345"}}`))
+			w.Write([]byte(`{"errcode":0,"errmsg":"success","url":"http://mock-payment-url","open_order_id":"12345"}`))
 			return
 		}
 		if r.URL.Path == "/payment/refund.html" {

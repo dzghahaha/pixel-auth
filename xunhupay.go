@@ -130,8 +130,8 @@ func (x *XunhuPay) CreatePayment(tradeOrderID string, totalFee float64, title, n
 		return nil, fmt.Errorf("[xunhupay] 发起支付失败: %s (code=%.0f)", errmsg, errcode)
 	}
 
-	data, _ := result["data"].(map[string]interface{})
-	return data, nil
+	// Return the root result map as payment response fields like url / url_qrcode are at the root level
+	return result, nil
 }
 
 // QueryOrder 查询订单状态
