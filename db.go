@@ -233,6 +233,7 @@ func createTables() {
 		price DECIMAL(10,2) NOT NULL,
 		total_amount DECIMAL(10,2) NOT NULL,
 		pay_type VARCHAR(16) NOT NULL DEFAULT 'wxpay',
+		pay_method VARCHAR(32) NOT NULL DEFAULT 'epay',
 		creator_id BIGINT UNSIGNED DEFAULT NULL,
 		card_keys TEXT DEFAULT NULL,
 		created_at DATETIME NOT NULL,
@@ -321,6 +322,7 @@ func createTables() {
 
 	// Migration: Add pay_type to key_orders if it doesn't exist (ignores error if column exists)
 	_, _ = db.Exec("ALTER TABLE key_orders ADD COLUMN pay_type VARCHAR(16) NOT NULL DEFAULT 'wxpay'")
+	_, _ = db.Exec("ALTER TABLE key_orders ADD COLUMN pay_method VARCHAR(32) NOT NULL DEFAULT 'epay'")
 	_, _ = db.Exec("ALTER TABLE key_orders ADD COLUMN creator_id BIGINT UNSIGNED DEFAULT NULL")
 
 	// Migration: Add columns to card_stock if they don't exist
@@ -608,6 +610,21 @@ func createTables() {
 	// Always ensure existing keys with empty original_key are backfilled with their own system_key
 	if _, err := db.Exec("UPDATE system_keys SET original_key = system_key WHERE original_key = ''"); err != nil {
 		log.Printf("Warning: failed to populate original_key for existing keys: %v\n", err)
+	}
+
+	var hasPayMethod bool
+	errCheck = db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'key_orders' 
+		  AND COLUMN_NAME = 'pay_method'
+	`).Scan(&hasPayMethod)
+	if errCheck == nil && !hasPayMethod {
+		log.Println("Adding 'pay_method' column to 'key_orders' table...")
+		if _, err := db.Exec("ALTER TABLE key_orders ADD COLUMN pay_method VARCHAR(32) NOT NULL DEFAULT 'epay'"); err != nil {
+			log.Printf("Warning: failed to add pay_method column to key_orders: %v\n", err)
+		}
 	}
 }
 

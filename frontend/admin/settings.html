@@ -142,35 +142,75 @@
             </div>
         </div>
 
-        <!-- 易支付对接配置卡片 -->
+        <!-- 支付通道配置卡片 -->
         <div class="card settings-container" style="margin-top: 20px;">
             <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
                 <div class="card-title-group">
-                    <span class="card-title">易支付通道对接设置</span>
-                    <span class="card-subtitle">配置易支付（Epay）接口参数以进行微信和支付宝通道支付对接</span>
+                    <span class="card-title">支付通道对接设置</span>
+                    <span class="card-subtitle">选择并配置系统支付方式，支持易支付 (Epay) 和虎皮椒支付 (XunhuPay)</span>
                 </div>
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
                 <div>
-                    <label for="setting-epay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">易支付请求地址 (Epay URL)</label>
-                    <input type="text" id="setting-epay-url" placeholder="例如：https://pay.vansdesign.cn/" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    <label for="setting-pay-method" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付接口方式</label>
+                    <select id="setting-pay-method" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        <option value="epay">易支付 (Epay)</option>
+                        <option value="xunhupay">虎皮椒支付 (XunhuPay)</option>
+                    </select>
                 </div>
-                <div>
-                    <label for="setting-epay-pid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户号 (PID)</label>
-                    <input type="text" id="setting-epay-pid" placeholder="易支付商户号，例如：1668" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+
+                <!-- 易支付配置 -->
+                <div id="wrapper-epay-settings" style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <label for="setting-epay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">易支付请求地址 (Epay URL)</label>
+                        <input type="text" id="setting-epay-url" placeholder="例如：https://pay.vansdesign.cn/" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label for="setting-epay-pid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户号 (PID)</label>
+                        <input type="text" id="setting-epay-pid" placeholder="易支付商户号，例如：1668" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label for="setting-epay-key" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户密钥 (KEY)</label>
+                        <input type="password" id="setting-epay-key" placeholder="易支付商户 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label for="setting-epay-wx-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付渠道 ID (Wechat Channel ID)</label>
+                        <input type="text" id="setting-epay-wx-channel" placeholder="微信支付渠道代码，例如：201906181353 (留空表示隐藏微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label for="setting-epay-alipay-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝支付渠道 ID (Alipay Channel ID)</label>
+                        <input type="text" id="setting-epay-alipay-channel" placeholder="支付宝支付渠道代码，例如：201906181354 (留空表示隐藏支付宝支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
                 </div>
-                <div>
-                    <label for="setting-epay-key" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户密钥 (KEY)</label>
-                    <input type="password" id="setting-epay-key" placeholder="易支付商户 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+
+                <!-- 虎皮椒支付配置 -->
+                <div id="wrapper-xunhupay-settings" style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <label for="setting-xunhupay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">虎皮椒网关地址 (Gateway URL)</label>
+                        <input type="text" id="setting-xunhupay-url" placeholder="例如：https://api.xunhupay.com" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label for="setting-xunhupay-wx-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 AppID (Wechat AppID)</label>
+                            <input type="text" id="setting-xunhupay-wx-appid" placeholder="微信支付 AppID (留空则禁用微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label for="setting-xunhupay-wx-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 Secret (Wechat Secret)</label>
+                            <input type="password" id="setting-xunhupay-wx-secret" placeholder="微信支付 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label for="setting-xunhupay-alipay-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 AppID (Alipay AppID)</label>
+                            <input type="text" id="setting-xunhupay-alipay-appid" placeholder="支付宝 AppID (留空则禁用支付宝)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label for="setting-xunhupay-alipay-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 Secret (Alipay Secret)</label>
+                            <input type="password" id="setting-xunhupay-alipay-secret" placeholder="支付宝 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label for="setting-epay-wx-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付渠道 ID (Wechat Channel ID)</label>
-                    <input type="text" id="setting-epay-wx-channel" placeholder="微信支付渠道代码，例如：201906181353 (留空表示隐藏微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label for="setting-epay-alipay-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝支付渠道 ID (Alipay Channel ID)</label>
-                    <input type="text" id="setting-epay-alipay-channel" placeholder="支付宝支付渠道代码，例如：201906181354 (留空表示隐藏支付宝支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                </div>
+
                 <button type="button" id="btn-save-epay" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存支付配置</button>
             </div>
         </div>
@@ -219,6 +259,28 @@
             const settingEpayKey = document.getElementById('setting-epay-key');
             const settingEpayWxChannel = document.getElementById('setting-epay-wx-channel');
             const settingEpayAlipayChannel = document.getElementById('setting-epay-alipay-channel');
+
+            const settingPayMethod = document.getElementById('setting-pay-method');
+            const wrapperEpaySettings = document.getElementById('wrapper-epay-settings');
+            const wrapperXunhupaySettings = document.getElementById('wrapper-xunhupay-settings');
+            const settingXunhupayUrl = document.getElementById('setting-xunhupay-url');
+            const settingXunhupayWxAppid = document.getElementById('setting-xunhupay-wx-appid');
+            const settingXunhupayWxSecret = document.getElementById('setting-xunhupay-wx-secret');
+            const settingXunhupayAlipayAppid = document.getElementById('setting-xunhupay-alipay-appid');
+            const settingXunhupayAlipaySecret = document.getElementById('setting-xunhupay-alipay-secret');
+
+            function togglePayMethodFields() {
+                if (settingPayMethod.value === 'xunhupay') {
+                    if (wrapperEpaySettings) wrapperEpaySettings.style.display = 'none';
+                    if (wrapperXunhupaySettings) wrapperXunhupaySettings.style.display = 'flex';
+                } else {
+                    if (wrapperEpaySettings) wrapperEpaySettings.style.display = 'flex';
+                    if (wrapperXunhupaySettings) wrapperXunhupaySettings.style.display = 'none';
+                }
+            }
+            if (settingPayMethod) {
+                settingPayMethod.addEventListener('change', togglePayMethodFields);
+            }
             
             const settingApiOpen = document.getElementById('setting-api-open');
             const settingApiBaseUrl = document.getElementById('setting-api-base-url');
@@ -342,6 +404,14 @@
                         settingEpayKey.value = data.settings.epay_key || '';
                         settingEpayWxChannel.value = data.settings.epay_wx_channel || '';
                         settingEpayAlipayChannel.value = data.settings.epay_alipay_channel || '';
+
+                        if (settingPayMethod) settingPayMethod.value = data.settings.pay_method || 'epay';
+                        if (settingXunhupayUrl) settingXunhupayUrl.value = data.settings.xunhupay_url || '';
+                        if (settingXunhupayWxAppid) settingXunhupayWxAppid.value = data.settings.xunhupay_wx_appid || '';
+                        if (settingXunhupayWxSecret) settingXunhupayWxSecret.value = data.settings.xunhupay_wx_secret || '';
+                        if (settingXunhupayAlipayAppid) settingXunhupayAlipayAppid.value = data.settings.xunhupay_alipay_appid || '';
+                        if (settingXunhupayAlipaySecret) settingXunhupayAlipaySecret.value = data.settings.xunhupay_alipay_secret || '';
+                        togglePayMethodFields();
                         
                         settingApiOpen.value = data.settings.api_open || 'off';
                         settingApiBaseUrl.value = data.settings.api_base_url || '';
@@ -381,6 +451,13 @@
                 const epayKeyVal = settingEpayKey.value.trim();
                 const epayWxVal = settingEpayWxChannel.value.trim();
                 const epayAliVal = settingEpayAlipayChannel.value.trim();
+
+                const payMethodVal = settingPayMethod ? settingPayMethod.value : 'epay';
+                const xunhupayUrlVal = settingXunhupayUrl ? settingXunhupayUrl.value.trim() : '';
+                const xunhupayWxAppidVal = settingXunhupayWxAppid ? settingXunhupayWxAppid.value.trim() : '';
+                const xunhupayWxSecretVal = settingXunhupayWxSecret ? settingXunhupayWxSecret.value.trim() : '';
+                const xunhupayAlipayAppidVal = settingXunhupayAlipayAppid ? settingXunhupayAlipayAppid.value.trim() : '';
+                const xunhupayAlipaySecretVal = settingXunhupayAlipaySecret ? settingXunhupayAlipaySecret.value.trim() : '';
                 
                 const apiOpenVal = settingApiOpen.value;
                 const apiBaseUrlVal = settingApiBaseUrl.value.trim();
@@ -397,13 +474,24 @@
                     showToast('请输入有效的卡密单价金额');
                     return;
                 }
-                if (!epayUrlVal) {
-                    showToast('易支付请求地址不能为空');
-                    return;
-                }
-                if (!epayPidVal) {
-                    showToast('易支付商户号(PID)不能为空');
-                    return;
+                if (payMethodVal === 'epay') {
+                    if (!epayUrlVal) {
+                        showToast('易支付请求地址不能为空');
+                        return;
+                    }
+                    if (!epayPidVal) {
+                        showToast('易支付商户号(PID)不能为空');
+                        return;
+                    }
+                } else if (payMethodVal === 'xunhupay') {
+                    if (!xunhupayUrlVal) {
+                        showToast('虎皮椒网关地址不能为空');
+                        return;
+                    }
+                    if (!xunhupayWxAppidVal && !xunhupayAlipayAppidVal) {
+                        showToast('微信支付 AppID 和 支付宝 AppID 至少配置一个');
+                        return;
+                    }
                 }
                 if (logCleanupOpenVal === 'on') {
                     if (!logCleanupDaysVal || isNaN(parseInt(logCleanupDaysVal)) || parseInt(logCleanupDaysVal) <= 0) {
@@ -438,6 +526,12 @@
                             epay_key: epayKeyVal,
                             epay_wx_channel: epayWxVal,
                             epay_alipay_channel: epayAliVal,
+                            pay_method: payMethodVal,
+                            xunhupay_url: xunhupayUrlVal,
+                            xunhupay_wx_appid: xunhupayWxAppidVal,
+                            xunhupay_wx_secret: xunhupayWxSecretVal,
+                            xunhupay_alipay_appid: xunhupayAlipayAppidVal,
+                            xunhupay_alipay_secret: xunhupayAlipaySecretVal,
                             api_open: apiOpenVal,
                             api_base_url: apiBaseUrlVal,
                             api_whitelist: apiWhitelistVal,

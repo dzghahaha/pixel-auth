@@ -3185,5 +3185,131 @@ func TestAdminFAQsFlow(t *testing.T) {
 	_, _ = db.Exec("DELETE FROM system_keys WHERE system_key = ?", cardSecret)
 }
 
+func TestXunhuPayFlow(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Create a local mock server for XunhuPay APIs
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		if r.URL.Path == "/payment/do.html" {
+			w.Write([]byte(`{"errcode":0,"errmsg":"success","data":{"url":"http://mock-payment-url","open_order_id":"12345"}}`))
+			return
+		}
+		if r.URL.Path == "/payment/refund.html" {
+			w.Write([]byte(`{"errcode":0,"errmsg":"success","data":{"refund_status":"CD"}}`))
+			return
+		}
+	}))
+	defer mockServer.Close()
+
+	// 2. Insert mock settings for Xunhupay
+	if _, err := db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('pay_method', 'xunhupay', NOW())"); err != nil {
+		t.Fatalf("failed to insert pay_method setting: %v", err)
+	}
+	if _, err := db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('xunhupay_url', ?, NOW())", mockServer.URL); err != nil {
+		t.Fatalf("failed to insert xunhupay_url setting: %v", err)
+	}
+	if _, err := db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('xunhupay_wx_appid', 'wx_test_appid', NOW())"); err != nil {
+		t.Fatalf("failed to insert xunhupay_wx_appid setting: %v", err)
+	}
+	if _, err := db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('xunhupay_wx_secret', 'wx_test_secret', NOW())"); err != nil {
+		t.Fatalf("failed to insert xunhupay_wx_secret setting: %v", err)
+	}
+
+	var testVal string
+	errGet := db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'pay_method'").Scan(&testVal)
+	t.Logf("BEFORE CHECKOUT: pay_method=%s, err=%v", testVal, errGet)
+
+	// 3. Create test admin and login
+	hashedPwd, _ := bcrypt.GenerateFromPassword([]byte("adminpwd"), bcrypt.DefaultCost)
+	now := time.Now()
+	if _, err := db.Exec("REPLACE INTO admins (username, password_hash, role, created_at, updated_at) VALUES ('admin', ?, 'admin', ?, ?)", string(hashedPwd), now, now); err != nil {
+		t.Fatalf("failed to insert admin: %v", err)
+	}
+
+	loginBody := `{"username":"admin","password":"adminpwd"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	cookie := rrLogin.Result().Cookies()[0]
+
+	// 4. Fill card stock pool
+	_, _ = db.Exec("DELETE FROM card_stock")
+	_, _ = db.Exec("INSERT INTO card_stock (card_key, status, vendor, note, created_at, updated_at) VALUES ('STOCKKEY1111', 'available', 'ai.deard.fun', 'Xunhu Purchased', ?, ?)", now, now)
+	_, _ = db.Exec("INSERT INTO card_stock (card_key, status, vendor, note, created_at, updated_at) VALUES ('STOCKKEY2222', 'available', 'ai.deard.fun', 'Xunhu Purchased', ?, ?)", now, now)
+
+	// 5. Initiate Checkout (Buy 2 keys via wxpay)
+	buyPayload := `{"quantity": 2, "type": "wxpay"}`
+	reqBuy := httptest.NewRequest(http.MethodPost, "/api/pay/buy", strings.NewReader(buyPayload))
+	reqBuy.AddCookie(cookie)
+	rrBuy := httptest.NewRecorder()
+	requirePermission("buy", handlePayBuy)(rrBuy, reqBuy)
+
+	if rrBuy.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rrBuy.Code, rrBuy.Body.String())
+	}
+
+	var buyResp map[string]interface{}
+	json.Unmarshal(rrBuy.Body.Bytes(), &buyResp)
+	if buyResp["pay_url"] != "http://mock-payment-url" {
+		t.Errorf("expected pay_url 'http://mock-payment-url', got '%v'", buyResp["pay_url"])
+	}
+	outTradeNo := buyResp["out_trade_no"].(string)
+
+	// Verify order entry contains pay_method = 'xunhupay'
+	var dbPayMethod string
+	db.QueryRow("SELECT pay_method FROM key_orders WHERE out_trade_no = ?", outTradeNo).Scan(&dbPayMethod)
+	if dbPayMethod != "xunhupay" {
+		t.Errorf("expected pay_method 'xunhupay' in DB, got '%s'", dbPayMethod)
+	}
+
+	// 6. Simulate callback notify (Success payment)
+	notifyVals := url.Values{
+		"appid":          {"wx_test_appid"},
+		"trade_order_id": {outTradeNo},
+		"total_fee":      {"19.98"},
+		"status":         {"OD"},
+		"time":           {fmt.Sprintf("%d", time.Now().Unix())},
+	}
+	
+	// Create signature
+	xunhuPayHelper := NewXunhuPay("wx_test_appid", "wx_test_secret", mockServer.URL)
+	paramsSign := make(map[string]string)
+	for k, vs := range notifyVals {
+		paramsSign[k] = vs[0]
+	}
+	notifyVals.Set("hash", xunhuPayHelper.MakeSign(paramsSign))
+
+	reqNotify := httptest.NewRequest(http.MethodPost, "/api/pay/notify", strings.NewReader(notifyVals.Encode()))
+	reqNotify.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrNotify := httptest.NewRecorder()
+	handlePayNotify(rrNotify, reqNotify)
+
+	if rrNotify.Body.String() != "success" {
+		t.Fatalf("expected notify response 'success', got: %s", rrNotify.Body.String())
+	}
+
+	// Verify order status is paid in DB
+	var dbStatus string
+	db.QueryRow("SELECT status FROM key_orders WHERE out_trade_no = ?", outTradeNo).Scan(&dbStatus)
+	if dbStatus != "paid" {
+		t.Errorf("expected paid status, got %s", dbStatus)
+	}
+
+	// 7. Test Refund API on the paid order
+	refundPayload := fmt.Sprintf(`{"out_trade_no": "%s"}`, outTradeNo)
+	reqRefund := httptest.NewRequest(http.MethodPost, "/api/admin/pay/refund", strings.NewReader(refundPayload))
+	reqRefund.AddCookie(cookie)
+	rrRefund := httptest.NewRecorder()
+	requirePermission("buy", handleAdminPayRefund)(rrRefund, reqRefund)
+	if rrRefund.Code != http.StatusOK {
+		t.Fatalf("expected 200 for refund, got %d. Body: %s", rrRefund.Code, rrRefund.Body.String())
+	}
+}
+
 
 

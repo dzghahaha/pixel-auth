@@ -1536,11 +1536,17 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"success": true,
 			"settings": map[string]string{
 				"two_factor_tutorial_url": getSetting("two_factor_tutorial_url", "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"),
+				"pay_method":              getSetting("pay_method", "epay"),
 				"epay_pid":                getSetting("epay_pid", "1668"),
 				"epay_key":                getSetting("epay_key", ""),
 				"epay_url":                getSetting("epay_url", "https://pay.vansdesign.cn/"),
 				"epay_wx_channel":         getSetting("epay_wx_channel", "201906181353"),
 				"epay_alipay_channel":     getSetting("epay_alipay_channel", ""),
+				"xunhupay_url":            getSetting("xunhupay_url", "https://api.xunhupay.com"),
+				"xunhupay_wx_appid":       getSetting("xunhupay_wx_appid", ""),
+				"xunhupay_wx_secret":      getSetting("xunhupay_wx_secret", ""),
+				"xunhupay_alipay_appid":   getSetting("xunhupay_alipay_appid", ""),
+				"xunhupay_alipay_secret":  getSetting("xunhupay_alipay_secret", ""),
 				"key_price":               getSetting("key_price", "9.99"),
 				"key_tier_prices":         getSetting("key_tier_prices", "[]"),
 				"api_open":                getSetting("api_open", "off"),
@@ -1554,11 +1560,17 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == http.MethodPost {
 		var req struct {
 			TwoFactorTutorialURL string `json:"two_factor_tutorial_url"`
+			PayMethod            string `json:"pay_method"`
 			EpayPID              string `json:"epay_pid"`
 			EpayKey              string `json:"epay_key"`
 			EpayURL              string `json:"epay_url"`
 			EpayWxChannel        string `json:"epay_wx_channel"`
 			EpayAlipayChannel    string `json:"epay_alipay_channel"`
+			XunhuPayURL          string `json:"xunhupay_url"`
+			XunhuPayWxAppID      string `json:"xunhupay_wx_appid"`
+			XunhuPayWxSecret     string `json:"xunhupay_wx_secret"`
+			XunhuPayAlipayAppID  string `json:"xunhupay_alipay_appid"`
+			XunhuPayAlipaySecret string `json:"xunhupay_alipay_secret"`
 			KeyPrice             string `json:"key_price"`
 			KeyTierPrices        string `json:"key_tier_prices"`
 			APIOpen              string `json:"api_open"`
@@ -1578,11 +1590,17 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 
 		// Read existing values from database as fallback to allow partial updates and support legacy tests
 		oldTutorial := getSetting("two_factor_tutorial_url", "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1")
+		oldPayMethod := getSetting("pay_method", "epay")
 		oldPID := getSetting("epay_pid", "1668")
 		oldKey := getSetting("epay_key", "")
 		oldURL := getSetting("epay_url", "https://pay.vansdesign.cn/")
 		oldWx := getSetting("epay_wx_channel", "201906181353")
 		oldAlipay := getSetting("epay_alipay_channel", "")
+		oldXunhuURL := getSetting("xunhupay_url", "https://api.xunhupay.com")
+		oldXunhuWxAppID := getSetting("xunhupay_wx_appid", "")
+		oldXunhuWxSecret := getSetting("xunhupay_wx_secret", "")
+		oldXunhuAliAppID := getSetting("xunhupay_alipay_appid", "")
+		oldXunhuAliSecret := getSetting("xunhupay_alipay_secret", "")
 		oldPrice := getSetting("key_price", "9.99")
 		oldTierPrices := getSetting("key_tier_prices", "[]")
 		oldAPIOpen := getSetting("api_open", "off")
@@ -1592,6 +1610,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 
 		if req.TwoFactorTutorialURL == "" {
 			req.TwoFactorTutorialURL = oldTutorial
+		}
+		if req.PayMethod == "" {
+			req.PayMethod = oldPayMethod
 		}
 		if req.EpayPID == "" {
 			req.EpayPID = oldPID
@@ -1607,6 +1628,21 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.EpayAlipayChannel == "" {
 			req.EpayAlipayChannel = oldAlipay
+		}
+		if req.XunhuPayURL == "" {
+			req.XunhuPayURL = oldXunhuURL
+		}
+		if req.XunhuPayWxAppID == "" {
+			req.XunhuPayWxAppID = oldXunhuWxAppID
+		}
+		if req.XunhuPayWxSecret == "" {
+			req.XunhuPayWxSecret = oldXunhuWxSecret
+		}
+		if req.XunhuPayAlipayAppID == "" {
+			req.XunhuPayAlipayAppID = oldXunhuAliAppID
+		}
+		if req.XunhuPayAlipaySecret == "" {
+			req.XunhuPayAlipaySecret = oldXunhuAliSecret
 		}
 		if req.KeyPrice == "" {
 			req.KeyPrice = oldPrice
@@ -1634,11 +1670,17 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		settingsToSave := map[string]string{
 			"two_factor_tutorial_url": req.TwoFactorTutorialURL,
+			"pay_method":              req.PayMethod,
 			"epay_pid":                req.EpayPID,
 			"epay_key":                req.EpayKey,
 			"epay_url":                req.EpayURL,
 			"epay_wx_channel":         req.EpayWxChannel,
 			"epay_alipay_channel":     req.EpayAlipayChannel,
+			"xunhupay_url":            req.XunhuPayURL,
+			"xunhupay_wx_appid":       req.XunhuPayWxAppID,
+			"xunhupay_wx_secret":      req.XunhuPayWxSecret,
+			"xunhupay_alipay_appid":   req.XunhuPayAlipayAppID,
+			"xunhupay_alipay_secret":  req.XunhuPayAlipaySecret,
 			"key_price":               req.KeyPrice,
 			"key_tier_prices":         req.KeyTierPrices,
 			"api_open":                req.APIOpen,
