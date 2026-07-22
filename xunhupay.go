@@ -28,6 +28,11 @@ func NewXunhuPay(appID, secret, gateway string) *XunhuPay {
 		gateway = "https://api.xunhupay.com"
 	}
 	gateway = strings.TrimRight(gateway, "/")
+	// Gracefully strip full endpoints if configured as the gateway URL
+	gateway = strings.TrimSuffix(gateway, "/payment/do.html")
+	gateway = strings.TrimSuffix(gateway, "/payment/query.html")
+	gateway = strings.TrimSuffix(gateway, "/payment/refund.html")
+	gateway = strings.TrimRight(gateway, "/")
 	return &XunhuPay{
 		AppID:   appID,
 		Secret:  secret,
