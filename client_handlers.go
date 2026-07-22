@@ -114,16 +114,20 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Filter if the username (email) failed previously with specific error messages
+		// Filter if previous failed records match:
+		// 1. Password errors require matching both username and password.
+		// 2. Email error only requires matching the username (email).
 		var prevMsg string
 		errPrev := db.QueryRow(`
 			SELECT message 
 			FROM account_records 
 			WHERE username = ? AND status = 'failed'
-				AND (message = '请输入正确的密码' 
-					OR message = '账号密码错误，请确认密码后重新提交。' 
-					OR message = '请输入正确的邮箱账号')
-			ORDER BY id DESC LIMIT 1`, acc.Username).Scan(&prevMsg)
+				AND (
+					(password = ? AND (message = '请输入正确的密码' OR message = '账号密码错误，请确认密码后重新提交。'))
+					OR
+					(message = '请输入正确的邮箱账号')
+				)
+			ORDER BY id DESC LIMIT 1`, acc.Username, acc.Password).Scan(&prevMsg)
 
 		if errPrev == nil && prevMsg != "" {
 			errMsg := prevMsg

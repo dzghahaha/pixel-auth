@@ -313,7 +313,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	}
 	orderID, _ := res.LastInsertId()
 
-	// 1. Insert a failed record with "请输入正确的密码" for test_user@gmail.com
+	// 1. Insert a failed record with "请输入正确的密码" for test_user@gmail.com (pwd: "wrong_pass123")
 	_, err = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		orderID, "PREV-CARD-SECRET", "test_user@gmail.com", "wrong_pass123", "12345678901234567890123456789012", "failed", "请输入正确的密码", time.Now(), time.Now())
 	if err != nil {
@@ -327,7 +327,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		t.Fatalf("failed to insert failed account record: %v", err)
 	}
 
-	// 3. Submit with the same username (test_user@gmail.com) but DIFFERENT password -> Should STILL fail with "请输入正确的密码" (since it only checks username/email now)
+	// 3. Submit with test_user@gmail.com and SAME password -> Should fail with "请输入正确的密码"
 	subReq := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -339,7 +339,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
 		Username:  "test_user@gmail.com",
-		Password:  "new_pass_456", // different password!
+		Password:  "wrong_pass123", // same password
 		TwoFactor: "12345678901234567890123456789012",
 	})
 
@@ -357,7 +357,32 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		t.Errorf("expected error message '请输入正确的密码', got '%v'", resp["message"])
 	}
 
-	// 4. Submit with bad_email@gmail.com -> Should fail with "请输入正确的邮箱账号"
+	// 4. Submit with test_user@gmail.com and DIFFERENT password -> Should SUCCEED (returns 200) because password changed
+	subReqDiffPwd := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReqDiffPwd.Accounts = append(subReqDiffPwd.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "test_user@gmail.com",
+		Password:  "new_pass_456", // different password!
+		TwoFactor: "12345678901234567890123456789012",
+	})
+
+	bodyBytesDiff, _ := json.Marshal(subReqDiffPwd)
+	reqSubmitDiff := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytesDiff))
+	rrSubmitDiff := httptest.NewRecorder()
+	handleSubmit(rrSubmitDiff, reqSubmitDiff)
+
+	if rrSubmitDiff.Code != http.StatusOK {
+		t.Errorf("expected status 200 for different password, got %d. Body: %s", rrSubmitDiff.Code, rrSubmitDiff.Body.String())
+	}
+
+	// 5. Submit with bad_email@gmail.com and DIFFERENT password -> Should STILL fail with "请输入正确的邮箱账号"
 	subReq2 := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -369,7 +394,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
 		Username:  "bad_email@gmail.com",
-		Password:  "pass123",
+		Password:  "another_pwd_789", // different password
 		TwoFactor: "12345678901234567890123456789012",
 	})
 
@@ -385,31 +410,6 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	json.Unmarshal(rrSubmit2.Body.Bytes(), &resp2)
 	if resp2["message"] != "请输入正确的邮箱账号" {
 		t.Errorf("expected error message '请输入正确的邮箱账号', got '%v'", resp2["message"])
-	}
-
-	// 5. Submit with clean_user@gmail.com (which has no failed history) -> Should succeed (returns 200)
-	subReq3 := SubmitRequest{
-		CardSecret: sysKey,
-		Mode:       "single",
-	}
-	subReq3.Accounts = append(subReq3.Accounts, struct {
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-		TwoFactor  string `json:"two_factor"`
-		ExtraEmail string `json:"extra_email,omitempty"`
-	}{
-		Username:  "clean_user@gmail.com",
-		Password:  "pass123",
-		TwoFactor: "12345678901234567890123456789012",
-	})
-
-	bodyBytes3, _ := json.Marshal(subReq3)
-	reqSubmit3 := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes3))
-	rrSubmit3 := httptest.NewRecorder()
-	handleSubmit(rrSubmit3, reqSubmit3)
-
-	if rrSubmit3.Code != http.StatusOK {
-		t.Errorf("expected status 200 for clean submission, got %d. Body: %s", rrSubmit3.Code, rrSubmit3.Body.String())
 	}
 }
 
