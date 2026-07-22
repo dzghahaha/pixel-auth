@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>常见问题管理 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css?v=1.0.2">
+    <script src="./admin.js?v=1.0.8"></script>
+    <style>
+        .btn-action-delete {
+            padding: 4px 10px;
+            font-size: 11px;
+            background-color: var(--danger-bg);
+            color: var(--danger);
+            border: 1px solid #fecaca;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+        }
+        .btn-action-delete:hover {
+            background-color: #fee2e2;
+            border-color: #f87171;
+        }
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background-color: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .pagination-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-page {
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-page:hover:not(:disabled) {
+            background-color: var(--bg-highlight);
+            border-color: var(--primary);
+        }
+        .btn-page:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .faq-text-cell {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .faq-text-cell:hover {
+            white-space: normal;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/logs.html" class="nav-item">系统日志</a>
+            <a href="/admin/faqs.html" class="nav-item active">常见问题</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 常见问题 SVG 图标 -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span class="header-title">常见问题管理</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 搜索与操作栏 -->
+        <div class="card" style="margin-bottom: 20px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 10px; flex: 1; max-width: 400px;">
+                    <input type="text" id="search-query" placeholder="输入错误码、描述或解决方案搜索..." style="margin-bottom: 0;">
+                    <button type="button" id="btn-search" class="btn-submit" style="padding: 8px 16px; font-size: 13px; white-space: nowrap; height: 36px; display: inline-flex; align-items: center;">搜索</button>
+                </div>
+                <button type="button" id="btn-open-create-modal" class="btn-submit" style="padding: 8px 16px; font-size: 13px; height: 36px; display: inline-flex; align-items: center;">+ 新增常见问题</button>
+            </div>
+        </div>
+
+        <!-- 数据表格卡片 -->
+        <div class="card" style="padding: 0; margin-bottom: 0;">
+            <div class="table-container">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">ID</th>
+                            <th style="width: 150px;">错误码 (Error Code)</th>
+                            <th>错误描述 (Description)</th>
+                            <th>解决方案 (Solution)</th>
+                            <th style="width: 150px;">更新时间</th>
+                            <th style="text-align: right; padding-right: 20px; width: 140px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="6" class="empty-tips">正在读取数据...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页条 -->
+            <div class="pagination-container">
+                <div class="pagination-info" id="pagination-info">
+                    共 0 条记录，当前第 1/1 页
+                </div>
+                <div class="pagination-buttons">
+                    <button type="button" class="btn-page" id="btn-prev" disabled>上一页</button>
+                    <button type="button" class="btn-page" id="btn-next" disabled>下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑弹窗 (Modal) -->
+    <div id="faq-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px; width: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">新增常见问题</h3>
+                <span class="close-btn" id="close-modal">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                <input type="hidden" id="faq-id">
+                
+                <div class="form-group">
+                    <label for="faq-error-code">错误码 / 标识 (Error Code) (唯一，不可重复)</label>
+                    <input type="text" id="faq-error-code" placeholder="如: 2FA, 10002, INCORRECT_PASSWORD 等">
+                </div>
+                <div class="form-group">
+                    <label for="faq-error-desc">错误描述 (匹配用户订单失败的提示文本)</label>
+                    <input type="text" id="faq-error-desc" placeholder="如: 二步验证校验失败、密码错误等关键词">
+                </div>
+                <div class="form-group">
+                    <label for="faq-solution">解决方案 (展示给客户的解决指导步骤)</label>
+                    <textarea id="faq-solution" rows="5" placeholder="请详细输入该错误的解决方案，支持换行..." style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; font-size: 13px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+
+                <button id="btn-save-faq" class="btn-submit" style="margin-top: 8px; width: 100%; height: 38px; color: white;">保存提交</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+            const tableBody = document.getElementById('table-body');
+            
+            const faqModal = document.getElementById('faq-modal');
+            const closeModal = document.getElementById('close-modal');
+            const btnOpenCreateModal = document.getElementById('btn-open-create-modal');
+            const btnSaveFaq = document.getElementById('btn-save-faq');
+
+            const modalTitle = document.getElementById('modal-title');
+            const inputId = document.getElementById('faq-id');
+            const inputErrorCode = document.getElementById('faq-error-code');
+            const inputErrorDesc = document.getElementById('faq-error-desc');
+            const inputSolution = document.getElementById('faq-solution');
+
+            const searchInput = document.getElementById('search-query');
+            const btnSearch = document.getElementById('btn-search');
+            
+            const prevBtn = document.getElementById('btn-prev');
+            const nextBtn = document.getElementById('btn-next');
+            const paginationInfo = document.getElementById('pagination-info');
+
+            let faqRecords = []; // Cache list locally
+            let currentPage = 1;
+            const pageSize = 15;
+            let totalRecords = 0;
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        window.applyNavPermissions(data.role, data.permissions);
+
+                        // Proceed to load FAQs
+                        loadFAQs();
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.clearAuthCache();
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            async function loadFAQs() {
+                try {
+                    const qValue = encodeURIComponent(searchInput.value.trim());
+                    const url = `/api/admin/faqs?page=${currentPage}&page_size=${pageSize}&query=${qValue}`;
+                    const resp = await fetch(url);
+                    const data = await resp.json();
+                    
+                    if (data.success && data.faqs) {
+                        faqRecords = data.faqs;
+                        totalRecords = data.total;
+                        renderTable();
+                        updatePagination();
+                    } else {
+                        showToast(data.message || '加载常见问题失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，加载失败');
+                }
+            }
+
+            function renderTable() {
+                if (faqRecords.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="empty-tips" style="text-align: center; padding: 30px;">无匹配的常见问题记录</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = '';
+                faqRecords.forEach(f => {
+                    const tr = document.createElement('tr');
+                    
+                    const timeStr = f.updated_at ? new Date(f.updated_at).toLocaleString() : '-';
+                    
+                    tr.innerHTML = `
+                        <td>${f.id}</td>
+                        <td><strong>${escapeHtml(f.error_code)}</strong></td>
+                        <td><div class="faq-text-cell" title="${escapeHtml(f.error_desc)}">${escapeHtml(f.error_desc)}</div></td>
+                        <td><div class="faq-text-cell" title="${escapeHtml(f.solution)}">${escapeHtml(f.solution)}</div></td>
+                        <td>${timeStr}</td>
+                        <td style="text-align: right; padding-right: 20px;">
+                            <button type="button" class="btn-action-edit" data-id="${f.id}" style="margin-right: 6px; padding: 4px 10px; font-size: 11px; background-color: var(--primary-bg); color: var(--primary); border: 1px solid rgba(79, 70, 229, 0.2); border-radius: 4px; cursor: pointer; font-weight: 600;">编辑</button>
+                            <button type="button" class="btn-action-delete" data-id="${f.id}">删除</button>
+                        </td>
+                    `;
+
+                    // Bind edit
+                    tr.querySelector('.btn-action-edit').addEventListener('click', () => {
+                        openEditModal(f);
+                    });
+
+                    // Bind delete
+                    tr.querySelector('.btn-action-delete').addEventListener('click', () => {
+                        handleDelete(f.id, f.error_code);
+                    });
+
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            function updatePagination() {
+                const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+                paginationInfo.textContent = `共 ${totalRecords} 条记录，当前第 ${currentPage}/${totalPages} 页`;
+                
+                prevBtn.disabled = (currentPage <= 1);
+                nextBtn.disabled = (currentPage >= totalPages);
+            }
+
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadFAQs();
+                }
+            });
+
+            nextBtn.addEventListener('click', () => {
+                const totalPages = Math.ceil(totalRecords / pageSize);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadFAQs();
+                }
+            });
+
+            btnSearch.addEventListener('click', () => {
+                currentPage = 1;
+                loadFAQs();
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    currentPage = 1;
+                    loadFAQs();
+                }
+            });
+
+            // Open Create Modal
+            btnOpenCreateModal.addEventListener('click', () => {
+                modalTitle.textContent = '新增常见问题';
+                inputId.value = '';
+                inputErrorCode.value = '';
+                inputErrorDesc.value = '';
+                inputSolution.value = '';
+                
+                inputErrorCode.disabled = false;
+                faqModal.classList.remove('hidden');
+            });
+
+            // Open Edit Modal
+            function openEditModal(faq) {
+                modalTitle.textContent = '编辑常见问题';
+                inputId.value = faq.id;
+                inputErrorCode.value = faq.error_code;
+                inputErrorDesc.value = faq.error_desc;
+                inputSolution.value = faq.solution;
+
+                inputErrorCode.disabled = false;
+                faqModal.classList.remove('hidden');
+            }
+
+            // Close Modal Action
+            function closeModalAction() {
+                faqModal.classList.add('hidden');
+            }
+
+            closeModal.addEventListener('click', closeModalAction);
+            window.addEventListener('click', (e) => {
+                if (e.target === faqModal) {
+                    closeModalAction();
+                }
+            });
+
+            // Save FAQ
+            btnSaveFaq.addEventListener('click', async () => {
+                const id = inputId.value;
+                const errorCode = inputErrorCode.value.trim();
+                const errorDesc = inputErrorDesc.value.trim();
+                const solution = inputSolution.value.trim();
+
+                if (!errorCode || !errorDesc || !solution) {
+                    showToast('错误码、描述和解决方案不能为空');
+                    return;
+                }
+
+                btnSaveFaq.disabled = true;
+                btnSaveFaq.textContent = '保存中...';
+
+                const url = id ? '/api/admin/faqs/update' : '/api/admin/faqs/create';
+                const bodyObj = {
+                    error_code: errorCode,
+                    error_desc: errorDesc,
+                    solution: solution
+                };
+                if (id) {
+                    bodyObj.id = parseInt(id, 10);
+                }
+
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(bodyObj)
+                    });
+                    const res = await resp.json();
+
+                    if (resp.ok && res.success) {
+                        showToast(res.message || '操作成功');
+                        closeModalAction();
+                        loadFAQs();
+                    } else {
+                        showToast(res.message || '保存失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('保存时发生网络错误');
+                } finally {
+                    btnSaveFaq.disabled = false;
+                    btnSaveFaq.textContent = '保存提交';
+                }
+            });
+
+            // Delete FAQ
+            async function handleDelete(id, errCode) {
+                if (!confirm(`确定要删除错误码为 "${errCode}" 的常见问题解答吗？`)) {
+                    return;
+                }
+
+                try {
+                    const resp = await fetch('/api/admin/faqs/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id })
+                    });
+                    const res = await resp.json();
+                    
+                    if (resp.ok && res.success) {
+                        showToast(res.message || '删除成功');
+                        loadFAQs();
+                    } else {
+                        showToast(res.message || '删除失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('删除时发生网络错误');
+                }
+            }
+
+            // Logout Handler
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        window.clearAuthCache();
+                        showToast('已安全退出登录');
+                        setTimeout(() => {
+                            window.location.href = '/admin/login.html';
+                        }, 800);
+                    } else {
+                        showToast(data.message || '注销失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.clearAuthCache();
+                    window.location.href = '/admin/login.html';
+                }
+            });
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            // Run authentication check
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

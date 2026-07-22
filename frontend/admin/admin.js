@@ -210,3 +210,87 @@ window.addEventListener('pageshow', (event) => {
         }
     }
 });
+
+// Global Admin Menu & Permission Management
+window.applyNavPermissions = function(role, permissions) {
+    if (role !== undefined && role !== null) {
+        localStorage.setItem('pixel_auth_role', role);
+    }
+    if (permissions !== undefined && permissions !== null) {
+        localStorage.setItem('pixel_auth_permissions', JSON.stringify(permissions));
+    }
+
+    const currentRole = (role !== undefined && role !== null) ? role : localStorage.getItem('pixel_auth_role');
+    let currentPerms = permissions;
+    if (!currentPerms) {
+        try {
+            currentPerms = JSON.parse(localStorage.getItem('pixel_auth_permissions') || '[]');
+        } catch (e) {
+            currentPerms = [];
+        }
+    }
+
+    const menuMap = {
+        '/admin/dashboard.html': 'dashboard',
+        '/admin/orders.html': 'orders',
+        '/admin/keys.html': 'keys',
+        '/admin/generate.html': 'generate',
+        '/admin/buy.html': 'buy',
+        '/admin/buy_records.html': 'buy',
+        '/admin/vendors.html': 'vendors',
+        '/admin/logs.html': 'logs',
+        '/admin/convert.html': 'convert',
+        '/admin/reset.html': 'reset',
+        '/admin/settings.html': 'settings',
+        '/admin/users.html': 'users',
+        '/admin/faqs.html': 'faqs'
+    };
+
+    document.querySelectorAll('a.nav-item').forEach(link => {
+        if (link.classList.contains('logout')) return;
+        const href = link.getAttribute('href');
+        if (menuMap[href]) {
+            const key = menuMap[href];
+            if (currentRole !== 'admin' && !currentPerms.includes(key)) {
+                link.style.display = 'none';
+            } else {
+                link.style.display = '';
+            }
+        }
+    });
+
+    const nav = document.querySelector('.admin-nav');
+    if (nav) {
+        nav.classList.add('nav-ready');
+    }
+};
+
+window.clearAuthCache = function() {
+    localStorage.removeItem('pixel_auth_role');
+    localStorage.removeItem('pixel_auth_permissions');
+};
+
+// Immediate pre-render permission filtering from localStorage cache to prevent menu flash on refresh
+(function initNavPermissions() {
+    const cachedRole = localStorage.getItem('pixel_auth_role');
+    const cachedPerms = localStorage.getItem('pixel_auth_permissions');
+    
+    function run() {
+        if (cachedRole) {
+            try {
+                window.applyNavPermissions(cachedRole, JSON.parse(cachedPerms || '[]'));
+            } catch (e) {}
+        } else {
+            const nav = document.querySelector('.admin-nav');
+            if (nav) {
+                nav.classList.add('nav-ready');
+            }
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+    } else {
+        run();
+    }
+})();

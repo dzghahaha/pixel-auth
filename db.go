@@ -26,6 +26,7 @@ type AccountRecord struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	Solution       string     `json:"solution,omitempty"`
 }
 
 // CardOrder holds the order history for a single card secret
@@ -279,6 +280,17 @@ func createTables() {
 		KEY idx_serial (serial)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
+	faqsDDL := `
+	CREATE TABLE IF NOT EXISTS faqs (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		error_code VARCHAR(128) NOT NULL,
+		error_desc TEXT NOT NULL,
+		solution TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE KEY idx_error_code (error_code)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
 		log.Fatalf("Error creating admin_sessions table: %v", err)
 	}
@@ -301,6 +313,10 @@ func createTables() {
 
 	if _, err := db.Exec(orchestratorLogsDDL); err != nil {
 		log.Fatalf("Error creating orchestrator_logs table: %v", err)
+	}
+
+	if _, err := db.Exec(faqsDDL); err != nil {
+		log.Fatalf("Error creating faqs table: %v", err)
 	}
 
 	// Migration: Add pay_type to key_orders if it doesn't exist (ignores error if column exists)

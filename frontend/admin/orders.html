@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台订单管理 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css?v=1.0.2">
-    <script src="./admin.js?v=1.0.7"></script>
+    <script src="./admin.js?v=1.0.8"></script>
     <style>
         /* Force hide native selects inside custom wrappers */
         .custom-select select {
@@ -501,6 +501,7 @@
             <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
             <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
+            <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -935,35 +936,8 @@
                     const data = await res.json();
                     if (res.ok && data.success) {
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
-                        
                         currentUserRole = data.role; // Save role globally
-                        const role = data.role;
-                        const permissions = data.permissions || [];
-                        
-                        const menuMap = {
-                            '/admin/dashboard.html': 'dashboard',
-                            '/admin/orders.html': 'orders',
-                            '/admin/keys.html': 'keys',
-                            '/admin/generate.html': 'generate',
-                            '/admin/buy.html': 'buy',
-                            '/admin/buy_records.html': 'buy',
-                            '/admin/vendors.html': 'vendors',
-                            '/admin/logs.html': 'logs',
-                            '/admin/convert.html': 'convert',
-                            '/admin/reset.html': 'reset',
-                            '/admin/settings.html': 'settings',
-                            '/admin/users.html': 'users'
-                        };
-
-                        document.querySelectorAll('a.nav-item').forEach(link => {
-                            const href = link.getAttribute('href');
-                            if (menuMap[href]) {
-                                const key = menuMap[href];
-                                if (role !== 'admin' && !permissions.includes(key)) {
-                                    link.style.display = 'none';
-                                }
-                            }
-                        });
+                        window.applyNavPermissions(data.role, data.permissions);
 
                         applyRoleUI();
                         const initPromises = [loadOrders()];
@@ -976,10 +950,12 @@
                             loader.classList.add('fade-out');
                         }
                     } else {
+                        window.clearAuthCache();
                         window.location.href = '/admin/login.html';
                     }
                 } catch (e) {
                     console.error(e);
+                    window.clearAuthCache();
                     window.location.href = '/admin/login.html';
                 }
             }
@@ -2133,6 +2109,7 @@
                 e.preventDefault();
                 try {
                     const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    window.clearAuthCache();
                     if (res.ok) {
                         window.location.href = '/admin/login.html';
                     } else {
@@ -2140,6 +2117,7 @@
                     }
                 } catch (e) {
                     console.error(e);
+                    window.clearAuthCache();
                     showToast('网络错误，注销失败');
                 }
             });

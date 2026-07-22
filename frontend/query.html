@@ -286,6 +286,22 @@
                         <button type="button" id="btn-copy-result-url" class="action-btn" style="flex-shrink: 0; background: var(--success); color: #fff; border: none; padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;">复制链接</button>
                     </div>
                 </div>
+
+                <!-- 解决方案 (如果有的话) -->
+                <div id="result-modal-solution-section" style="display: none; flex-direction: column; gap: 6px; margin-top: 6px;">
+                    <span style="font-size: 12px; color: var(--warning-text); font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                        <!-- 帮助/提示图标 SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--warning-text); margin: 0;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        解决方案：
+                    </span>
+                    <div id="result-modal-solution" style="background: var(--warning-bg); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px 16px; color: var(--warning-text); font-size: 13px; font-weight: 600; word-break: break-all; white-space: pre-wrap; line-height: 1.5;">
+                        -
+                    </div>
+                </div>
             </div>
             <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button type="button" id="btn-copy-result-all" class="action-btn" style="background: var(--primary); color: white; border: 1px solid var(--primary); padding: 8px 16px; font-size: 13px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: opacity 0.2s;">复制完整信息</button>
@@ -505,7 +521,7 @@
                             // Bind result modal click
                             tr.querySelector('.clickable-result').addEventListener('click', (e) => {
                                 e.stopPropagation();
-                                openResultModal(rec.username, rec.status, rec.message || '-', rec.discount_url || '');
+                                openResultModal(rec.username, rec.status, rec.message || '-', rec.discount_url || '', rec.solution || '');
                             });
 
                             // Operations cell (resubmit button for failed 2FA key submissions, cancel button for pending)
@@ -692,7 +708,7 @@
             }
 
             // Open Result Modal
-            window.openResultModal = (username, status, message, discountUrl) => {
+            window.openResultModal = (username, status, message, discountUrl, solution) => {
                 document.getElementById('result-modal-username').textContent = username;
                 
                 // Status Tag
@@ -731,6 +747,16 @@
                     };
                 } else {
                     urlSection.style.display = 'none';
+                }
+
+                // Solution section
+                const solutionSection = document.getElementById('result-modal-solution-section');
+                const solutionText = document.getElementById('result-modal-solution');
+                if (solution) {
+                    solutionSection.style.display = 'flex';
+                    solutionText.textContent = solution;
+                } else {
+                    solutionSection.style.display = 'none';
                 }
 
                 // Copy all

@@ -2886,5 +2886,176 @@ func TestKeyTierPricesCalculation(t *testing.T) {
 	}
 }
 
+func TestAdminFAQsFlow(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// Clear table
+	_, _ = db.Exec("DELETE FROM faqs")
+	_, _ = db.Exec("DELETE FROM admin_sessions")
+	_, _ = db.Exec("DELETE FROM admins")
+
+	// Insert test admin
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("testpwd123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+
+	now := time.Now()
+	_, err = db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?)",
+		"testadminfaq", string(hashedPassword), now, now)
+	if err != nil {
+		t.Fatalf("failed to insert admin: %v", err)
+	}
+
+	// Login to get session cookie
+	loginReqPayload := `{"username": "testadminfaq", "password": "testpwd123"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginReqPayload))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+
+	cookies := rrLogin.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "admin_session" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatalf("session cookie not found in response")
+	}
+
+	// 1. Create a FAQ
+	createPayload := `{"error_code": "ERR_TEST_FAQ", "error_desc": "测试错误匹配", "solution": "这是一个测试解决方案"}`
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/admin/faqs/create", strings.NewReader(createPayload))
+	reqCreate.AddCookie(sessionCookie)
+	rrCreate := httptest.NewRecorder()
+	requirePermission("faqs", handleAdminFAQsCreate)(rrCreate, reqCreate)
+
+	if rrCreate.Code != http.StatusOK {
+		t.Errorf("expected 200 for create FAQ, got %d. Body: %s", rrCreate.Code, rrCreate.Body.String())
+	}
+
+	// Verify duplication prevention
+	rrCreateDup := httptest.NewRecorder()
+	reqCreateDup := httptest.NewRequest(http.MethodPost, "/api/admin/faqs/create", strings.NewReader(createPayload))
+	reqCreateDup.AddCookie(sessionCookie)
+	requirePermission("faqs", handleAdminFAQsCreate)(rrCreateDup, reqCreateDup)
+	if rrCreateDup.Code == http.StatusOK {
+		t.Errorf("expected duplication failure, but got 200")
+	}
+
+	// 2. List FAQs
+	reqList := httptest.NewRequest(http.MethodGet, "/api/admin/faqs?query=ERR_TEST_FAQ", nil)
+	reqList.AddCookie(sessionCookie)
+	rrList := httptest.NewRecorder()
+	requirePermission("faqs", handleAdminFAQs)(rrList, reqList)
+
+	if rrList.Code != http.StatusOK {
+		t.Errorf("expected 200 for list FAQ, got %d", rrList.Code)
+	}
+
+	var listResp struct {
+		Success bool `json:"success"`
+		Total   int  `json:"total"`
+		FAQs    []struct {
+			ID        int64  `json:"id"`
+			ErrorCode string `json:"error_code"`
+			ErrorDesc string `json:"error_desc"`
+			Solution  string `json:"solution"`
+		} `json:"faqs"`
+	}
+	err = json.Unmarshal(rrList.Body.Bytes(), &listResp)
+	if err != nil {
+		t.Fatalf("failed to unmarshal list response: %v", err)
+	}
+	if listResp.Total != 1 || len(listResp.FAQs) != 1 {
+		t.Errorf("expected 1 FAQ, got total=%d, length=%d", listResp.Total, len(listResp.FAQs))
+	}
+	faqID := listResp.FAQs[0].ID
+
+	// 3. Update FAQ
+	updatePayload := fmt.Sprintf(`{"id": %d, "error_code": "ERR_TEST_FAQ", "error_desc": "测试错误匹配更新", "solution": "这是一个测试解决方案更新"}`, faqID)
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/faqs/update", strings.NewReader(updatePayload))
+	reqUpdate.AddCookie(sessionCookie)
+	rrUpdate := httptest.NewRecorder()
+	requirePermission("faqs", handleAdminFAQsUpdate)(rrUpdate, reqUpdate)
+
+	if rrUpdate.Code != http.StatusOK {
+		t.Errorf("expected 200 for update FAQ, got %d", rrUpdate.Code)
+	}
+
+	// 4. Test client-side solution mapping via /api/query
+	// Insert a mock order and failed account record
+	cardSecret := "CARD_TEST_FAQ_SECRET"
+	_, _ = db.Exec("DELETE FROM account_records WHERE card_secret = ?", cardSecret)
+	_, _ = db.Exec("DELETE FROM orders WHERE card_secret = ?", cardSecret)
+	_, _ = db.Exec("DELETE FROM system_keys WHERE system_key = ?", cardSecret)
+
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, created_at, updated_at) VALUES (?, 'ai.deard.fun', 'key123', 'active', ?, ?)", cardSecret, now, now)
+	if err != nil {
+		t.Fatalf("failed to insert system key: %v", err)
+	}
+
+	resOrder, err := db.Exec("INSERT INTO orders (card_secret, mode, vendor, created_at, updated_at) VALUES (?, 'single', 'ai.deard.fun', ?, ?)", cardSecret, now, now)
+	if err != nil {
+		t.Fatalf("failed to insert mock order: %v", err)
+	}
+	orderID, _ := resOrder.LastInsertId()
+
+	// Insert failed record with message matching error_desc or error_code of FAQ
+	// Error desc is "测试错误匹配更新", message contains "遇到了测试错误匹配更新问题"
+	_, err = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, 'user1@gmail.com', 'pwd', '2fa', 'failed', '遇到了测试错误匹配更新问题', ?, ?)", orderID, cardSecret, now, now)
+	if err != nil {
+		t.Fatalf("failed to insert mock account record: %v", err)
+	}
+
+	// Perform client query
+	reqQuery := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/query?card_secret=%s", cardSecret), nil)
+	rrQuery := httptest.NewRecorder()
+	handleQuery(rrQuery, reqQuery)
+
+	if rrQuery.Code != http.StatusOK {
+		t.Errorf("expected 200 for query, got %d", rrQuery.Code)
+	}
+
+	var queryResp struct {
+		Success bool            `json:"success"`
+		Records []AccountRecord `json:"records"`
+	}
+	err = json.Unmarshal(rrQuery.Body.Bytes(), &queryResp)
+	if err != nil {
+		t.Fatalf("failed to unmarshal query response: %v", err)
+	}
+	if len(queryResp.Records) != 1 {
+		t.Errorf("expected 1 record, got %d", len(queryResp.Records))
+	} else {
+		rec := queryResp.Records[0]
+		if rec.Solution != "这是一个测试解决方案更新" {
+			t.Errorf("expected mapped solution '这是一个测试解决方案更新', got '%s'", rec.Solution)
+		}
+	}
+
+	// 5. Delete FAQ
+	deletePayload := fmt.Sprintf(`{"id": %d}`, faqID)
+	reqDelete := httptest.NewRequest(http.MethodPost, "/api/admin/faqs/delete", strings.NewReader(deletePayload))
+	reqDelete.AddCookie(sessionCookie)
+	rrDelete := httptest.NewRecorder()
+	requirePermission("faqs", handleAdminFAQsDelete)(rrDelete, reqDelete)
+
+	if rrDelete.Code != http.StatusOK {
+		t.Errorf("expected 200 for delete FAQ, got %d", rrDelete.Code)
+	}
+
+	// Clean up
+	_, _ = db.Exec("DELETE FROM account_records WHERE card_secret = ?", cardSecret)
+	_, _ = db.Exec("DELETE FROM orders WHERE card_secret = ?", cardSecret)
+	_, _ = db.Exec("DELETE FROM system_keys WHERE system_key = ?", cardSecret)
+}
+
 
 

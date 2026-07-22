@@ -701,6 +701,13 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		if r.ExtraEmail != "" {
 			rec.ExtraEmail = r.ExtraEmail
 		}
+		if rec.Status == "failed" && rec.Message != "" {
+			var solution string
+			errSol := db.QueryRow("SELECT solution FROM faqs WHERE (? LIKE CONCAT('%', error_code, '%') AND error_code != '') OR (? LIKE CONCAT('%', error_desc, '%') AND error_desc != '') LIMIT 1", rec.Message, rec.Message).Scan(&solution)
+			if errSol == nil {
+				rec.Solution = solution
+			}
+		}
 		respRecords = append(respRecords, rec)
 	}
 
