@@ -113,6 +113,27 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+
+		// Filter if the exact username and password failed previously with specific error messages
+		var prevMsg string
+		errPrev := db.QueryRow(`
+			SELECT message 
+			FROM account_records 
+			WHERE username = ? AND password = ? AND status = 'failed'
+				AND (message = '请输入正确的密码' OR message = '账号密码错误，请确认密码后重新提交。')
+			ORDER BY id DESC LIMIT 1`, acc.Username, acc.Password).Scan(&prevMsg)
+
+		if errPrev == nil && prevMsg != "" {
+			errMsg := prevMsg
+			if len(req.Accounts) > 1 {
+				errMsg = fmt.Sprintf("第 %d 行账号%s", idx+1, prevMsg)
+			}
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": errMsg,
+			})
+			return
+		}
 	}
 
 	// Retrieve vendor mapping from system_keys table

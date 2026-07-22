@@ -235,6 +235,12 @@ func TestHandleSubmitAndQueryAPI(t *testing.T) {
 }
 
 func TestInvalidSubmitRequests(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
 	// 1. Test missing card secret
 	subReq := SubmitRequest{
 		CardSecret: "",
@@ -282,6 +288,91 @@ func TestInvalidSubmitRequests(t *testing.T) {
 
 	if !strings.Contains(rrSubmit2.Body.String(), "账号列表不能为空") {
 		t.Errorf("expected error message about empty accounts list, got %s", rrSubmit2.Body.String())
+	}
+}
+
+func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	sysKey := "FILTER-TEST-KEY"
+	_, err := db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		sysKey, "mock", "MOCK-VENDOR-KEY", "active", sysKey, time.Now(), time.Now())
+	if err != nil {
+		t.Fatalf("failed to insert mock system key: %v", err)
+	}
+
+	// Create a mock order to associate with account_records
+	res, err := db.Exec("INSERT INTO orders (card_secret, mode, vendor, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		"PREV-CARD-SECRET", "single", "mock", time.Now(), time.Now())
+	if err != nil {
+		t.Fatalf("failed to insert order: %v", err)
+	}
+	orderID, _ := res.LastInsertId()
+
+	// 1. Insert a failed record with "请输入正确的密码"
+	_, err = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "PREV-CARD-SECRET", "test_user@gmail.com", "wrong_pass123", "12345678901234567890123456789012", "failed", "请输入正确的密码", time.Now(), time.Now())
+	if err != nil {
+		t.Fatalf("failed to insert failed account record: %v", err)
+	}
+
+	// 2. Submit with the exact same username and password -> Should fail with "请输入正确的密码"
+	subReq := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq.Accounts = append(subReq.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "test_user@gmail.com",
+		Password:  "wrong_pass123",
+		TwoFactor: "12345678901234567890123456789012",
+	})
+
+	bodyBytes, _ := json.Marshal(subReq)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d. Body: %s", rrSubmit.Code, rrSubmit.Body.String())
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(rrSubmit.Body.Bytes(), &resp)
+	if resp["message"] != "请输入正确的密码" {
+		t.Errorf("expected error message '请输入正确的密码', got '%v'", resp["message"])
+	}
+
+	// 3. Submit with same username but different password -> Should succeed (returns 200)
+	subReq2 := SubmitRequest{
+		CardSecret: sysKey,
+		Mode:       "single",
+	}
+	subReq2.Accounts = append(subReq2.Accounts, struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		TwoFactor  string `json:"two_factor"`
+		ExtraEmail string `json:"extra_email,omitempty"`
+	}{
+		Username:  "test_user@gmail.com",
+		Password:  "new_pass_456",
+		TwoFactor: "12345678901234567890123456789012",
+	})
+
+	bodyBytes2, _ := json.Marshal(subReq2)
+	reqSubmit2 := httptest.NewRequest(http.MethodPost, "/api/submit", bytes.NewBuffer(bodyBytes2))
+	rrSubmit2 := httptest.NewRecorder()
+	handleSubmit(rrSubmit2, reqSubmit2)
+
+	if rrSubmit2.Code != http.StatusOK {
+		t.Errorf("expected status 200 for new password submission, got %d. Body: %s", rrSubmit2.Code, rrSubmit2.Body.String())
 	}
 }
 
