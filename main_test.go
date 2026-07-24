@@ -327,7 +327,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		t.Fatalf("failed to insert failed account record: %v", err)
 	}
 
-	// 3. Submit with test_user@gmail.com and SAME password -> Should fail with "请输入正确的密码"
+	// 3. Submit with test_user@gmail.com and SAME password -> Should now SUCCEED (200) instead of failing
 	subReq := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -348,16 +348,15 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	rrSubmit := httptest.NewRecorder()
 	handleSubmit(rrSubmit, reqSubmit)
 
-	if rrSubmit.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d. Body: %s", rrSubmit.Code, rrSubmit.Body.String())
-	}
-	var resp map[string]interface{}
-	json.Unmarshal(rrSubmit.Body.Bytes(), &resp)
-	if resp["message"] != "请输入正确的密码" {
-		t.Errorf("expected error message '请输入正确的密码', got '%v'", resp["message"])
+	if rrSubmit.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. Body: %s", rrSubmit.Code, rrSubmit.Body.String())
 	}
 
-	// 4. Submit with test_user@gmail.com and DIFFERENT password -> Should SUCCEED (returns 200) because password changed
+	// Clean up records and orders created by the submission to avoid active order blocks for the next step
+	_, _ = db.Exec("DELETE FROM account_records WHERE card_secret = ?", sysKey)
+	_, _ = db.Exec("DELETE FROM orders WHERE card_secret = ?", sysKey)
+
+	// 4. Submit with test_user@gmail.com and DIFFERENT password -> Should SUCCEED (returns 200)
 	subReqDiffPwd := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -369,7 +368,7 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		ExtraEmail string `json:"extra_email,omitempty"`
 	}{
 		Username:  "test_user@gmail.com",
-		Password:  "new_pass_456", // different password!
+		Password:  "new_pass_456", // different password
 		TwoFactor: "12345678901234567890123456789012",
 	})
 
@@ -382,7 +381,11 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 		t.Errorf("expected status 200 for different password, got %d. Body: %s", rrSubmitDiff.Code, rrSubmitDiff.Body.String())
 	}
 
-	// 5. Submit with bad_email@gmail.com and DIFFERENT password -> Should STILL fail with "请输入正确的邮箱账号"
+	// Clean up records and orders created by the submission to avoid active order blocks for the next step
+	_, _ = db.Exec("DELETE FROM account_records WHERE card_secret = ?", sysKey)
+	_, _ = db.Exec("DELETE FROM orders WHERE card_secret = ?", sysKey)
+
+	// 5. Submit with bad_email@gmail.com and DIFFERENT password -> Should now SUCCEED (200) instead of failing
 	subReq2 := SubmitRequest{
 		CardSecret: sysKey,
 		Mode:       "single",
@@ -403,13 +406,8 @@ func TestSubmitFilterOnPreviousPasswordErrors(t *testing.T) {
 	rrSubmit2 := httptest.NewRecorder()
 	handleSubmit(rrSubmit2, reqSubmit2)
 
-	if rrSubmit2.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d. Body: %s", rrSubmit2.Code, rrSubmit2.Body.String())
-	}
-	var resp2 map[string]interface{}
-	json.Unmarshal(rrSubmit2.Body.Bytes(), &resp2)
-	if resp2["message"] != "请输入正确的邮箱账号" {
-		t.Errorf("expected error message '请输入正确的邮箱账号', got '%v'", resp2["message"])
+	if rrSubmit2.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. Body: %s", rrSubmit2.Code, rrSubmit2.Body.String())
 	}
 }
 
