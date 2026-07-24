@@ -623,13 +623,14 @@
                             <th>最新账号</th>
                             <th>最新状态</th>
                             <th class="admin-only">供应商 / Task ID</th>
+                            <th class="admin-only">创建人</th>
                             <th>首次提交时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="10" style="padding: 48px 0; text-align: center;">
+                            <td colspan="11" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载订单列表数据...</span>
@@ -991,7 +992,7 @@
 
             // Fetch and render unique orders
             async function loadOrders() {
-                tableBody.innerHTML = getTableLoadingHTML(10, '正在读取数据...');
+                tableBody.innerHTML = getTableLoadingHTML(11, '正在读取数据...');
                 const queryVal = searchInput.value.trim();
                 const originalKeyVal = searchOriginalKey.value.trim();
                 const noteVal = searchNote.value.trim();
@@ -1031,7 +1032,7 @@
                         btnNext.disabled = currentPage >= totalPages;
 
                         if (currentOrders.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密订单记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密订单记录</td></tr>';
                             return;
                         }
 
@@ -1063,6 +1064,7 @@
                                 <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
+                                <td class="admin-only" style="font-size:13px; color: var(--slate-600);">${o.creator_name || '-'}</td>
                                 <td class="time-td">${formatDate(o.created_at)}</td>
                                 <td>
                                     <button type="button" class="btn-detail" data-id="${o.id}">详情</button>

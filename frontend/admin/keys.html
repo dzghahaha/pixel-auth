@@ -121,13 +121,14 @@
                             <th>当前状态</th>
                             <th class="admin-only">关联的原始密钥</th>
                             <th>备注</th>
+                            <th class="admin-only">创建人</th>
                             <th>生成时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="9" style="padding: 48px 0; text-align: center;">
+                            <td colspan="10" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载密钥数据...</span>
@@ -280,7 +281,7 @@
 
             // Fetch and render keys
             async function loadKeys() {
-                tableBody.innerHTML = getTableLoadingHTML(9, '正在读取卡密数据...');
+                tableBody.innerHTML = getTableLoadingHTML(10, '正在读取卡密数据...');
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
                 const vendorVal = vendorSelect.value;
@@ -318,7 +319,7 @@
                         }
 
                         if (currentKeys.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
                             return;
                         }
 
@@ -350,6 +351,7 @@
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-family: monospace; font-size:12px; color: var(--slate-600);">${k.original_key || '-'}</td>
                                 <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${k.note || ''}">${k.note || '-'}</td>
+                                <td class="admin-only" style="font-size:13px; color: var(--slate-600);">${k.creator_name || '-'}</td>
                                 <td class="time-td">${formatDate(k.created_at)}</td>
                                 <td>${actionBtnHtml}</td>
                             `;

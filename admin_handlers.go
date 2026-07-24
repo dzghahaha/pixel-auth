@@ -154,9 +154,11 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	dataQuery := fmt.Sprintf(`
 		SELECT o.id, o.card_secret, o.mode, COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
 		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
-		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key
+		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key,
+		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
 		FROM orders o
 		LEFT JOIN system_keys sk ON o.card_secret = sk.system_key
+		LEFT JOIN admins a ON o.creator_id = a.id
 		LEFT JOIN (
 			SELECT r1.*
 			FROM account_records r1
@@ -201,6 +203,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		VendorKey   string     `json:"vendor_key"`
 		Note        string     `json:"note"`
 		OriginalKey string     `json:"original_key"`
+		CreatorName string     `json:"creator_name"`
 	}
 
 	var records []AdminOrderRow
@@ -226,6 +229,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 			&row.VendorKey,
 			&row.Note,
 			&row.OriginalKey,
+			&row.CreatorName,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning admin order row: %v\n", errScan)
@@ -1117,10 +1121,12 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT id, system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note
-		FROM system_keys
+		SELECT sk.id, sk.system_key, sk.vendor, sk.vendor_key, sk.status, sk.original_key, sk.created_at, sk.updated_at, sk.note,
+		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
+		FROM system_keys sk
+		LEFT JOIN admins a ON sk.creator_id = a.id
 		WHERE %s
-		ORDER BY id DESC
+		ORDER BY sk.id DESC
 		LIMIT ? OFFSET ?`, whereSQL)
 
 	dataArgs := append(args, pageSize, offset)
@@ -1145,6 +1151,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
 		Note        string    `json:"note"`
+		CreatorName string    `json:"creator_name"`
 	}
 
 	var records []SystemKeyRow
@@ -1160,6 +1167,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 			&row.CreatedAt,
 			&row.UpdatedAt,
 			&row.Note,
+			&row.CreatorName,
 		)
 		if errScan != nil {
 			log.Printf("Error scanning system key row: %v\n", errScan)
