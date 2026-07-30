@@ -103,6 +103,71 @@
                 <select id="filter-creator" class="status-select admin-only">
                     <option value="">所有创建人</option>
                 </select>
+                <!-- Custom Datepicker Component -->
+                <div class="datepicker-wrapper" id="datepicker-wrapper">
+                    <!-- The Trigger (displays current selection) -->
+                    <div class="datepicker-trigger" id="datepicker-trigger">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span id="datepicker-display-value">生成时间：全部时间</span>
+                        </div>
+                        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    
+                    <!-- The Datepicker Popover Card -->
+                    <div class="datepicker-popup" id="datepicker-popup">
+                        <!-- Top Row: Shortcuts inside the popup -->
+                        <div class="popover-shortcuts" id="popover-shortcuts">
+                            <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
+                        </div>
+                        
+                        <!-- Divider -->
+                        <div class="popover-divider"></div>
+                        
+                        <!-- Middle Row: Date Inputs -->
+                        <div class="popover-inputs">
+                            <div class="popover-input-field">
+                                <span class="field-label">开始日期</span>
+                                <input type="text" id="filter-start-time" readonly placeholder="开始日期">
+                            </div>
+                            <span class="popover-separator">至</span>
+                            <div class="popover-input-field">
+                                <span class="field-label">结束日期</span>
+                                <input type="text" id="filter-end-time" readonly placeholder="结束日期">
+                            </div>
+                        </div>
+
+                        <!-- Custom Calendar month view -->
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button type="button" class="btn-calendar-nav" id="btn-prev-month">&lt;</button>
+                                <span class="calendar-month-year" id="calendar-month-year">2026年7月</span>
+                                <button type="button" class="btn-calendar-nav" id="btn-next-month">&gt;</button>
+                            </div>
+                            <div class="calendar-weekdays">
+                                <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                            </div>
+                            <div class="calendar-days-grid" id="calendar-days-grid"></div>
+                        </div>
+
+                        <!-- Footer actions -->
+                        <div class="popover-footer">
+                            <button type="button" class="btn-popover-reset" id="btn-popover-reset">重置</button>
+                            <button type="button" class="btn-popover-apply" id="btn-popover-apply">确认应用</button>
+                        </div>
+                    </div>
+                </div>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
                 <button type="button" id="btn-export" class="btn-detail" style="height: 38px; padding: 0 16px; font-size: 13px; font-weight: 500; white-space: nowrap;">导出筛选卡密</button>
             </div>
@@ -193,6 +258,262 @@
             const closeResultModal = document.getElementById('close-result-modal');
             const btnCloseResult = document.getElementById('btn-close-result');
             const resultModalBody = document.getElementById('result-modal-body');
+
+            // Datepicker elements
+            const filterStartTime = document.getElementById('filter-start-time');
+            const filterEndTime = document.getElementById('filter-end-time');
+            const datepickerWrapper = document.getElementById('datepicker-wrapper');
+            const datepickerTrigger = document.getElementById('datepicker-trigger');
+            const datepickerPopup = document.getElementById('datepicker-popup');
+            const datepickerDisplay = document.getElementById('datepicker-display-value');
+            const popoverShortcuts = document.getElementById('popover-shortcuts');
+            const btnPopoverReset = document.getElementById('btn-popover-reset');
+            const btnPopoverApply = document.getElementById('btn-popover-apply');
+
+            const btnPrevMonth = document.getElementById('btn-prev-month');
+            const btnNextMonth = document.getElementById('btn-next-month');
+            const calendarMonthYear = document.getElementById('calendar-month-year');
+            const calendarDaysGrid = document.getElementById('calendar-days-grid');
+
+            let calendarCurrentDate = new Date();
+            let selectedStartDate = null;
+            let selectedEndDate = null;
+
+            // Helper to format Date object into YYYY-MM-DD
+            const padNum = (n) => n.toString().padStart(2, '0');
+            const toLocalDateStr = (d) => {
+                return d ? `${d.getFullYear()}-${padNum(d.getMonth() + 1)}-${padNum(d.getDate())}` : '';
+            };
+
+            // Format date string for displaying in the trigger
+            function updateDatePickerDisplay() {
+                const start = toLocalDateStr(selectedStartDate);
+                const end = toLocalDateStr(selectedEndDate);
+
+                if (start && end) {
+                    if (start === end) {
+                        datepickerDisplay.textContent = `生成时间: ${start}`;
+                    } else {
+                        datepickerDisplay.textContent = `${start} 至 ${end}`;
+                    }
+                } else if (start) {
+                    datepickerDisplay.textContent = `${start} 起`;
+                } else if (end) {
+                    datepickerDisplay.textContent = `至 ${end}`;
+                } else {
+                    datepickerDisplay.textContent = '生成时间：全部时间';
+                }
+            }
+
+            // Sync Date selection to text fields
+            function syncSelectionsToInputs() {
+                filterStartTime.value = toLocalDateStr(selectedStartDate);
+                filterEndTime.value = toLocalDateStr(selectedEndDate);
+                updateDatePickerDisplay();
+            }
+
+            // Highlight cells inside custom calendar grid
+            function highlightCell(cell, date) {
+                const time = date.getTime();
+                const start = selectedStartDate ? selectedStartDate.getTime() : null;
+                const end = selectedEndDate ? selectedEndDate.getTime() : null;
+                
+                if (start && end) {
+                    if (time === start) {
+                        cell.classList.add('selected-start');
+                    } else if (time === end) {
+                        cell.classList.add('selected-end');
+                    } else if (time > start && time < end) {
+                        cell.classList.add('selected-range');
+                    }
+                } else if (start) {
+                    if (time === start) {
+                        cell.classList.add('selected-single');
+                    }
+                }
+            }
+
+            // Day cell click handler
+            function handleDayClick(date) {
+                const clickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                
+                if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
+                    selectedStartDate = clickedDate;
+                    selectedEndDate = null;
+                    popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                } else {
+                    if (clickedDate < selectedStartDate) {
+                        selectedStartDate = clickedDate;
+                        selectedEndDate = null;
+                    } else {
+                        selectedEndDate = clickedDate;
+                    }
+                }
+                
+                syncSelectionsToInputs();
+                renderCalendar();
+            }
+
+            // Render calendar grid
+            function renderCalendar() {
+                const year = calendarCurrentDate.getFullYear();
+                const month = calendarCurrentDate.getMonth();
+                
+                calendarMonthYear.textContent = `${year}年${month + 1}月`;
+                calendarDaysGrid.innerHTML = '';
+                
+                const firstDay = new Date(year, month, 1);
+                let startDayIndex = firstDay.getDay();
+                
+                const totalDays = new Date(year, month + 1, 0).getDate();
+                const prevMonthTotalDays = new Date(year, month, 0).getDate();
+                for (let i = startDayIndex - 1; i >= 0; i--) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    const d = prevMonthTotalDays - i;
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month - 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+                
+                for (let d = 1; d <= totalDays; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell';
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+                
+                const currentCells = startDayIndex + totalDays;
+                const remainingCells = 42 - currentCells;
+                for (let d = 1; d <= remainingCells; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    cell.textContent = d;
+                    
+                    const cellDate = new Date(year, month + 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+            }
+
+            // Month navigation
+            btnPrevMonth.addEventListener('click', (e) => {
+                e.stopPropagation();
+                calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+                renderCalendar();
+            });
+            btnNextMonth.addEventListener('click', (e) => {
+                e.stopPropagation();
+                calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+                renderCalendar();
+            });
+
+            // Toggle popover on trigger click
+            datepickerTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = datepickerWrapper.classList.contains('open');
+                
+                document.querySelectorAll('.custom-select').forEach(cs => {
+                    cs.classList.remove('open');
+                });
+
+                if (isOpen) {
+                    datepickerWrapper.classList.remove('open');
+                } else {
+                    datepickerWrapper.classList.add('open');
+                    renderCalendar();
+                }
+            });
+
+            // Prevent closing when clicking inside popover
+            datepickerPopup.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            // Close popover when clicking outside
+            document.addEventListener('click', () => {
+                datepickerWrapper.classList.remove('open');
+            });
+
+            // Reset action
+            btnPopoverReset.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedStartDate = null;
+                selectedEndDate = null;
+                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                
+                syncSelectionsToInputs();
+                renderCalendar();
+                datepickerWrapper.classList.remove('open');
+                
+                currentPage = 1;
+                loadKeys();
+            });
+
+            // Apply action
+            btnPopoverApply.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                datepickerWrapper.classList.remove('open');
+                
+                currentPage = 1;
+                loadKeys();
+            });
+
+            // Shortcut clicks inside popover
+            popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    
+                    popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    const range = btn.getAttribute('data-range');
+                    
+                    if (range === 'all') {
+                        selectedStartDate = null;
+                        selectedEndDate = null;
+                    } else {
+                        const now = new Date();
+                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                        if (range === 'today') {
+                            selectedStartDate = today;
+                            selectedEndDate = today;
+                        } else if (range === 'yesterday') {
+                            const yesterday = new Date(today);
+                            yesterday.setDate(today.getDate() - 1);
+                            selectedStartDate = yesterday;
+                            selectedEndDate = yesterday;
+                        } else if (range === '7days') {
+                            const daysAgo = new Date(today);
+                            daysAgo.setDate(today.getDate() - 6);
+                            selectedStartDate = daysAgo;
+                            selectedEndDate = today;
+                        } else if (range === '30days') {
+                            const daysAgo = new Date(today);
+                            daysAgo.setDate(today.getDate() - 29);
+                            selectedStartDate = daysAgo;
+                            selectedEndDate = today;
+                        }
+                    }
+
+                    syncSelectionsToInputs();
+                    renderCalendar();
+                    datepickerWrapper.classList.remove('open');
+                    
+                    currentPage = 1;
+                    loadKeys();
+                });
+            });
 
             let currentPage = 1;
             let totalPages = 1;
@@ -286,9 +607,11 @@
                 const statusVal = statusSelect.value;
                 const vendorVal = vendorSelect.value;
                 const creatorVal = creatorSelect.value;
+                const startVal = filterStartTime ? filterStartTime.value : '';
+                const endVal = filterEndTime ? filterEndTime.value : '';
 
                 try {
-                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}`;
+                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -505,13 +828,15 @@
                 const statusVal = statusSelect.value;
                 const vendorVal = vendorSelect.value;
                 const creatorVal = creatorSelect.value;
+                const startVal = filterStartTime ? filterStartTime.value : '';
+                const endVal = filterEndTime ? filterEndTime.value : '';
 
                 btnExport.disabled = true;
                 const originalText = btnExport.textContent;
                 btnExport.textContent = '正在导出...';
 
                 try {
-                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}`;
+                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
                     const res = await fetch(url);
                     const data = await res.json();
 

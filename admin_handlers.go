@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -994,6 +995,33 @@ func handleAdminOrderReplaceResubmit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func parseTimeParam(paramVal string, isEnd bool) (time.Time, error) {
+	paramVal = strings.TrimSpace(paramVal)
+	if paramVal == "" {
+		return time.Time{}, fmt.Errorf("empty parameter")
+	}
+	if sec, err := strconv.ParseInt(paramVal, 10, 64); err == nil {
+		if sec > 1e11 {
+			sec = sec / 1000
+		}
+		return time.Unix(sec, 0), nil
+	}
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, paramVal, time.Local); err == nil {
+			if layout == "2006-01-02" && isEnd {
+				return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, time.Local), nil
+			}
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("invalid time format: %s", paramVal)
+}
+
 func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1020,6 +1048,14 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	vendorFilter := r.URL.Query().Get("vendor")
 	creatorFilter := r.URL.Query().Get("creator_id")
+	startTimeParam := r.URL.Query().Get("start_time")
+	if startTimeParam == "" {
+		startTimeParam = r.URL.Query().Get("start_date")
+	}
+	endTimeParam := r.URL.Query().Get("end_time")
+	if endTimeParam == "" {
+		endTimeParam = r.URL.Query().Get("end_date")
+	}
 
 	adminID, ok := getAdminID(r)
 	if !ok {
@@ -1045,34 +1081,48 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 
 	if role == "admin" {
 		if creatorFilter != "" {
-			whereClauses = append(whereClauses, "creator_id = ?")
+			whereClauses = append(whereClauses, "sk.creator_id = ?")
 			args = append(args, creatorFilter)
 		}
 	} else if role == "user" {
-		whereClauses = append(whereClauses, "creator_id = ?")
+		whereClauses = append(whereClauses, "sk.creator_id = ?")
 		args = append(args, adminID)
 	}
 
 	if searchTerm != "" {
-		whereClauses = append(whereClauses, "(system_key LIKE ? OR vendor_key LIKE ? OR original_key LIKE ? OR note LIKE ?)")
+		whereClauses = append(whereClauses, "(sk.system_key LIKE ? OR sk.vendor_key LIKE ? OR sk.original_key LIKE ? OR sk.note LIKE ?)")
 		likeArg := "%" + searchTerm + "%"
 		args = append(args, likeArg, likeArg, likeArg, likeArg)
 	}
 
 	if statusFilter != "" {
-		whereClauses = append(whereClauses, "status = ?")
+		whereClauses = append(whereClauses, "sk.status = ?")
 		args = append(args, statusFilter)
 	}
 
 	if vendorFilter != "" {
-		whereClauses = append(whereClauses, "vendor = ?")
+		whereClauses = append(whereClauses, "sk.vendor = ?")
 		args = append(args, vendorFilter)
+	}
+
+	if startTimeParam != "" {
+		if t, err := parseTimeParam(startTimeParam, false); err == nil {
+			whereClauses = append(whereClauses, "sk.created_at >= ?")
+			args = append(args, t)
+		}
+	}
+
+	if endTimeParam != "" {
+		if t, err := parseTimeParam(endTimeParam, true); err == nil {
+			whereClauses = append(whereClauses, "sk.created_at <= ?")
+			args = append(args, t)
+		}
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")
 
 	var totalCount int
-	errCount := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM system_keys WHERE %s", whereSQL), args...).Scan(&totalCount)
+	errCount := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM system_keys sk WHERE %s", whereSQL), args...).Scan(&totalCount)
 	if errCount != nil {
 		log.Printf("Error counting system keys: %v\n", errCount)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1085,10 +1135,10 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	isExport := r.URL.Query().Get("export") == "true"
 	if isExport {
 		dataQuery := fmt.Sprintf(`
-			SELECT system_key
-			FROM system_keys
+			SELECT sk.system_key
+			FROM system_keys sk
 			WHERE %s
-			ORDER BY id DESC`, whereSQL)
+			ORDER BY sk.id DESC`, whereSQL)
 		rows, errRows := db.Query(dataQuery, args...)
 		if errRows != nil {
 			log.Printf("Error querying system keys for export: %v\n", errRows)

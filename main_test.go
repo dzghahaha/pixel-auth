@@ -1596,6 +1596,66 @@ func TestAdminBackendFlow(t *testing.T) {
 		t.Errorf("expected exported keys list, got %v", exportResp)
 	}
 
+	// Test Admin Keys Creation Time Filter API
+	nowFilter := time.Now()
+	pastTime := nowFilter.AddDate(0, 0, -10)
+	sysKeyOld := "OLDTIME_KEY_TEST_99"
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, created_at, updated_at) VALUES (?, 'ai.deard.fun', 'vk_old', 'active', ?, ?)", sysKeyOld, pastTime, pastTime)
+	if err != nil {
+		t.Fatalf("failed to insert past system key: %v", err)
+	}
+
+	// Filter by start_date = today (should exclude old key)
+	todayStr := nowFilter.Format("2006-01-02")
+	reqKeysToday := httptest.NewRequest(http.MethodGet, "/api/admin/keys?start_date="+todayStr, nil)
+	reqKeysToday.AddCookie(sessionCookie)
+	rrKeysToday := httptest.NewRecorder()
+	requireAdmin(handleAdminKeys)(rrKeysToday, reqKeysToday)
+	if rrKeysToday.Code != http.StatusOK {
+		t.Fatalf("expected 200 for start_date filter, got %d", rrKeysToday.Code)
+	}
+	var respToday map[string]interface{}
+	json.Unmarshal(rrKeysToday.Body.Bytes(), &respToday)
+	recordsToday, ok := respToday["records"].([]interface{})
+	if !ok {
+		t.Fatalf("expected records array, got %v", respToday)
+	}
+	for _, item := range recordsToday {
+		m := item.(map[string]interface{})
+		if m["system_key"] == sysKeyOld {
+			t.Errorf("old key %s should not appear when filtering from %s", sysKeyOld, todayStr)
+		}
+	}
+
+	// Filter by end_date = 5 days ago (should include old key, exclude today's key)
+	fiveDaysAgoStr := nowFilter.AddDate(0, 0, -5).Format("2006-01-02")
+	reqKeysPast := httptest.NewRequest(http.MethodGet, "/api/admin/keys?end_date="+fiveDaysAgoStr, nil)
+	reqKeysPast.AddCookie(sessionCookie)
+	rrKeysPast := httptest.NewRecorder()
+	requireAdmin(handleAdminKeys)(rrKeysPast, reqKeysPast)
+	if rrKeysPast.Code != http.StatusOK {
+		t.Fatalf("expected 200 for end_date filter, got %d", rrKeysPast.Code)
+	}
+	var respPast map[string]interface{}
+	json.Unmarshal(rrKeysPast.Body.Bytes(), &respPast)
+	recordsPast, ok := respPast["records"].([]interface{})
+	if !ok {
+		t.Fatalf("expected records array, got %v", respPast)
+	}
+	foundOld := false
+	for _, item := range recordsPast {
+		m := item.(map[string]interface{})
+		if m["system_key"] == sysKeyOld {
+			foundOld = true
+		}
+		if m["system_key"] == "test-sys-key-export" {
+			t.Errorf("today's key test-sys-key-export should not appear when filtering until %s", fiveDaysAgoStr)
+		}
+	}
+	if !foundOld {
+		t.Errorf("expected past key %s to be found in end_date filter result", sysKeyOld)
+	}
+
 	// 6.c Test Admin Dashboard Stats API
 	// Query stats - unauthorized (no cookie)
 	reqStatsUnauth := httptest.NewRequest(http.MethodGet, "/api/admin/dashboard/stats", nil)
