@@ -76,6 +76,7 @@ func main() {
 	http.HandleFunc("/api/admin/dashboard/stats", limit(requirePermission("dashboard", handleAdminDashboardStats)))
 	http.HandleFunc("/api/admin/settings", limit(requirePermission("settings", handleAdminSettings)))
 	http.HandleFunc("/api/admin/logs", limit(requirePermission("logs", handleAdminLogs)))
+	http.HandleFunc("/api/admin/devices/selector", limit(requirePermission("logs", handleAdminDevicesSelector)))
 	http.HandleFunc("/api/admin/faqs", limit(requirePermission("faqs", handleAdminFAQs)))
 	http.HandleFunc("/api/admin/faqs/create", limit(requirePermission("faqs", handleAdminFAQsCreate)))
 	http.HandleFunc("/api/admin/faqs/update", limit(requirePermission("faqs", handleAdminFAQsUpdate)))

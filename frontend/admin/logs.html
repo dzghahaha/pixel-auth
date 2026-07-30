@@ -138,7 +138,9 @@
         <div class="card" style="margin-bottom: 20px;">
             <div class="search-combo">
                 <input type="text" id="search-task-id" class="search-input" style="max-width: 180px;" placeholder="按任务ID筛选...">
-                <input type="text" id="search-serial" class="search-input" style="max-width: 180px;" placeholder="按序列号 (serial) 筛选...">
+                <select id="filter-serial" class="status-select" style="min-width: 170px;">
+                    <option value="">所有序列号 (Serial)</option>
+                </select>
                 <input type="text" id="search-query" class="search-input" placeholder="输入日志内容搜索...">
                 <select id="filter-level" class="status-select">
                     <option value="">所有级别</option>
@@ -227,7 +229,7 @@
             const toast = document.getElementById('toast');
             
             const searchTaskId = document.getElementById('search-task-id');
-            const searchSerial = document.getElementById('search-serial');
+            const serialSelect = document.getElementById('filter-serial');
             const searchInput = document.getElementById('search-query');
             const levelSelect = document.getElementById('filter-level');
             const btnSearch = document.getElementById('btn-search');
@@ -267,6 +269,30 @@
                 }, 3000);
             }
 
+            // Load devices serials selector
+            async function loadSerialsSelector() {
+                try {
+                    const res = await fetch('/api/admin/devices/selector');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        const serials = data.serials || [];
+                        const selectedSerial = serialSelect.value;
+                        serialSelect.innerHTML = '<option value="">所有序列号 (Serial)</option>';
+                        serials.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s;
+                            opt.textContent = s;
+                            if (s === selectedSerial) {
+                                opt.selected = true;
+                            }
+                            serialSelect.appendChild(opt);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to load serials selector:', e);
+                }
+            }
+
             // Check admin login
             async function checkLogin() {
                 try {
@@ -276,6 +302,7 @@
                         adminUserDisplay.textContent = `管理员: ${data.username}`;
                         window.applyNavPermissions(data.role, data.permissions);
 
+                        await loadSerialsSelector();
                         await loadLogs();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
@@ -304,7 +331,7 @@
             async function loadLogs() {
                 tableBody.innerHTML = getTableLoadingHTML(6, '正在读取日志数据...');
                 const taskVal = searchTaskId.value.trim();
-                const serialVal = searchSerial.value.trim();
+                const serialVal = serialSelect.value;
                 const queryVal = searchInput.value.trim();
                 const levelVal = levelSelect.value;
 
@@ -442,13 +469,18 @@
                 loadLogs();
             });
 
-            [searchTaskId, searchSerial, searchInput].forEach(input => {
+            [searchTaskId, searchInput].forEach(input => {
                 input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         currentPage = 1;
                         loadLogs();
                     }
                 });
+            });
+
+            serialSelect.addEventListener('change', () => {
+                currentPage = 1;
+                loadLogs();
             });
 
             levelSelect.addEventListener('change', () => {

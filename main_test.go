@@ -3369,5 +3369,95 @@ func TestXunhuPayFlow(t *testing.T) {
 	}
 }
 
+func TestAdminDevicesSelectorAndLogs(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Create admin user & login
+	hashedPwd, _ := bcrypt.GenerateFromPassword([]byte("adminpwd123"), bcrypt.DefaultCost)
+	now := time.Now()
+	_, errDb := db.Exec("REPLACE INTO admins (username, password_hash, role, created_at, updated_at) VALUES ('logadmin', ?, 'admin', ?, ?)", string(hashedPwd), now, now)
+	if errDb != nil {
+		t.Fatalf("failed to insert test admin: %v", errDb)
+	}
+
+	loginBody := `{"username":"logadmin","password":"adminpwd123"}`
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", strings.NewReader(loginBody))
+	rrLogin := httptest.NewRecorder()
+	handleAdminLogin(rrLogin, reqLogin)
+	if rrLogin.Code != http.StatusOK {
+		t.Fatalf("failed to log in: %d", rrLogin.Code)
+	}
+	sessionCookie := rrLogin.Result().Cookies()[0]
+
+	// 2. Insert test device and test log
+	testSerial := "SN_TEST_DEVICE_888"
+	_, err := db.Exec("INSERT INTO devices (serial, name, status, created_at, updated_at) VALUES (?, 'Test Device 888', 'active', ?, ?)", testSerial, now, now)
+	if err != nil {
+		t.Fatalf("failed to insert test device: %v", err)
+	}
+
+	_, err = db.Exec("INSERT INTO orchestrator_logs (level, message, task_id, serial, created_at) VALUES ('info', 'Test log message for device', 'task-101', ?, ?)", testSerial, now)
+	if err != nil {
+		t.Fatalf("failed to insert test orchestrator log: %v", err)
+	}
+
+	// 3. Test GET /api/admin/devices/selector
+	reqSelector := httptest.NewRequest(http.MethodGet, "/api/admin/devices/selector", nil)
+	reqSelector.AddCookie(sessionCookie)
+	rrSelector := httptest.NewRecorder()
+	requirePermission("logs", handleAdminDevicesSelector)(rrSelector, reqSelector)
+
+	if rrSelector.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for devices selector, got %d. Body: %s", rrSelector.Code, rrSelector.Body.String())
+	}
+
+	var selectorResp map[string]interface{}
+	json.Unmarshal(rrSelector.Body.Bytes(), &selectorResp)
+	if selectorResp["success"] != true {
+		t.Errorf("expected success true for devices selector, got %v", selectorResp)
+	}
+
+	serials, ok := selectorResp["serials"].([]interface{})
+	if !ok {
+		t.Fatalf("expected serials array, got %v", selectorResp)
+	}
+
+	foundSerial := false
+	for _, s := range serials {
+		if fmt.Sprintf("%v", s) == testSerial {
+			foundSerial = true
+			break
+		}
+	}
+	if !foundSerial {
+		t.Errorf("expected test serial %s in devices selector response, got %v", testSerial, serials)
+	}
+
+	// 4. Test GET /api/admin/logs?serial=SN_TEST_DEVICE_888
+	reqLogs := httptest.NewRequest(http.MethodGet, "/api/admin/logs?serial="+testSerial, nil)
+	reqLogs.AddCookie(sessionCookie)
+	rrLogs := httptest.NewRecorder()
+	requirePermission("logs", handleAdminLogs)(rrLogs, reqLogs)
+
+	if rrLogs.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for logs query, got %d", rrLogs.Code)
+	}
+
+	var logsResp map[string]interface{}
+	json.Unmarshal(rrLogs.Body.Bytes(), &logsResp)
+	if logsResp["success"] != true {
+		t.Errorf("expected success true for logs query, got %v", logsResp)
+	}
+
+	records, ok := logsResp["records"].([]interface{})
+	if !ok || len(records) == 0 {
+		t.Fatalf("expected non-empty log records for serial filter, got %v", logsResp)
+	}
+}
+
 
 

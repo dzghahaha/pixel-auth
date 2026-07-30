@@ -292,6 +292,17 @@ func createTables() {
 		UNIQUE KEY idx_error_code (error_code)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
+	devicesDDL := `
+	CREATE TABLE IF NOT EXISTS devices (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		serial VARCHAR(64) NOT NULL DEFAULT '',
+		name VARCHAR(128) NOT NULL DEFAULT '',
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		UNIQUE KEY idx_serial (serial)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
 		log.Fatalf("Error creating admin_sessions table: %v", err)
 	}
@@ -318,6 +329,10 @@ func createTables() {
 
 	if _, err := db.Exec(faqsDDL); err != nil {
 		log.Fatalf("Error creating faqs table: %v", err)
+	}
+
+	if _, err := db.Exec(devicesDDL); err != nil {
+		log.Printf("Warning: failed to create devices table: %v\n", err)
 	}
 
 	// Migration: Add pay_type to key_orders if it doesn't exist (ignores error if column exists)

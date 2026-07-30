@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2616,6 +2617,72 @@ func handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 		"page":      page,
 		"page_size": pageSize,
 		"records":   logs,
+	})
+}
+
+func handleAdminDevicesSelector(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "请登录后操作",
+		})
+		return
+	}
+
+	var serials []string
+	seen := make(map[string]bool)
+
+	// 1. Query devices table - try 'serial' first, then 'serial_number'
+	rows, err := db.Query("SELECT DISTINCT serial FROM devices WHERE serial IS NOT NULL AND serial != '' ORDER BY serial ASC")
+	if err != nil {
+		rows, err = db.Query("SELECT DISTINCT serial_number FROM devices WHERE serial_number IS NOT NULL AND serial_number != '' ORDER BY serial_number ASC")
+	}
+
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var s string
+			if errScan := rows.Scan(&s); errScan == nil {
+				s = strings.TrimSpace(s)
+				if s != "" && !seen[s] {
+					seen[s] = true
+					serials = append(serials, s)
+				}
+			}
+		}
+	}
+
+	// 2. Also query orchestrator_logs table for any serials logged
+	logRows, errLog := db.Query("SELECT DISTINCT serial FROM orchestrator_logs WHERE serial IS NOT NULL AND serial != '' ORDER BY serial ASC")
+	if errLog == nil {
+		defer logRows.Close()
+		for logRows.Next() {
+			var s string
+			if errScan := logRows.Scan(&s); errScan == nil {
+				s = strings.TrimSpace(s)
+				if s != "" && !seen[s] {
+					seen[s] = true
+					serials = append(serials, s)
+				}
+			}
+		}
+	}
+
+	sort.Strings(serials)
+
+	if serials == nil {
+		serials = []string{}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"serials": serials,
 	})
 }
 
