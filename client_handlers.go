@@ -241,6 +241,10 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var maintenanceMode string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode'").Scan(&maintenanceMode)
+	isMaintenance := (maintenanceMode == "on")
+
 	type AccountSubmitResult struct {
 		Username   string
 		Password   string
@@ -252,7 +256,19 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var submitResults []AccountSubmitResult
-	if vendor == "pass.aisale.one" {
+	if isMaintenance {
+		for _, acc := range req.Accounts {
+			submitResults = append(submitResults, AccountSubmitResult{
+				Username:   acc.Username,
+				Password:   acc.Password,
+				TwoFactor:  acc.TwoFactor,
+				ExtraEmail: acc.ExtraEmail,
+				TaskID:     "",
+				Status:     "paused",
+				Message:    "系统维护中，已挂起",
+			})
+		}
+	} else if vendor == "pass.aisale.one" {
 		for _, acc := range req.Accounts {
 			res, err := submitTaskToVendor(vendorKey, acc.Username, acc.Password, acc.TwoFactor)
 			if err != nil {
@@ -351,7 +367,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Insert account records
 	var usernames []string
-	if vendor == "pass.aisale.one" {
+	if isMaintenance || vendor == "pass.aisale.one" {
 		for _, res := range submitResults {
 			var extraEmail interface{} = nil
 			if res.ExtraEmail != "" {
@@ -403,7 +419,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	// Proactive Feature: Mock background processing daemon with MySQL updates
 	// Only run this if we are not in testing environment to prevent test database contamination
 	isTesting := strings.Contains(os.Args[0], ".test") || os.Getenv("MYSQL_TEST_DSN") != ""
-	if vendor != "pass.aisale.one" && vendor != "ai.deard.fun" && !isTesting {
+	if !isMaintenance && vendor != "pass.aisale.one" && vendor != "ai.deard.fun" && !isTesting {
 		go func(cSecret string, oID int64, targets []string) {
 			time.Sleep(5 * time.Second)
 

@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>设备列表管理 - Pixel 订阅管理</title>
+    <link rel="stylesheet" href="./admin.css?v=1.0.2">
+    <script src="./admin.js?v=1.0.8"></script>
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg-card, #ffffff);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow-sm);
+        }
+        .stat-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .stat-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--slate-500);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--slate-900);
+        }
+        .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .search-combo {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 16px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 220px;
+        }
+        .status-select {
+            min-width: 150px;
+            cursor: pointer;
+        }
+        .serial-badge {
+            font-family: var(--font-mono, "JetBrains Mono", Menlo, Monaco, monospace);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--slate-900);
+            background: var(--slate-100, #f1f5f9);
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--slate-200, #e2e8f0);
+            display: inline-block;
+        }
+        .btn-action-edit {
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-action-edit:hover {
+            background-color: #bae6fd;
+            color: #0284c7;
+        }
+        .btn-action-delete {
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-left: 6px;
+        }
+        .btn-action-delete:hover {
+            background-color: #fecaca;
+            color: #991b1b;
+        }
+        @media (max-width: 768px) {
+            .search-combo {
+                padding: 12px;
+                gap: 8px;
+            }
+            .status-select {
+                flex: 1;
+            }
+        }
+        @media (max-width: 480px) {
+            .search-combo {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 导航菜单 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/devices.html" class="nav-item active">设备列表</a>
+            <a href="/admin/logs.html" class="nav-item">系统日志</a>
+            <a href="/admin/faqs.html" class="nav-item">常见问题</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- 设备列表 SVG 图标 -->
+                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="12" rx="2" ry="2"/>
+                    <line x1="12" y1="16" x2="12" y2="20"/>
+                    <line x1="8" y1="20" x2="16" y2="20"/>
+                </svg>
+                <span class="header-title">客户端设备列表</span>
+            </div>
+            <div class="header-right" id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
+                管理员: -
+            </div>
+        </header>
+
+        <!-- 统计面板 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <span class="stat-label">总设备数</span>
+                    <span class="stat-value" id="stat-total">0</span>
+                </div>
+                <div class="stat-icon" style="background: #e0f2fe; color: #0284c7;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <span class="stat-label">正常在线</span>
+                    <span class="stat-value" id="stat-active" style="color: #059669;">0</span>
+                </div>
+                <div class="stat-icon" style="background: #d1fae5; color: #059669;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <span class="stat-label">已停用 / 禁用</span>
+                    <span class="stat-value" id="stat-disabled" style="color: #dc2626;">0</span>
+                </div>
+                <div class="stat-icon" style="background: #fee2e2; color: #dc2626;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <span class="stat-label">维护中</span>
+                    <span class="stat-value" id="stat-maintenance" style="color: #d97706;">0</span>
+                </div>
+                <div class="stat-icon" style="background: #fef3c7; color: #d97706;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 搜索过滤卡片与工具栏 -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="search-combo">
+                <input type="text" id="search-query" class="search-input" placeholder="输入设备序列号(SN)或名称搜索...">
+                <select id="filter-status" class="status-select">
+                    <option value="">所有状态</option>
+                    <option value="idle">空闲 (idle)</option>
+                    <option value="active">正常 (active)</option>
+                    <option value="disabled">禁用 (disabled)</option>
+                    <option value="maintenance">维护中 (maintenance)</option>
+                </select>
+                <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
+                <button type="button" id="btn-open-create-modal" class="btn-submit" style="margin-left: auto; padding: 8px 16px; font-size: 13px;">+ 添加新设备</button>
+            </div>
+        </div>
+
+        <!-- 数据表格卡片 -->
+        <div class="card">
+            <div class="table-container">
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">ID</th>
+                            <th style="width: 220px;">设备序列号 (SN)</th>
+                            <th>设备名称</th>
+                            <th style="width: 120px;">当前状态</th>
+                            <th style="width: 170px;">创建时间</th>
+                            <th style="width: 170px;">更新时间</th>
+                            <th style="width: 160px; text-align: right; padding-right: 20px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="7" style="padding: 48px 0; text-align: center;">
+                                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
+                                    <div class="loader-spinner"></div>
+                                    <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载设备数据...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页栏 -->
+            <div class="pagination-container">
+                <button type="button" id="btn-prev-page" class="btn-page" disabled>上一页</button>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--slate-600);">
+                    <span>第</span>
+                    <input type="number" id="input-page-num" class="page-input" value="1" min="1" style="width: 52px; text-align: center; padding: 4px; border: 1px solid var(--slate-300); border-radius: 6px; font-size:13px; outline:none; font-weight: 600; color: var(--slate-900);">
+                    <span>/ <span id="span-total-pages">1</span> 页</span>
+                    <span style="margin-left: 8px; color: var(--slate-400); font-weight: 400;">(共 <span id="span-total-count">0</span> 台设备)</span>
+                </div>
+                <button type="button" id="btn-next-page" class="btn-page" disabled>下一页</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑设备状态弹窗 -->
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 480px; width: 90%;">
+            <div class="modal-header">
+                <span id="edit-modal-title">编辑设备状态</span>
+                <span id="close-edit-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <input type="hidden" id="edit-device-id">
+                
+                <div class="form-group">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--slate-500);">设备序列号 (SN)</label>
+                    <input type="text" id="edit-device-serial" class="form-input readonly-box" readonly style="font-family: monospace; font-weight: 600; background-color: var(--slate-100, #f1f5f9);">
+                </div>
+                
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="edit-device-name" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">设备名称</label>
+                    <input type="text" id="edit-device-name" class="form-input" placeholder="请输入设备描述或名称...">
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="edit-device-status" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">设备状态</label>
+                    <select id="edit-device-status" class="form-input" style="cursor: pointer; padding: 10px; font-size: 14px;">
+                        <option value="idle">空闲 (idle) - 设备在线就绪</option>
+                        <option value="active">正常 (active) - 设备正常允许访问</option>
+                        <option value="disabled">禁用 (disabled) - 拒绝访问并停用</option>
+                        <option value="maintenance">维护中 (maintenance) - 暂停使用维护</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border-color); background-color: var(--slate-50, #f8fafc);">
+                <button type="button" id="btn-cancel-edit" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">取消</button>
+                <button type="button" id="btn-save-edit" class="btn-submit" style="padding: 8px 20px; font-size: 13px;">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加设备弹窗 -->
+    <div id="create-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 480px; width: 90%;">
+            <div class="modal-header">
+                <span>添加新设备</span>
+                <span id="close-create-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="form-group">
+                    <label for="create-device-serial" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">设备序列号 (SN) <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="create-device-serial" class="form-input" placeholder="输入唯一的设备序列号..." style="font-family: monospace;">
+                </div>
+                
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="create-device-name" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">设备名称</label>
+                    <input type="text" id="create-device-name" class="form-input" placeholder="输入设备标识名称 (如：办公主机A)">
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="create-device-status" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">初始状态</label>
+                    <select id="create-device-status" class="form-input" style="cursor: pointer; padding: 10px; font-size: 14px;">
+                        <option value="active">正常 (active)</option>
+                        <option value="disabled">禁用 (disabled)</option>
+                        <option value="maintenance">维护中 (maintenance)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border-color); background-color: var(--slate-50, #f8fafc);">
+                <button type="button" id="btn-cancel-create" class="btn-cancel" style="padding: 8px 16px; font-size: 13px;">取消</button>
+                <button type="button" id="btn-save-create" class="btn-submit" style="padding: 8px 20px; font-size: 13px;">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminUserDisplay = document.getElementById('admin-user-display');
+            const btnLogout = document.getElementById('btn-logout');
+            const toast = document.getElementById('toast');
+
+            const searchInput = document.getElementById('search-query');
+            const filterStatus = document.getElementById('filter-status');
+            const btnSearch = document.getElementById('btn-search');
+            const btnOpenCreateModal = document.getElementById('btn-open-create-modal');
+
+            const tableBody = document.getElementById('table-body');
+            const statTotal = document.getElementById('stat-total');
+            const statActive = document.getElementById('stat-active');
+            const statDisabled = document.getElementById('stat-disabled');
+            const statMaintenance = document.getElementById('stat-maintenance');
+
+            const btnPrev = document.getElementById('btn-prev-page');
+            const btnNext = document.getElementById('btn-next-page');
+            const inputPageNum = document.getElementById('input-page-num');
+            const spanTotalPages = document.getElementById('span-total-pages');
+            const spanTotalCount = document.getElementById('span-total-count');
+
+            // Edit Modal elements
+            const editModal = document.getElementById('edit-modal');
+            const closeEditModal = document.getElementById('close-edit-modal');
+            const btnCancelEdit = document.getElementById('btn-cancel-edit');
+            const btnSaveEdit = document.getElementById('btn-save-edit');
+            const editDeviceId = document.getElementById('edit-device-id');
+            const editDeviceSerial = document.getElementById('edit-device-serial');
+            const editDeviceName = document.getElementById('edit-device-name');
+            const editDeviceStatus = document.getElementById('edit-device-status');
+
+            // Create Modal elements
+            const createModal = document.getElementById('create-modal');
+            const closeCreateModal = document.getElementById('close-create-modal');
+            const btnCancelCreate = document.getElementById('btn-cancel-create');
+            const btnSaveCreate = document.getElementById('btn-save-create');
+            const createDeviceSerial = document.getElementById('create-device-serial');
+            const createDeviceName = document.getElementById('create-device-name');
+            const createDeviceStatus = document.getElementById('create-device-status');
+
+            let currentPage = 1;
+            let totalPages = 1;
+            const pageSize = 20;
+            let currentDevices = [];
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+
+            function formatDate(dateStr) {
+                if (!dateStr) return '-';
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return dateStr;
+                return d.toLocaleString('zh-CN', { hour12: false });
+            }
+
+            // Check admin login
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        adminUserDisplay.textContent = `管理员: ${data.username}`;
+                        window.applyNavPermissions(data.role, data.permissions);
+
+                        await loadDevices();
+
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                        }
+                    } else {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.clearAuthCache();
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // Load device list
+            async function loadDevices() {
+                tableBody.innerHTML = getTableLoadingHTML(7, '正在读取设备数据...');
+                const queryVal = searchInput.value.trim();
+                const statusVal = filterStatus.value;
+
+                try {
+                    const url = `/api/admin/devices?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        currentDevices = data.devices || [];
+                        const total = data.total || 0;
+                        totalPages = Math.ceil(total / pageSize) || 1;
+
+                        inputPageNum.value = currentPage;
+                        spanTotalPages.textContent = totalPages;
+                        spanTotalCount.textContent = total;
+                        btnPrev.disabled = currentPage <= 1;
+                        btnNext.disabled = currentPage >= totalPages;
+
+                        // Stats update
+                        if (data.stats) {
+                            statTotal.textContent = data.stats.total || 0;
+                            statActive.textContent = data.stats.active || 0;
+                            statDisabled.textContent = data.stats.disabled || 0;
+                            statMaintenance.textContent = data.stats.maintenance || 0;
+                        }
+
+                        if (currentDevices.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的设备记录</td></tr>';
+                            return;
+                        }
+
+                        tableBody.innerHTML = '';
+                        currentDevices.forEach(d => {
+                            const tr = document.createElement('tr');
+
+                            let statusBadgeClass = 'active';
+                            let statusText = '正常';
+                            if (d.status === 'idle') {
+                                statusBadgeClass = 'idle';
+                                statusText = '空闲';
+                            } else if (d.status === 'disabled') {
+                                statusBadgeClass = 'disabled';
+                                statusText = '禁用';
+                            } else if (d.status === 'maintenance') {
+                                statusBadgeClass = 'maintenance';
+                                statusText = '维护中';
+                            } else if (d.status === 'active') {
+                                statusBadgeClass = 'active';
+                                statusText = '正常';
+                            } else {
+                                statusBadgeClass = 'paused';
+                                statusText = d.status;
+                            }
+
+                            tr.innerHTML = `
+                                <td>${d.id}</td>
+                                <td><span class="serial-badge">${d.serial || '-'}</span></td>
+                                <td style="font-weight: 600; color: var(--slate-800);">${d.name || '-'}</td>
+                                <td><span class="status-badge ${statusBadgeClass}">${statusText}</span></td>
+                                <td style="font-size: 12px; color: var(--slate-500);">${formatDate(d.created_at)}</td>
+                                <td style="font-size: 12px; color: var(--slate-500);">${formatDate(d.updated_at)}</td>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    <button type="button" class="btn-action-edit" data-id="${d.id}">编辑状态</button>
+                                    <button type="button" class="btn-action-delete" data-id="${d.id}" data-serial="${d.serial}">删除</button>
+                                </td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+
+                        // Bind Edit actions
+                        document.querySelectorAll('.btn-action-edit').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const id = parseInt(e.currentTarget.getAttribute('data-id'), 10);
+                                openEditModal(id);
+                            });
+                        });
+
+                        // Bind Delete actions
+                        document.querySelectorAll('.btn-action-delete').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const id = parseInt(e.currentTarget.getAttribute('data-id'), 10);
+                                const serial = e.currentTarget.getAttribute('data-serial');
+                                deleteDevice(id, serial);
+                            });
+                        });
+
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--danger);">请求失败，请检查网络连接</td></tr>';
+                }
+            }
+
+            // Open Edit Modal
+            function openEditModal(id) {
+                const device = currentDevices.find(d => d.id === id);
+                if (!device) return;
+
+                editDeviceId.value = device.id;
+                editDeviceSerial.value = device.serial;
+                editDeviceName.value = device.name || '';
+                editDeviceStatus.value = device.status || 'active';
+
+                editModal.classList.remove('hidden');
+            }
+
+            function closeEditModalAction() {
+                editModal.classList.add('hidden');
+            }
+
+            closeEditModal.addEventListener('click', closeEditModalAction);
+            btnCancelEdit.addEventListener('click', closeEditModalAction);
+
+            // Save Edit Status & Details
+            btnSaveEdit.addEventListener('click', async () => {
+                const id = parseInt(editDeviceId.value, 10);
+                const name = editDeviceName.value.trim();
+                const status = editDeviceStatus.value;
+
+                if (!id) {
+                    showToast('设备ID无效');
+                    return;
+                }
+
+                btnSaveEdit.disabled = true;
+                btnSaveEdit.textContent = '保存中...';
+
+                try {
+                    const res = await fetch('/api/admin/devices/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: id,
+                            name: name,
+                            status: status
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '设备状态更新成功');
+                        closeEditModalAction();
+                        await loadDevices();
+                    } else {
+                        showToast(data.message || '更新失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法更新设备');
+                } finally {
+                    btnSaveEdit.disabled = false;
+                    btnSaveEdit.textContent = '保存修改';
+                }
+            });
+
+            // Open Create Modal
+            btnOpenCreateModal.addEventListener('click', () => {
+                createDeviceSerial.value = '';
+                createDeviceName.value = '';
+                createDeviceStatus.value = 'active';
+                createModal.classList.remove('hidden');
+            });
+
+            function closeCreateModalAction() {
+                createModal.classList.add('hidden');
+            }
+
+            closeCreateModal.addEventListener('click', closeCreateModalAction);
+            btnCancelCreate.addEventListener('click', closeCreateModalAction);
+
+            // Save New Device
+            btnSaveCreate.addEventListener('click', async () => {
+                const serial = createDeviceSerial.value.trim();
+                const name = createDeviceName.value.trim();
+                const status = createDeviceStatus.value;
+
+                if (!serial) {
+                    showToast('请输入设备序列号');
+                    return;
+                }
+
+                btnSaveCreate.disabled = true;
+                btnSaveCreate.textContent = '添加中...';
+
+                try {
+                    const res = await fetch('/api/admin/devices/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            serial: serial,
+                            name: name,
+                            status: status
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '设备添加成功');
+                        closeCreateModalAction();
+                        await loadDevices();
+                    } else {
+                        showToast(data.message || '添加失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，无法添加设备');
+                } finally {
+                    btnSaveCreate.disabled = false;
+                    btnSaveCreate.textContent = '确认添加';
+                }
+            });
+
+            // Delete Device
+            async function deleteDevice(id, serial) {
+                if (!confirm(`确定要删除序列号为 “${serial}” 的设备吗？`)) {
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/admin/devices/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '设备已删除');
+                        await loadDevices();
+                    } else {
+                        showToast(data.message || '删除失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，删除失败');
+                }
+            }
+
+            // Click outside modals to close
+            window.addEventListener('click', (e) => {
+                if (e.target === editModal) {
+                    closeEditModalAction();
+                }
+                if (e.target === createModal) {
+                    closeCreateModalAction();
+                }
+            });
+
+            // ESC key to close
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (!editModal.classList.contains('hidden')) {
+                        closeEditModalAction();
+                    }
+                    if (!createModal.classList.contains('hidden')) {
+                        closeCreateModalAction();
+                    }
+                }
+            });
+
+            // Search events
+            btnSearch.addEventListener('click', () => {
+                currentPage = 1;
+                loadDevices();
+            });
+
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    currentPage = 1;
+                    loadDevices();
+                }
+            });
+
+            filterStatus.addEventListener('change', () => {
+                currentPage = 1;
+                loadDevices();
+            });
+
+            // Pagination
+            btnPrev.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadDevices();
+                }
+            });
+
+            btnNext.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadDevices();
+                }
+            });
+
+            inputPageNum.addEventListener('change', () => {
+                let page = parseInt(inputPageNum.value, 10);
+                if (isNaN(page) || page < 1) page = 1;
+                if (page > totalPages) page = totalPages;
+                currentPage = page;
+                loadDevices();
+            });
+
+            // Intercept navigation links
+            document.querySelectorAll('a.nav-item').forEach(link => {
+                if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetUrl = link.getAttribute('href');
+                        const loader = document.getElementById('page-loader');
+                        if (loader) {
+                            loader.classList.remove('fade-out');
+                        }
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 180);
+                    });
+                }
+            });
+
+            // Logout
+            btnLogout.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/logout', { method: 'POST' });
+                    window.clearAuthCache();
+                    if (res.ok) {
+                        window.location.href = '/admin/login.html';
+                    } else {
+                        showToast('注销登录失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.clearAuthCache();
+                    showToast('网络错误，注销失败');
+                }
+            });
+
+            // Init
+            checkLogin();
+        });
+    </script>
+</body>
+</html>

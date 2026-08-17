@@ -347,6 +347,10 @@ func createTables() {
 	_, _ = db.Exec("ALTER TABLE card_stock ADD COLUMN note VARCHAR(256) NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE card_stock ADD COLUMN creator_id BIGINT UNSIGNED DEFAULT NULL")
 
+	// Migration: Add columns to devices table if they don't exist
+	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN name VARCHAR(128) NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+
 	// Insert default vendors if not present
 	defaultVendors := []struct {
 		Name        string

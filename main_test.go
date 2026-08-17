@@ -96,6 +96,18 @@ func initTestDB(t *testing.T) {
 	if _, err := db.Exec("DELETE FROM card_stock"); err != nil {
 		t.Logf("Failed to clear card_stock: %v", err)
 	}
+	if _, err := db.Exec("DELETE FROM devices"); err != nil {
+		t.Logf("Failed to clear devices: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM admin_sessions"); err != nil {
+		t.Logf("Failed to clear admin_sessions: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM admin_permissions"); err != nil {
+		t.Logf("Failed to clear admin_permissions: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM admins"); err != nil {
+		t.Logf("Failed to clear admins: %v", err)
+	}
 }
 
 func TestMySQLStorage(t *testing.T) {
@@ -1543,6 +1555,32 @@ func TestAdminBackendFlow(t *testing.T) {
 	if dbStatus != "success" || dbMessage != "已绑定优惠" || dbDiscount != "https://pixel.sub/offer" {
 		t.Errorf("record fields not updated correctly in database: status=%s, message=%s, discount=%s", dbStatus, dbMessage, dbDiscount)
 	}
+
+	// 6.a Test Orders Update API with 'cancelled' status
+	updateCancelledPayload := fmt.Sprintf(`{"record_id": %d, "status": "cancelled", "message": "管理员取消", "discount_url": ""}`, recordID)
+	reqUpdateCancelled := httptest.NewRequest(http.MethodPost, "/api/admin/orders/update", strings.NewReader(updateCancelledPayload))
+	reqUpdateCancelled.AddCookie(sessionCookie)
+	rrUpdateCancelled := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminOrdersUpdate)(rrUpdateCancelled, reqUpdateCancelled)
+
+	if rrUpdateCancelled.Code != http.StatusOK {
+		t.Fatalf("expected 200 for orders update to cancelled, got %d. Body: %s", rrUpdateCancelled.Code, rrUpdateCancelled.Body.String())
+	}
+
+	err = db.QueryRow("SELECT status, message FROM account_records WHERE id = ?", recordID).
+		Scan(&dbStatus, &dbMessage)
+	if err != nil {
+		t.Fatalf("failed to query updated record: %v", err)
+	}
+	if dbStatus != "cancelled" || dbMessage != "管理员取消" {
+		t.Errorf("record fields not updated to cancelled correctly: status=%s, message=%s", dbStatus, dbMessage)
+	}
+
+	// Restore to success for subsequent stats assertions
+	reqRestore := httptest.NewRequest(http.MethodPost, "/api/admin/orders/update", strings.NewReader(updatePayload))
+	reqRestore.AddCookie(sessionCookie)
+	rrRestore := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminOrdersUpdate)(rrRestore, reqRestore)
 
 	// Insert a test key to ensure keys query and export returns data
 	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -3456,6 +3494,222 @@ func TestAdminDevicesSelectorAndLogs(t *testing.T) {
 	records, ok := logsResp["records"].([]interface{})
 	if !ok || len(records) == 0 {
 		t.Fatalf("expected non-empty log records for serial filter, got %v", logsResp)
+	}
+}
+
+func createTestAdminSession(t *testing.T, username, role string, permissions []string) *http.Cookie {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("pwd123"), bcrypt.DefaultCost)
+	now := time.Now()
+	res, err := db.Exec("INSERT INTO admins (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		username, string(hashedPassword), role, now, now)
+	if err != nil {
+		t.Fatalf("failed to insert admin user: %v", err)
+	}
+	adminID, _ := res.LastInsertId()
+
+	for _, perm := range permissions {
+		_, _ = db.Exec("INSERT INTO admin_permissions (admin_id, permission, created_at) VALUES (?, ?, ?)", adminID, perm, now)
+	}
+
+	token := fmt.Sprintf("session-%d-%d", adminID, now.UnixNano())
+	expiresAt := now.Add(24 * time.Hour)
+	_, err = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)", token, adminID, expiresAt, now)
+	if err != nil {
+		t.Fatalf("failed to insert session: %v", err)
+	}
+
+	return &http.Cookie{
+		Name:  "admin_session",
+		Value: token,
+	}
+}
+
+func TestMaintenanceModeAndResume(t *testing.T) {
+	initTestDB(t)
+
+	// 1. Enable Maintenance Mode via Settings
+	_, err := db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('maintenance_mode', 'on', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'on'")
+	if err != nil {
+		t.Fatalf("failed to enable maintenance_mode in DB: %v", err)
+	}
+
+	// 2. Insert test system key for submission
+	cardSecret := "test-maint-key-001"
+	_, err = db.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, creator_id, original_key, created_at, updated_at) VALUES (?, 'ai.deard.fun', 'vk-maint-001', 'active', 1, ?, NOW(), NOW())", cardSecret, cardSecret)
+	if err != nil {
+		t.Fatalf("failed to insert system key: %v", err)
+	}
+
+	// 3. Submit task while Maintenance Mode is ON
+	submitBody := fmt.Sprintf(`{"card_secret": "%s", "mode": "single", "accounts": [{"username": "maintuser@gmail.com", "password": "pwd", "two_factor": "12345678901234567890123456789012"}]}`, cardSecret)
+	reqSubmit := httptest.NewRequest(http.MethodPost, "/api/submit", strings.NewReader(submitBody))
+	rrSubmit := httptest.NewRecorder()
+	handleSubmit(rrSubmit, reqSubmit)
+
+	if rrSubmit.Code != http.StatusOK {
+		t.Fatalf("expected 200 for submit during maintenance mode, got %d. Body: %s", rrSubmit.Code, rrSubmit.Body.String())
+	}
+
+	var submitResp map[string]interface{}
+	json.Unmarshal(rrSubmit.Body.Bytes(), &submitResp)
+	if submitResp["success"] != true {
+		t.Fatalf("expected submit success true, got %v", submitResp)
+	}
+
+	// 4. Verify order record status is 'paused'
+	var recordStatus, recordMessage string
+	err = db.QueryRow("SELECT status, message FROM account_records WHERE card_secret = ?", cardSecret).Scan(&recordStatus, &recordMessage)
+	if err != nil {
+		t.Fatalf("failed to query inserted record: %v", err)
+	}
+	if recordStatus != "paused" || recordMessage != "系统维护中，已挂起" {
+		t.Errorf("expected status 'paused' and message '系统维护中，已挂起', got status=%s, message=%s", recordStatus, recordMessage)
+	}
+
+	// 5. Test Batch Resume with Regular Operator User (should fail 403)
+	userCookie := createTestAdminSession(t, "op_user_maint", "user", []string{"orders"})
+	reqResumeUser := httptest.NewRequest(http.MethodPost, "/api/admin/orders/resume_paused", nil)
+	reqResumeUser.AddCookie(userCookie)
+	rrResumeUser := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminOrdersResumePaused)(rrResumeUser, reqResumeUser)
+
+	if rrResumeUser.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for operator attempting batch resume, got %d", rrResumeUser.Code)
+	}
+
+	// 6. Test Batch Resume with SuperAdmin (should succeed)
+	adminCookie := createTestAdminSession(t, "superadmin_maint", "admin", nil)
+	reqResumeAdmin := httptest.NewRequest(http.MethodPost, "/api/admin/orders/resume_paused", nil)
+	reqResumeAdmin.AddCookie(adminCookie)
+	rrResumeAdmin := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminOrdersResumePaused)(rrResumeAdmin, reqResumeAdmin)
+
+	if rrResumeAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for superadmin batch resume, got %d. Body: %s", rrResumeAdmin.Code, rrResumeAdmin.Body.String())
+	}
+
+	var resumeResp map[string]interface{}
+	json.Unmarshal(rrResumeAdmin.Body.Bytes(), &resumeResp)
+	if resumeResp["success"] != true || resumeResp["resumed_count"].(float64) < 1 {
+		t.Errorf("expected batch resume success true and resumed_count >= 1, got %v", resumeResp)
+	}
+
+	// 7. Verify record status is now 'pending'
+	err = db.QueryRow("SELECT status, message FROM account_records WHERE card_secret = ?", cardSecret).Scan(&recordStatus, &recordMessage)
+	if err != nil {
+		t.Fatalf("failed to query resumed record: %v", err)
+	}
+	if recordStatus != "pending" || recordMessage != "恢复排队处理" {
+		t.Errorf("expected status 'pending' and message '恢复排队处理', got status=%s, message=%s", recordStatus, recordMessage)
+	}
+}
+
+func TestAdminDeviceManagement(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		return
+	}
+	defer db.Close()
+
+	// 1. Create superadmin session
+	adminCookie := createTestAdminSession(t, "device_admin", "admin", nil)
+
+	// 2. Test create device
+	createBody := `{"serial":"SN_TEST_DEV_001","name":"测试设备001","status":"active"}`
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/admin/devices/create", strings.NewReader(createBody))
+	reqCreate.AddCookie(adminCookie)
+	rrCreate := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevicesCreate)(rrCreate, reqCreate)
+
+	if rrCreate.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for device create, got %d. Body: %s", rrCreate.Code, rrCreate.Body.String())
+	}
+
+	var createResp map[string]interface{}
+	json.Unmarshal(rrCreate.Body.Bytes(), &createResp)
+	if createResp["success"] != true {
+		t.Fatalf("expected success true for device create, got %v", createResp)
+	}
+	deviceID := int64(createResp["id"].(float64))
+	if deviceID <= 0 {
+		t.Fatalf("expected valid device id, got %d", deviceID)
+	}
+
+	// 3. Test list devices (GET /api/admin/devices)
+	reqList := httptest.NewRequest(http.MethodGet, "/api/admin/devices?query=SN_TEST_DEV_001", nil)
+	reqList.AddCookie(adminCookie)
+	rrList := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevices)(rrList, reqList)
+
+	if rrList.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for device list, got %d. Body: %s", rrList.Code, rrList.Body.String())
+	}
+
+	var listResp map[string]interface{}
+	json.Unmarshal(rrList.Body.Bytes(), &listResp)
+	if listResp["success"] != true {
+		t.Fatalf("expected success true for device list, got %v", listResp)
+	}
+	if listResp["total"].(float64) < 1 {
+		t.Errorf("expected at least 1 total device, got %v", listResp["total"])
+	}
+
+	// 4. Test update device status (POST /api/admin/devices/update_status) -> disabled
+	updateStatusBody := fmt.Sprintf(`{"id":%d,"status":"disabled"}`, deviceID)
+	reqUpdateStatus := httptest.NewRequest(http.MethodPost, "/api/admin/devices/update_status", strings.NewReader(updateStatusBody))
+	reqUpdateStatus.AddCookie(adminCookie)
+	rrUpdateStatus := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevicesUpdateStatus)(rrUpdateStatus, reqUpdateStatus)
+
+	if rrUpdateStatus.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for update_status, got %d. Body: %s", rrUpdateStatus.Code, rrUpdateStatus.Body.String())
+	}
+
+	// Verify in DB that status is now 'disabled'
+	var dbStatus string
+	err := db.QueryRow("SELECT status FROM devices WHERE id = ?", deviceID).Scan(&dbStatus)
+	if err != nil {
+		t.Fatalf("failed to query updated device: %v", err)
+	}
+	if dbStatus != "disabled" {
+		t.Errorf("expected device status 'disabled', got '%s'", dbStatus)
+	}
+
+	// 5. Test update device name & status (POST /api/admin/devices/update) -> maintenance
+	updateBody := fmt.Sprintf(`{"id":%d,"name":"修改后的测试设备","status":"maintenance"}`, deviceID)
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/devices/update", strings.NewReader(updateBody))
+	reqUpdate.AddCookie(adminCookie)
+	rrUpdate := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevicesUpdate)(rrUpdate, reqUpdate)
+
+	if rrUpdate.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for device update, got %d. Body: %s", rrUpdate.Code, rrUpdate.Body.String())
+	}
+
+	var dbName string
+	err = db.QueryRow("SELECT name, status FROM devices WHERE id = ?", deviceID).Scan(&dbName, &dbStatus)
+	if err != nil {
+		t.Fatalf("failed to query updated device: %v", err)
+	}
+	if dbName != "修改后的测试设备" || dbStatus != "maintenance" {
+		t.Errorf("expected device name '修改后的测试设备' and status 'maintenance', got name='%s', status='%s'", dbName, dbStatus)
+	}
+
+	// 6. Test delete device (POST /api/admin/devices/delete)
+	deleteBody := fmt.Sprintf(`{"id":%d}`, deviceID)
+	reqDelete := httptest.NewRequest(http.MethodPost, "/api/admin/devices/delete", strings.NewReader(deleteBody))
+	reqDelete.AddCookie(adminCookie)
+	rrDelete := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevicesDelete)(rrDelete, reqDelete)
+
+	if rrDelete.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for device delete, got %d. Body: %s", rrDelete.Code, rrDelete.Body.String())
+	}
+
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM devices WHERE id = ?", deviceID).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected device to be deleted, but still found in DB")
 	}
 }
 

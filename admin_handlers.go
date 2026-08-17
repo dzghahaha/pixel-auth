@@ -286,7 +286,7 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := strings.ToLower(req.Status)
-	if status != "pending" && status != "running" && status != "success" && status != "failed" {
+	if status != "pending" && status != "running" && status != "success" && status != "failed" && status != "cancelled" && status != "paused" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "无效的状态值",
@@ -296,7 +296,7 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	var errUpdate error
-	if status == "success" || status == "failed" {
+	if status == "success" || status == "failed" || status == "cancelled" {
 		_, errUpdate = db.Exec(`
 			UPDATE account_records 
 			SET status = ?, message = ?, discount_url = ?, completed_at = ?, updated_at = ? 
@@ -322,6 +322,33 @@ func handleAdminOrdersUpdate(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "更新成功",
+	})
+}
+
+func handleAdminOrdersResumePaused(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	res, err := db.Exec(`
+		UPDATE account_records 
+		SET status = 'pending', message = '恢复排队处理', updated_at = NOW() 
+		WHERE status = 'paused'`)
+	if err != nil {
+		log.Printf("Error resuming paused orders: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "恢复挂起订单失败",
+		})
+		return
+	}
+
+	resumedCount, _ := res.RowsAffected()
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":       true,
+		"resumed_count": resumedCount,
+		"message":       fmt.Sprintf("成功将 %d 条挂起订单恢复为排队中", resumedCount),
 	})
 }
 
@@ -1612,6 +1639,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"api_base_url":            getSetting("api_base_url", ""),
 				"api_whitelist":           getSetting("api_whitelist", ""),
 				"deard_convert_open":      getSetting("deard_convert_open", "off"),
+				"maintenance_mode":        getSetting("maintenance_mode", "off"),
 				"log_cleanup_open":        getSetting("log_cleanup_open", "off"),
 				"log_cleanup_days":        getSetting("log_cleanup_days", "30"),
 			},
@@ -1636,6 +1664,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			APIBaseURL           string `json:"api_base_url"`
 			APIWhitelist         string `json:"api_whitelist"`
 			DeardConvertOpen     string `json:"deard_convert_open"`
+			MaintenanceMode      string `json:"maintenance_mode"`
 			LogCleanupOpen       string `json:"log_cleanup_open"`
 			LogCleanupDays       string `json:"log_cleanup_days"`
 		}
@@ -1664,6 +1693,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		oldTierPrices := getSetting("key_tier_prices", "[]")
 		oldAPIOpen := getSetting("api_open", "off")
 		oldAPIBaseURL := getSetting("api_base_url", "")
+		oldMaintenanceMode := getSetting("maintenance_mode", "off")
 		oldLogCleanupOpen := getSetting("log_cleanup_open", "off")
 		oldLogCleanupDays := getSetting("log_cleanup_days", "30")
 
@@ -1715,6 +1745,9 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		if req.APIBaseURL == "" {
 			req.APIBaseURL = oldAPIBaseURL
 		}
+		if req.MaintenanceMode == "" {
+			req.MaintenanceMode = oldMaintenanceMode
+		}
 		if req.LogCleanupOpen == "" {
 			req.LogCleanupOpen = oldLogCleanupOpen
 		}
@@ -1746,6 +1779,7 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"api_base_url":            req.APIBaseURL,
 			"api_whitelist":           req.APIWhitelist,
 			"deard_convert_open":      req.DeardConvertOpen,
+			"maintenance_mode":        req.MaintenanceMode,
 			"log_cleanup_open":        req.LogCleanupOpen,
 			"log_cleanup_days":        req.LogCleanupDays,
 		}
@@ -2683,6 +2717,390 @@ func handleAdminDevicesSelector(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"serials": serials,
+	})
+}
+
+type DeviceItem struct {
+	ID        int64     `json:"id"`
+	Serial    string    `json:"serial"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// handleAdminDevices lists devices with optional query search, status filter, and pagination
+func handleAdminDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	page := 1
+	pageSize := 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		fmt.Sscanf(p, "%d", &page)
+	}
+	if ps := r.URL.Query().Get("page_size"); ps != "" {
+		fmt.Sscanf(ps, "%d", &pageSize)
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+	searchTerm := strings.TrimSpace(r.URL.Query().Get("query"))
+	if searchTerm == "" {
+		searchTerm = strings.TrimSpace(r.URL.Query().Get("search"))
+	}
+	statusFilter := strings.TrimSpace(r.URL.Query().Get("status"))
+
+	whereClauses := []string{"1=1"}
+	var args []interface{}
+
+	if searchTerm != "" {
+		whereClauses = append(whereClauses, "(serial LIKE ? OR name LIKE ?)")
+		likeArg := "%" + searchTerm + "%"
+		args = append(args, likeArg, likeArg)
+	}
+
+	if statusFilter != "" && statusFilter != "all" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, statusFilter)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	// 1. Total count for current query
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM devices WHERE %s", whereSQL)
+	err := db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		log.Printf("Query devices count error: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询设备总数失败",
+		})
+		return
+	}
+
+	// 2. Fetch paginated devices
+	selectQuery := fmt.Sprintf("SELECT id, serial, COALESCE(name, ''), status, COALESCE(created_at, updated_at, NOW()), COALESCE(updated_at, NOW()) FROM devices WHERE %s ORDER BY id DESC LIMIT ? OFFSET ?", whereSQL)
+	queryArgs := append(args, pageSize, offset)
+
+	rows, err := db.Query(selectQuery, queryArgs...)
+	if err != nil {
+		log.Printf("Query devices error: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询设备列表失败",
+		})
+		return
+	}
+	defer rows.Close()
+
+	devices := []DeviceItem{}
+	for rows.Next() {
+		var d DeviceItem
+		if errScan := rows.Scan(&d.ID, &d.Serial, &d.Name, &d.Status, &d.CreatedAt, &d.UpdatedAt); errScan == nil {
+			devices = append(devices, d)
+		}
+	}
+
+	// 3. Stats for header badges
+	stats := map[string]int{
+		"total":       0,
+		"active":      0,
+		"idle":        0,
+		"disabled":    0,
+		"maintenance": 0,
+	}
+	statRows, errStat := db.Query("SELECT status, COUNT(*) FROM devices GROUP BY status")
+	if errStat == nil {
+		defer statRows.Close()
+		totalAll := 0
+		for statRows.Next() {
+			var st string
+			var cnt int
+			if errScan := statRows.Scan(&st, &cnt); errScan == nil {
+				totalAll += cnt
+				stats[st] = cnt
+			}
+		}
+		stats["total"] = totalAll
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"devices":   devices,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"stats":     stats,
+	})
+}
+
+// handleAdminDevicesUpdateStatus updates only status (or status and name) of a device
+func handleAdminDevicesUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID     int64  `json:"id"`
+		Serial string `json:"serial"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式",
+		})
+		return
+	}
+
+	req.Status = strings.TrimSpace(req.Status)
+	if req.Status == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "状态不能为空",
+		})
+		return
+	}
+
+	var res sql.Result
+	var err error
+	now := time.Now()
+
+	if req.ID > 0 {
+		res, err = db.Exec("UPDATE devices SET status = ?, updated_at = ? WHERE id = ?", req.Status, now, req.ID)
+	} else if strings.TrimSpace(req.Serial) != "" {
+		res, err = db.Exec("UPDATE devices SET status = ?, updated_at = ? WHERE serial = ?", req.Status, now, strings.TrimSpace(req.Serial))
+	} else {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请提供有效的设备ID或序列号",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Update device status error: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新设备状态失败",
+		})
+		return
+	}
+
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff == 0 {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "未找到要更新的设备",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "设备状态更新成功",
+	})
+}
+
+// handleAdminDevicesUpdate updates device details (status and name)
+func handleAdminDevicesUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID     int64  `json:"id"`
+		Serial string `json:"serial"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式",
+		})
+		return
+	}
+
+	req.Status = strings.TrimSpace(req.Status)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Status == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "状态不能为空",
+		})
+		return
+	}
+
+	var res sql.Result
+	var err error
+	now := time.Now()
+
+	if req.ID > 0 {
+		res, err = db.Exec("UPDATE devices SET name = ?, status = ?, updated_at = ? WHERE id = ?", req.Name, req.Status, now, req.ID)
+	} else if strings.TrimSpace(req.Serial) != "" {
+		res, err = db.Exec("UPDATE devices SET name = ?, status = ?, updated_at = ? WHERE serial = ?", req.Name, req.Status, now, strings.TrimSpace(req.Serial))
+	} else {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请提供有效的设备ID或序列号",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Update device error: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "更新设备失败",
+		})
+		return
+	}
+
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff == 0 {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "未找到要更新的设备",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "设备信息更新成功",
+	})
+}
+
+// handleAdminDevicesCreate creates a new device entry
+func handleAdminDevicesCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Serial string `json:"serial"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式",
+		})
+		return
+	}
+
+	req.Serial = strings.TrimSpace(req.Serial)
+	req.Name = strings.TrimSpace(req.Name)
+	req.Status = strings.TrimSpace(req.Status)
+
+	if req.Serial == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "设备序列号不能为空",
+		})
+		return
+	}
+	if req.Status == "" {
+		req.Status = "active"
+	}
+
+	now := time.Now()
+	res, err := db.Exec("INSERT INTO devices (serial, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		req.Serial, req.Name, req.Status, now, now)
+
+	if err != nil {
+		log.Printf("Create device error: %v\n", err)
+		if strings.Contains(err.Error(), "Duplicate") || strings.Contains(err.Error(), "idx_serial") {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "该设备序列号已存在",
+			})
+			return
+		}
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "创建设备失败",
+		})
+		return
+	}
+
+	newID, _ := res.LastInsertId()
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "设备创建成功",
+		"id":      newID,
+	})
+}
+
+// handleAdminDevicesDelete removes a device by id or serial
+func handleAdminDevicesDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID     int64  `json:"id"`
+		Serial string `json:"serial"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的请求格式",
+		})
+		return
+	}
+
+	var res sql.Result
+	var err error
+
+	if req.ID > 0 {
+		res, err = db.Exec("DELETE FROM devices WHERE id = ?", req.ID)
+	} else if strings.TrimSpace(req.Serial) != "" {
+		res, err = db.Exec("DELETE FROM devices WHERE serial = ?", strings.TrimSpace(req.Serial))
+	} else {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请提供有效的设备ID或序列号",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Delete device error: %v\n", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "删除设备失败",
+		})
+		return
+	}
+
+	rowsAff, _ := res.RowsAffected()
+	if rowsAff == 0 {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "未找到要删除的设备",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "设备已删除",
 	})
 }
 

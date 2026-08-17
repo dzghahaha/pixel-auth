@@ -238,6 +238,7 @@ window.applyNavPermissions = function(role, permissions) {
         '/admin/buy.html': 'buy',
         '/admin/buy_records.html': 'buy',
         '/admin/vendors.html': 'vendors',
+        '/admin/devices.html': 'devices',
         '/admin/logs.html': 'logs',
         '/admin/convert.html': 'convert',
         '/admin/reset.html': 'reset',

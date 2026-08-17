@@ -581,6 +581,66 @@ select {
     animation: pulse 1.5s infinite;
 }
 
+.status-badge.cancelled {
+    background-color: rgba(148, 163, 184, 0.12);
+    color: #475569;
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+.status-badge.cancelled::before {
+    background-color: #94a3b8;
+}
+
+.status-badge.paused {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+.status-badge.paused::before {
+    background-color: #f59e0b;
+}
+
+.status-badge.active {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #065f46;
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.status-badge.active::before {
+    background-color: #10b981;
+}
+
+.status-badge.idle {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: #4338ca;
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.status-badge.idle::before {
+    background-color: #6366f1;
+}
+
+.status-badge.disabled {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #991b1b;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.status-badge.disabled::before {
+    background-color: #ef4444;
+}
+
+.status-badge.maintenance {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+.status-badge.maintenance::before {
+    background-color: #f59e0b;
+}
+
 @keyframes pulse {
     0% { transform: scale(0.9); opacity: 0.6; }
     50% { transform: scale(1.2); opacity: 1; }

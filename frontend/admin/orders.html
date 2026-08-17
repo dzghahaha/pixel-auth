@@ -500,6 +500,7 @@
             <a href="/admin/buy.html" class="nav-item">购买卡密</a>
             <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
             <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/devices.html" class="nav-item">设备列表</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
@@ -536,6 +537,8 @@
                     <option value="running">进行中 (Running)</option>
                     <option value="success">成功 (Success)</option>
                     <option value="failed">失败 (Failed)</option>
+                    <option value="cancelled">已取消 (Cancelled)</option>
+                    <option value="paused">维护挂起 (Paused)</option>
                 </select>
                 <select id="filter-creator" class="status-select admin-only">
                     <option value="">所有创建人</option>
@@ -564,6 +567,7 @@
                         <div class="popover-shortcuts" id="popover-shortcuts">
                             <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
                             <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="this_month">本月</button>
                             <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
                             <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
                             <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
@@ -606,6 +610,7 @@
                     </div>
                 </div>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
+                <button type="button" id="btn-resume-paused" class="btn-replace-key admin-only" style="padding: 10px 16px; font-size: 13px;">一键恢复排队</button>
             </div>
         </div>
 
@@ -615,7 +620,7 @@
                 <table class="result-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th class="admin-only">ID</th>
                             <th>系统卡密</th>
                             <th>源Key</th>
                             <th>卡密备注</th>
@@ -735,6 +740,7 @@
                             <option value="running">进行中 (running)</option>
                             <option value="success">成功 (success)</option>
                             <option value="failed">失败 (failed)</option>
+                            <option value="cancelled">已取消 (cancelled)</option>
                         </select>
                     </div>
 
@@ -1051,12 +1057,15 @@
                             } else if (o.status === 'failed') {
                                 statusClass = 'failed';
                                 statusText = '失败';
+                            } else if (o.status === 'cancelled') {
+                                statusClass = 'cancelled';
+                                statusText = '已取消';
                             }
 
                             const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:var(--slate-400);">${o.task_id || '-'}</span>` : '-';
 
                             tr.innerHTML = `
-                                <td>${o.id}</td>
+                                <td class="admin-only">${o.id}</td>
                                 <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${o.card_secret}</td>
                                 <td style="font-family: monospace; font-size: 12px; color: var(--slate-600);">${o.original_key || '-'}</td>
                                 <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
@@ -1184,6 +1193,9 @@
                             } else if (r.status === 'failed') {
                                 statusClass = 'failed';
                                 statusText = '失败';
+                            } else if (r.status === 'cancelled') {
+                                statusClass = 'cancelled';
+                                statusText = '已取消';
                             }
 
                             const detailsInfo = `
@@ -1985,6 +1997,10 @@
                             yesterday.setDate(today.getDate() - 1);
                             selectedStartDate = yesterday;
                             selectedEndDate = yesterday;
+                        } else if (range === 'this_month') {
+                            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                            selectedStartDate = firstDay;
+                            selectedEndDate = today;
                         } else if (range === '7days') {
                             const daysAgo = new Date(today);
                             daysAgo.setDate(today.getDate() - 6);
@@ -2037,6 +2053,35 @@
                 currentPage = 1;
                 loadOrders();
             });
+
+            const btnResumePaused = document.getElementById('btn-resume-paused');
+            if (btnResumePaused) {
+                btnResumePaused.addEventListener('click', async () => {
+                    const confirmed = await showCustomConfirm(
+                        '批量恢复排队确认',
+                        '确定要将所有状态为“维护挂起”的订单一键恢复为“排队中”吗？恢复后任务将自动提交处理。',
+                        '确认恢复排队'
+                    );
+                    if (!confirmed) return;
+
+                    try {
+                        const res = await fetch('/api/admin/orders/resume_paused', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            showToast(data.message || '恢复排队成功');
+                            loadOrders();
+                        } else {
+                            showToast(data.message || '恢复排队失败');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showToast('网络错误，无法恢复排队');
+                    }
+                });
+            }
             searchInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     currentPage = 1;

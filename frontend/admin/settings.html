@@ -30,6 +30,7 @@
             <a href="/admin/buy.html" class="nav-item">购买卡密</a>
             <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
             <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/devices.html" class="nav-item">设备列表</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/settings.html" class="nav-item active">系统设置</a>
@@ -238,6 +239,26 @@
                 <button type="button" id="btn-save-log-cleanup" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存日志配置</button>
             </div>
         </div>
+
+        <!-- 系统维护挂起模式配置 -->
+        <div class="card settings-container" style="margin-top: 20px;">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+                <div class="card-title-group">
+                    <span class="card-title">系统维护挂起模式</span>
+                    <span class="card-subtitle">开启后用户提交的任务将暂存为“维护挂起”状态，避免向第三方下发任务导致报错</span>
+                </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <label for="setting-maintenance-mode" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">维护挂起模式开关</label>
+                    <select id="setting-maintenance-mode" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        <option value="off">关闭 - 正常处理订单 (OFF)</option>
+                        <option value="on">开启 - 挂起新建订单 (ON)</option>
+                    </select>
+                </div>
+                <button type="button" id="btn-save-maintenance" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存维护配置</button>
+            </div>
+        </div>
     </div>
 
     <!-- 弹窗提示组件 -->
@@ -290,6 +311,9 @@
             const settingLogCleanupOpen = document.getElementById('setting-log-cleanup-open');
             const settingLogCleanupDays = document.getElementById('setting-log-cleanup-days');
             const btnSaveLogCleanup = document.getElementById('btn-save-log-cleanup');
+
+            const settingMaintenanceMode = document.getElementById('setting-maintenance-mode');
+            const btnSaveMaintenance = document.getElementById('btn-save-maintenance');
 
             const btnSavePriceSettings = document.getElementById('btn-save-price-settings');
             const btnAddTierRow = document.getElementById('btn-add-tier-row');
@@ -419,6 +443,7 @@
 
                         settingLogCleanupOpen.value = data.settings.log_cleanup_open || 'off';
                         settingLogCleanupDays.value = data.settings.log_cleanup_days || '30';
+                        if (settingMaintenanceMode) settingMaintenanceMode.value = data.settings.maintenance_mode || 'off';
 
                         if (data.settings.key_tier_prices) {
                             try {
@@ -465,6 +490,8 @@
 
                 const logCleanupOpenVal = settingLogCleanupOpen.value;
                 const logCleanupDaysVal = settingLogCleanupDays.value.trim();
+
+                const maintenanceModeVal = settingMaintenanceMode ? settingMaintenanceMode.value : 'off';
 
                 if (!tutorialVal) {
                     showToast('二步验证教程链接不能为空');
@@ -536,7 +563,8 @@
                             api_base_url: apiBaseUrlVal,
                             api_whitelist: apiWhitelistVal,
                             log_cleanup_open: logCleanupOpenVal,
-                            log_cleanup_days: logCleanupDaysVal
+                            log_cleanup_days: logCleanupDaysVal,
+                            maintenance_mode: maintenanceModeVal
                         })
                     });
                     const data = await res.json();
@@ -554,12 +582,14 @@
                     if (btnSavePriceSettings) btnSavePriceSettings.disabled = false;
                     if (btnSaveApi) btnSaveApi.disabled = false;
                     if (btnSaveLogCleanup) btnSaveLogCleanup.disabled = false;
+                    if (btnSaveMaintenance) btnSaveMaintenance.disabled = false;
                     
                     btnSaveSettings.textContent = '保存配置';
                     btnSaveEpay.textContent = '保存支付配置';
                     if (btnSavePriceSettings) btnSavePriceSettings.textContent = '保存价格配置';
                     if (btnSaveApi) btnSaveApi.textContent = '保存 API 配置';
                     if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存日志配置';
+                    if (btnSaveMaintenance) btnSaveMaintenance.textContent = '保存维护配置';
                 }
             }
 
@@ -578,6 +608,9 @@
             }
             if (btnSaveLogCleanup) {
                 btnSaveLogCleanup.addEventListener('click', saveAllSettings);
+            }
+            if (btnSaveMaintenance) {
+                btnSaveMaintenance.addEventListener('click', saveAllSettings);
             }
 
             // Logout event
