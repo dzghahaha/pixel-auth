@@ -4,11 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>系统配置 - Pixel 订阅管理</title>
-    <link rel="stylesheet" href="./admin.css?v=1.0.2">
+    <link rel="stylesheet" href="./admin.css?v=1.1.0">
     <script src="./admin.js?v=1.0.8"></script>
     <style>
         .settings-container {
-            padding: 24px;
+            padding: 20px 24px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-collapsible {
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            border-radius: 12px;
+            position: relative;
+        }
+        .card-collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            padding: 16px 20px;
+            margin: -20px -24px 0 -24px;
+            border-radius: 12px 12px 0 0;
+            transition: background-color 0.15s ease, border-radius 0.2s ease;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .card-collapsible.collapsed .card-collapsible-header {
+            border-bottom: none;
+            border-radius: 12px;
+            margin-bottom: -20px;
+        }
+        .card-collapsible-header:hover {
+            background-color: var(--bg-highlight, #f8fafc);
+        }
+        .card-collapsible-header .card-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .card-collapse-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            background: transparent;
+            transition: background-color 0.15s ease, color 0.15s ease;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        .card-collapsible-header:hover .card-collapse-toggle {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .card-collapse-icon {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-collapsible.collapsed .card-collapse-icon {
+            transform: rotate(-90deg);
+        }
+        .card-collapsible-body {
+            display: grid;
+            grid-template-rows: 1fr;
+            transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-top: 18px;
+        }
+        .card-collapsible.collapsed .card-collapsible-body {
+            grid-template-rows: 0fr;
+            margin-top: 0;
+        }
+        .card-collapsible-content {
+            overflow: hidden;
+            min-height: 0;
+        }
+        .settings-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 16px 0 20px 0;
+            padding: 10px 16px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        .btn-toolbar-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-toolbar-action:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--primary-light, #f0f7ff);
         }
     </style>
 </head>
@@ -53,210 +153,324 @@
             </div>
         </header>
 
-        <!-- 系统参数配置卡片 -->
-        <div class="card settings-container">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 工具栏：一键展开/折叠 -->
+        <div class="settings-toolbar">
+            <div style="font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <span>点击卡片标题栏可自由折叠或展开配置模块</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" id="btn-expand-all" class="btn-toolbar-action">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="7 13 12 18 17 13"></polyline>
+                        <polyline points="7 6 12 11 17 6"></polyline>
+                    </svg>
+                    全部展开
+                </button>
+                <button type="button" id="btn-collapse-all" class="btn-toolbar-action">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="17 11 12 6 7 11"></polyline>
+                        <polyline points="17 18 12 13 7 18"></polyline>
+                    </svg>
+                    全部折叠
+                </button>
+            </div>
+        </div>
+
+        <!-- 1. 全局参数配置卡片 -->
+        <div class="card settings-container card-collapsible" id="card-global">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">全局参数配置</span>
                     <span class="card-subtitle">配置系统全局参数，修改后客户端及后台即时生效</span>
                 </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-two-factor-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">客户端二步验证教程链接 (2FA Tutorial Link)</label>
-                    <input type="text" id="setting-two-factor-url" placeholder="请输入教程 URL 链接" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-two-factor-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">客户端二步验证教程链接 (2FA Tutorial Link)</label>
+                            <input type="text" id="setting-two-factor-url" placeholder="请输入教程 URL 链接" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label for="setting-deard-convert-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">deard 卡密自动转换开关</label>
+                            <select id="setting-deard-convert-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="on">开启 (ON)</option>
+                                <option value="off">关闭 (OFF)</option>
+                            </select>
+                            <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">开启后，用户提交 deard (ai.deard.fun) 厂商卡密时，系统将自动从数据库挑选一个有积分的 pass.aisale.one 第三方卡密并转换绑定。</span>
+                        </div>
+                        <button type="button" id="btn-save-settings" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存配置</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="setting-deard-convert-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">deard 卡密自动转换开关</label>
-                    <select id="setting-deard-convert-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        <option value="on">开启 (ON)</option>
-                        <option value="off">关闭 (OFF)</option>
-                    </select>
-                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">开启后，用户提交 deard (ai.deard.fun) 厂商卡密时，系统将自动从数据库挑选一个有积分的 pass.aisale.one 第三方卡密并转换绑定。</span>
-                </div>
-                <button type="button" id="btn-save-settings" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存配置</button>
             </div>
         </div>
 
-        <!-- 卡密价格与阶梯梯度设置 -->
-        <div class="card settings-container" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 2. 设备配置卡片 -->
+        <div class="card settings-container card-collapsible" id="card-device" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
+                <div class="card-title-group">
+                    <span class="card-title">设备配置</span>
+                    <span class="card-subtitle">配置工作终端设备的默认网络接入参数 (WiFi SSID & 密码)</span>
+                </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-device-wifi-ssid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">设备连接 WiFi 名称 (WiFi SSID)</label>
+                            <input type="text" id="setting-device-wifi-ssid" placeholder="请输入设备连接的 WiFi 名称，如：Office_WiFi_5G" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">终端设备初始化或配网时使用的 WiFi 名称。</span>
+                        </div>
+                        <div>
+                            <label for="setting-device-wifi-password" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">设备连接 WiFi 密码 (WiFi Password)</label>
+                            <input type="text" id="setting-device-wifi-password" placeholder="请输入 WiFi 密码 (无密码可留空)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">终端设备连接该 WiFi 时的认证密码。</span>
+                        </div>
+                        <button type="button" id="btn-save-device-settings" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存设备配置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 卡密价格与阶梯梯度设置 -->
+        <div class="card settings-container card-collapsible" id="card-price" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">卡密价格设置</span>
                     <span class="card-subtitle">设置卡密的基础售卖单价与按购买数量梯度的阶梯优惠价格</span>
                 </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-key-price" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">基础卡密单价 (元/张)</label>
-                    <input type="number" step="0.01" min="0.01" id="setting-key-price" placeholder="请输入卡密基础单价，例如：9.99" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">未达到任何阶梯门槛时的默认单价。</span>
-                </div>
-
-                <div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary);">阶梯价格配置 (按购买数量优惠)</label>
-                        <button type="button" id="btn-add-tier-row" style="padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--primary); background: var(--primary-light); border: 1px dashed var(--primary); border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                            添加价格阶梯
-                        </button>
-                    </div>
-                    
-                    <div id="tier-prices-wrapper" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
-                        <div id="tier-prices-empty" style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 12px 0;">
-                            暂未设置阶梯价格（默认全部按基础单价计费）
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-key-price" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">基础卡密单价 (元/张)</label>
+                            <input type="number" step="0.01" min="0.01" id="setting-key-price" placeholder="请输入卡密基础单价，例如：9.99" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            <span style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: block;">未达到任何阶梯门槛时的默认单价。</span>
                         </div>
-                        <div id="tier-prices-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                    </div>
-                    <span style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; display: block;">规则说明：用户购买数量 ≥ 门槛张数时，享有对应优惠单价。系统将自动匹配满足条件的最大门槛。</span>
-                </div>
 
-                <button type="button" id="btn-save-price-settings" class="btn-submit" style="white-space: nowrap; width: 140px; align-self: flex-end;">保存价格配置</button>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary);">阶梯价格配置 (按购买数量优惠)</label>
+                                <button type="button" id="btn-add-tier-row" style="padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--primary); background: var(--primary-light); border: 1px dashed var(--primary); border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    添加价格阶梯
+                                </button>
+                            </div>
+                            
+                            <div id="tier-prices-wrapper" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                                <div id="tier-prices-empty" style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 12px 0;">
+                                    暂未设置阶梯价格（默认全部按基础单价计费）
+                                </div>
+                                <div id="tier-prices-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                            </div>
+                            <span style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; display: block;">规则说明：用户购买数量 ≥ 门槛张数时，享有对应优惠单价。系统将自动匹配满足条件的最大门槛。</span>
+                        </div>
+
+                        <button type="button" id="btn-save-price-settings" class="btn-submit" style="white-space: nowrap; width: 140px; align-self: flex-end;">保存价格配置</button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- API 开放接口设置 -->
-        <div class="card settings-container" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 4. API 开放接口设置 -->
+        <div class="card settings-container card-collapsible" id="card-api" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">API 开放接口设置</span>
                     <span class="card-subtitle">配置开放接口状态、接口根地址及 IP 访问控制白名单</span>
                 </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-api-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">开放接口启用状态 (API Status)</label>
-                    <select id="setting-api-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        <option value="on">开启 (ON)</option>
-                        <option value="off">关闭 (OFF)</option>
-                    </select>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-api-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">开放接口启用状态 (API Status)</label>
+                            <select id="setting-api-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="on">开启 (ON)</option>
+                                <option value="off">关闭 (OFF)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="setting-api-base-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">开放接口根地址 (API Base URL)</label>
+                            <input type="text" id="setting-api-base-url" placeholder="例如：http://yourdomain.com (用于API文档显示，留空则自动获取当前网页根地址)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label for="setting-api-whitelist" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">API 访问控制 IP 白名单 (IP Whitelist)</label>
+                            <textarea id="setting-api-whitelist" placeholder="可访问接口的客户端 IP，多个 IP 用逗号或换行分隔。留空代表允许所有 IP 访问。" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; height: 80px; box-sizing: border-box; resize: vertical; font-family: monospace;"></textarea>
+                        </div>
+                        <button type="button" id="btn-save-api" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存 API 配置</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="setting-api-base-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">开放接口根地址 (API Base URL)</label>
-                    <input type="text" id="setting-api-base-url" placeholder="例如：http://yourdomain.com (用于API文档显示，留空则自动获取当前网页根地址)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label for="setting-api-whitelist" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">API 访问控制 IP 白名单 (IP Whitelist)</label>
-                    <textarea id="setting-api-whitelist" placeholder="可访问接口的客户端 IP，多个 IP 用逗号或换行分隔。留空代表允许所有 IP 访问。" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; height: 80px; box-sizing: border-box; resize: vertical; font-family: monospace;"></textarea>
-                </div>
-                <button type="button" id="btn-save-api" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存 API 配置</button>
             </div>
         </div>
 
-        <!-- 支付通道配置卡片 -->
-        <div class="card settings-container" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 5. 支付通道配置卡片 -->
+        <div class="card settings-container card-collapsible" id="card-pay" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">支付通道对接设置</span>
                     <span class="card-subtitle">选择并配置系统支付方式，支持易支付 (Epay) 和虎皮椒支付 (XunhuPay)</span>
                 </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-pay-method" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付接口方式</label>
-                    <select id="setting-pay-method" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        <option value="epay">易支付 (Epay)</option>
-                        <option value="xunhupay">虎皮椒支付 (XunhuPay)</option>
-                    </select>
-                </div>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-pay-method" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付接口方式</label>
+                            <select id="setting-pay-method" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="epay">易支付 (Epay)</option>
+                                <option value="xunhupay">虎皮椒支付 (XunhuPay)</option>
+                            </select>
+                        </div>
 
-                <!-- 易支付配置 -->
-                <div id="wrapper-epay-settings" style="display: flex; flex-direction: column; gap: 16px;">
-                    <div>
-                        <label for="setting-epay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">易支付请求地址 (Epay URL)</label>
-                        <input type="text" id="setting-epay-url" placeholder="例如：https://pay.vansdesign.cn/" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    </div>
-                    <div>
-                        <label for="setting-epay-pid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户号 (PID)</label>
-                        <input type="text" id="setting-epay-pid" placeholder="易支付商户号，例如：1668" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    </div>
-                    <div>
-                        <label for="setting-epay-key" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户密钥 (KEY)</label>
-                        <input type="password" id="setting-epay-key" placeholder="易支付商户 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    </div>
-                    <div>
-                        <label for="setting-epay-wx-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付渠道 ID (Wechat Channel ID)</label>
-                        <input type="text" id="setting-epay-wx-channel" placeholder="微信支付渠道代码，例如：201906181353 (留空表示隐藏微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    </div>
-                    <div>
-                        <label for="setting-epay-alipay-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝支付渠道 ID (Alipay Channel ID)</label>
-                        <input type="text" id="setting-epay-alipay-channel" placeholder="支付宝支付渠道代码，例如：201906181354 (留空表示隐藏支付宝支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        <!-- 易支付配置 -->
+                        <div id="wrapper-epay-settings" style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <label for="setting-epay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">易支付请求地址 (Epay URL)</label>
+                                <input type="text" id="setting-epay-url" placeholder="例如：https://pay.vansdesign.cn/" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label for="setting-epay-pid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户号 (PID)</label>
+                                <input type="text" id="setting-epay-pid" placeholder="易支付商户号，例如：1668" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label for="setting-epay-key" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">商户密钥 (KEY)</label>
+                                <input type="password" id="setting-epay-key" placeholder="易支付商户 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label for="setting-epay-wx-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付渠道 ID (Wechat Channel ID)</label>
+                                <input type="text" id="setting-epay-wx-channel" placeholder="微信支付渠道代码，例如：201906181353 (留空表示隐藏微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label for="setting-epay-alipay-channel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝支付渠道 ID (Alipay Channel ID)</label>
+                                <input type="text" id="setting-epay-alipay-channel" placeholder="支付宝支付渠道代码，例如：201906181354 (留空表示隐藏支付宝支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                        </div>
+
+                        <!-- 虎皮椒支付配置 -->
+                        <div id="wrapper-xunhupay-settings" style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <label for="setting-xunhupay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">虎皮椒网关地址 (Gateway URL)</label>
+                                <input type="text" id="setting-xunhupay-url" placeholder="例如：https://api.xunhupay.com" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <label for="setting-xunhupay-wx-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 AppID (Wechat AppID)</label>
+                                    <input type="text" id="setting-xunhupay-wx-appid" placeholder="微信支付 AppID (留空则禁用微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label for="setting-xunhupay-wx-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 Secret (Wechat Secret)</label>
+                                    <input type="password" id="setting-xunhupay-wx-secret" placeholder="微信支付 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <label for="setting-xunhupay-alipay-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 AppID (Alipay AppID)</label>
+                                    <input type="text" id="setting-xunhupay-alipay-appid" placeholder="支付宝 AppID (留空则禁用支付宝)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label for="setting-xunhupay-alipay-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 Secret (Alipay Secret)</label>
+                                    <input type="password" id="setting-xunhupay-alipay-secret" placeholder="支付宝 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" id="btn-save-epay" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存支付配置</button>
                     </div>
                 </div>
-
-                <!-- 虎皮椒支付配置 -->
-                <div id="wrapper-xunhupay-settings" style="display: flex; flex-direction: column; gap: 16px;">
-                    <div>
-                        <label for="setting-xunhupay-url" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">虎皮椒网关地址 (Gateway URL)</label>
-                        <input type="text" id="setting-xunhupay-url" placeholder="例如：https://api.xunhupay.com" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div>
-                            <label for="setting-xunhupay-wx-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 AppID (Wechat AppID)</label>
-                            <input type="text" id="setting-xunhupay-wx-appid" placeholder="微信支付 AppID (留空则禁用微信支付)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label for="setting-xunhupay-wx-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">微信支付 Secret (Wechat Secret)</label>
-                            <input type="password" id="setting-xunhupay-wx-secret" placeholder="微信支付 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div>
-                            <label for="setting-xunhupay-alipay-appid" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 AppID (Alipay AppID)</label>
-                            <input type="text" id="setting-xunhupay-alipay-appid" placeholder="支付宝 AppID (留空则禁用支付宝)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label for="setting-xunhupay-alipay-secret" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">支付宝 Secret (Alipay Secret)</label>
-                            <input type="password" id="setting-xunhupay-alipay-secret" placeholder="支付宝 MD5 密钥 (留空表示不修改)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        </div>
-                    </div>
-                </div>
-
-                <button type="button" id="btn-save-epay" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存支付配置</button>
             </div>
         </div>
 
-        <!-- 运行日志清理配置 -->
-        <div class="card settings-container" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 6. 运行日志清理配置 -->
+        <div class="card settings-container card-collapsible" id="card-logs" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">运行日志清理配置</span>
                     <span class="card-subtitle">设置自动清理后台日志任务 (清理 orchestrator_logs 表的过期记录)</span>
                 </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-log-cleanup-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">自动清理日志开关</label>
-                    <select id="setting-log-cleanup-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        <option value="on">开启 (ON)</option>
-                        <option value="off">关闭 (OFF)</option>
-                    </select>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-log-cleanup-open" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">自动清理日志开关</label>
+                            <select id="setting-log-cleanup-open" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="on">开启 (ON)</option>
+                                <option value="off">关闭 (OFF)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="setting-log-cleanup-days" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">日志保存时长 (天)</label>
+                            <input type="number" min="1" id="setting-log-cleanup-days" placeholder="请输入日志保存天数，默认：30" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                        </div>
+                        <button type="button" id="btn-save-log-cleanup" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存日志配置</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="setting-log-cleanup-days" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">日志保存时长 (天)</label>
-                    <input type="number" min="1" id="setting-log-cleanup-days" placeholder="请输入日志保存天数，默认：30" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                </div>
-                <button type="button" id="btn-save-log-cleanup" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存日志配置</button>
             </div>
         </div>
 
-        <!-- 系统维护挂起模式配置 -->
-        <div class="card settings-container" style="margin-top: 20px;">
-            <div class="card-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
+        <!-- 7. 系统维护挂起模式配置 -->
+        <div class="card settings-container card-collapsible" id="card-maintenance" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
                     <span class="card-title">系统维护挂起模式</span>
                     <span class="card-subtitle">开启后用户提交的任务将暂存为“维护挂起”状态，避免向第三方下发任务导致报错</span>
                 </div>
-            </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                <div>
-                    <label for="setting-maintenance-mode" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">维护挂起模式开关</label>
-                    <select id="setting-maintenance-mode" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                        <option value="off">关闭 - 正常处理订单 (OFF)</option>
-                        <option value="on">开启 - 挂起新建订单 (ON)</option>
-                    </select>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                 </div>
-                <button type="button" id="btn-save-maintenance" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存维护配置</button>
+            </div>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-maintenance-mode" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">维护挂起模式开关</label>
+                            <select id="setting-maintenance-mode" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="off">关闭 - 正常处理订单 (OFF)</option>
+                                <option value="on">开启 - 挂起新建订单 (ON)</option>
+                            </select>
+                        </div>
+                        <button type="button" id="btn-save-maintenance" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存维护配置</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -269,26 +483,113 @@
             const toast = document.getElementById('toast');
             const adminUserDisplay = document.getElementById('admin-user-display');
             const btnLogout = document.getElementById('btn-logout');
-            const btnSaveSettings = document.getElementById('btn-save-settings');
-            const btnSaveEpay = document.getElementById('btn-save-epay');
-            
+
+            // 1. 全局配置
             const settingTwoFactorUrl = document.getElementById('setting-two-factor-url');
-            const settingKeyPrice = document.getElementById('setting-key-price');
             const settingDeardConvertOpen = document.getElementById('setting-deard-convert-open');
+            const btnSaveSettings = document.getElementById('btn-save-settings');
+
+            // 2. 设备配置
+            const settingDeviceWifiSsid = document.getElementById('setting-device-wifi-ssid');
+            const settingDeviceWifiPassword = document.getElementById('setting-device-wifi-password');
+            const btnSaveDeviceSettings = document.getElementById('btn-save-device-settings');
+
+            // 3. 价格设置
+            const settingKeyPrice = document.getElementById('setting-key-price');
+            const btnSavePriceSettings = document.getElementById('btn-save-price-settings');
+            const btnAddTierRow = document.getElementById('btn-add-tier-row');
+            const tierPricesEmpty = document.getElementById('tier-prices-empty');
+            const tierPricesList = document.getElementById('tier-prices-list');
+
+            // 4. API 设置
+            const settingApiOpen = document.getElementById('setting-api-open');
+            const settingApiBaseUrl = document.getElementById('setting-api-base-url');
+            const settingApiWhitelist = document.getElementById('setting-api-whitelist');
+            const btnSaveApi = document.getElementById('btn-save-api');
+
+            // 5. 支付设置
+            const settingPayMethod = document.getElementById('setting-pay-method');
+            const wrapperEpaySettings = document.getElementById('wrapper-epay-settings');
             const settingEpayUrl = document.getElementById('setting-epay-url');
             const settingEpayPid = document.getElementById('setting-epay-pid');
             const settingEpayKey = document.getElementById('setting-epay-key');
             const settingEpayWxChannel = document.getElementById('setting-epay-wx-channel');
             const settingEpayAlipayChannel = document.getElementById('setting-epay-alipay-channel');
 
-            const settingPayMethod = document.getElementById('setting-pay-method');
-            const wrapperEpaySettings = document.getElementById('wrapper-epay-settings');
             const wrapperXunhupaySettings = document.getElementById('wrapper-xunhupay-settings');
             const settingXunhupayUrl = document.getElementById('setting-xunhupay-url');
             const settingXunhupayWxAppid = document.getElementById('setting-xunhupay-wx-appid');
             const settingXunhupayWxSecret = document.getElementById('setting-xunhupay-wx-secret');
             const settingXunhupayAlipayAppid = document.getElementById('setting-xunhupay-alipay-appid');
             const settingXunhupayAlipaySecret = document.getElementById('setting-xunhupay-alipay-secret');
+            const btnSaveEpay = document.getElementById('btn-save-epay');
+
+            // 6. 日志清理
+            const settingLogCleanupOpen = document.getElementById('setting-log-cleanup-open');
+            const settingLogCleanupDays = document.getElementById('setting-log-cleanup-days');
+            const btnSaveLogCleanup = document.getElementById('btn-save-log-cleanup');
+
+            // 7. 维护模式
+            const settingMaintenanceMode = document.getElementById('setting-maintenance-mode');
+            const btnSaveMaintenance = document.getElementById('btn-save-maintenance');
+
+            // 折叠卡片状态管理
+            const COLLAPSE_STORAGE_KEY = 'pixel_auth_settings_collapsed_map';
+            function getCollapsedMap() {
+                try {
+                    const stored = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+                    return stored ? JSON.parse(stored) : {};
+                } catch (e) {
+                    return {};
+                }
+            }
+
+            function setCardCollapsed(cardId, isCollapsed) {
+                const card = document.getElementById(cardId);
+                if (!card) return;
+                if (isCollapsed) {
+                    card.classList.add('collapsed');
+                } else {
+                    card.classList.remove('collapsed');
+                }
+                const map = getCollapsedMap();
+                map[cardId] = isCollapsed;
+                localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(map));
+            }
+
+            function initCollapsibleCards() {
+                const collapsedMap = getCollapsedMap();
+                document.querySelectorAll('.card-collapsible').forEach(card => {
+                    const cardId = card.id;
+                    if (cardId && collapsedMap[cardId] === true) {
+                        card.classList.add('collapsed');
+                    }
+                    const header = card.querySelector('.card-collapsible-header');
+                    if (header) {
+                        header.addEventListener('click', () => {
+                            const isCurrentlyCollapsed = card.classList.contains('collapsed');
+                            setCardCollapsed(cardId, !isCurrentlyCollapsed);
+                        });
+                    }
+                });
+
+                const btnExpandAll = document.getElementById('btn-expand-all');
+                const btnCollapseAll = document.getElementById('btn-collapse-all');
+                if (btnExpandAll) {
+                    btnExpandAll.addEventListener('click', () => {
+                        document.querySelectorAll('.card-collapsible').forEach(card => {
+                            setCardCollapsed(card.id, false);
+                        });
+                    });
+                }
+                if (btnCollapseAll) {
+                    btnCollapseAll.addEventListener('click', () => {
+                        document.querySelectorAll('.card-collapsible').forEach(card => {
+                            setCardCollapsed(card.id, true);
+                        });
+                    });
+                }
+            }
 
             function togglePayMethodFields() {
                 if (settingPayMethod.value === 'xunhupay') {
@@ -302,23 +603,6 @@
             if (settingPayMethod) {
                 settingPayMethod.addEventListener('change', togglePayMethodFields);
             }
-            
-            const settingApiOpen = document.getElementById('setting-api-open');
-            const settingApiBaseUrl = document.getElementById('setting-api-base-url');
-            const settingApiWhitelist = document.getElementById('setting-api-whitelist');
-            const btnSaveApi = document.getElementById('btn-save-api');
-
-            const settingLogCleanupOpen = document.getElementById('setting-log-cleanup-open');
-            const settingLogCleanupDays = document.getElementById('setting-log-cleanup-days');
-            const btnSaveLogCleanup = document.getElementById('btn-save-log-cleanup');
-
-            const settingMaintenanceMode = document.getElementById('setting-maintenance-mode');
-            const btnSaveMaintenance = document.getElementById('btn-save-maintenance');
-
-            const btnSavePriceSettings = document.getElementById('btn-save-price-settings');
-            const btnAddTierRow = document.getElementById('btn-add-tier-row');
-            const tierPricesEmpty = document.getElementById('tier-prices-empty');
-            const tierPricesList = document.getElementById('tier-prices-list');
 
             let tierPricesData = [];
 
@@ -399,6 +683,7 @@
                         window.applyNavPermissions(data.role, data.permissions);
 
                         loadSettings();
+                        initCollapsibleCards();
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -428,6 +713,10 @@
                         settingEpayKey.value = data.settings.epay_key || '';
                         settingEpayWxChannel.value = data.settings.epay_wx_channel || '';
                         settingEpayAlipayChannel.value = data.settings.epay_alipay_channel || '';
+
+                        // Device settings
+                        if (settingDeviceWifiSsid) settingDeviceWifiSsid.value = data.settings.device_wifi_ssid || '';
+                        if (settingDeviceWifiPassword) settingDeviceWifiPassword.value = data.settings.device_wifi_password || '';
 
                         if (settingPayMethod) settingPayMethod.value = data.settings.pay_method || 'epay';
                         if (settingXunhupayUrl) settingXunhupayUrl.value = data.settings.xunhupay_url || '';
@@ -476,6 +765,9 @@
                 const epayKeyVal = settingEpayKey.value.trim();
                 const epayWxVal = settingEpayWxChannel.value.trim();
                 const epayAliVal = settingEpayAlipayChannel.value.trim();
+
+                const deviceWifiSsidVal = settingDeviceWifiSsid ? settingDeviceWifiSsid.value.trim() : '';
+                const deviceWifiPasswordVal = settingDeviceWifiPassword ? settingDeviceWifiPassword.value.trim() : '';
 
                 const payMethodVal = settingPayMethod ? settingPayMethod.value : 'epay';
                 const xunhupayUrlVal = settingXunhupayUrl ? settingXunhupayUrl.value.trim() : '';
@@ -527,17 +819,13 @@
                     }
                 }
 
-                btnSaveSettings.disabled = true;
-                btnSaveEpay.disabled = true;
-                if (btnSavePriceSettings) btnSavePriceSettings.disabled = true;
-                if (btnSaveApi) btnSaveApi.disabled = true;
-                if (btnSaveLogCleanup) btnSaveLogCleanup.disabled = true;
-                
-                btnSaveSettings.textContent = '保存中...';
-                btnSaveEpay.textContent = '保存中...';
-                if (btnSavePriceSettings) btnSavePriceSettings.textContent = '保存中...';
-                if (btnSaveApi) btnSaveApi.textContent = '保存中...';
-                if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存中...';
+                const allButtons = [btnSaveSettings, btnSaveDeviceSettings, btnSavePriceSettings, btnSaveApi, btnSaveEpay, btnSaveLogCleanup, btnSaveMaintenance];
+                allButtons.forEach(btn => {
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.textContent = '保存中...';
+                    }
+                });
 
                 try {
                     const res = await fetch('/api/admin/settings', {
@@ -564,7 +852,9 @@
                             api_whitelist: apiWhitelistVal,
                             log_cleanup_open: logCleanupOpenVal,
                             log_cleanup_days: logCleanupDaysVal,
-                            maintenance_mode: maintenanceModeVal
+                            maintenance_mode: maintenanceModeVal,
+                            device_wifi_ssid: deviceWifiSsidVal,
+                            device_wifi_password: deviceWifiPasswordVal
                         })
                     });
                     const data = await res.json();
@@ -577,41 +867,27 @@
                     console.error(e);
                     showToast('网络错误，保存配置失败');
                 } finally {
-                    btnSaveSettings.disabled = false;
-                    btnSaveEpay.disabled = false;
-                    if (btnSavePriceSettings) btnSavePriceSettings.disabled = false;
-                    if (btnSaveApi) btnSaveApi.disabled = false;
-                    if (btnSaveLogCleanup) btnSaveLogCleanup.disabled = false;
-                    if (btnSaveMaintenance) btnSaveMaintenance.disabled = false;
-                    
-                    btnSaveSettings.textContent = '保存配置';
-                    btnSaveEpay.textContent = '保存支付配置';
+                    allButtons.forEach(btn => {
+                        if (btn) btn.disabled = false;
+                    });
+                    if (btnSaveSettings) btnSaveSettings.textContent = '保存配置';
+                    if (btnSaveDeviceSettings) btnSaveDeviceSettings.textContent = '保存设备配置';
                     if (btnSavePriceSettings) btnSavePriceSettings.textContent = '保存价格配置';
                     if (btnSaveApi) btnSaveApi.textContent = '保存 API 配置';
+                    if (btnSaveEpay) btnSaveEpay.textContent = '保存支付配置';
                     if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存日志配置';
                     if (btnSaveMaintenance) btnSaveMaintenance.textContent = '保存维护配置';
                 }
             }
 
             // Save settings events
-            if (btnSaveSettings) {
-                btnSaveSettings.addEventListener('click', saveAllSettings);
-            }
-            if (btnSavePriceSettings) {
-                btnSavePriceSettings.addEventListener('click', saveAllSettings);
-            }
-            if (btnSaveEpay) {
-                btnSaveEpay.addEventListener('click', saveAllSettings);
-            }
-            if (btnSaveApi) {
-                btnSaveApi.addEventListener('click', saveAllSettings);
-            }
-            if (btnSaveLogCleanup) {
-                btnSaveLogCleanup.addEventListener('click', saveAllSettings);
-            }
-            if (btnSaveMaintenance) {
-                btnSaveMaintenance.addEventListener('click', saveAllSettings);
-            }
+            if (btnSaveSettings) btnSaveSettings.addEventListener('click', saveAllSettings);
+            if (btnSaveDeviceSettings) btnSaveDeviceSettings.addEventListener('click', saveAllSettings);
+            if (btnSavePriceSettings) btnSavePriceSettings.addEventListener('click', saveAllSettings);
+            if (btnSaveEpay) btnSaveEpay.addEventListener('click', saveAllSettings);
+            if (btnSaveApi) btnSaveApi.addEventListener('click', saveAllSettings);
+            if (btnSaveLogCleanup) btnSaveLogCleanup.addEventListener('click', saveAllSettings);
+            if (btnSaveMaintenance) btnSaveMaintenance.addEventListener('click', saveAllSettings);
 
             // Logout event
             if (btnLogout) {

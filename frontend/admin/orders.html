@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台订单管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="./admin.css?v=1.0.2">
+    <link rel="stylesheet" href="./admin.css?v=1.1.0">
     <script src="./admin.js?v=1.0.8"></script>
     <style>
         /* Force hide native selects inside custom wrappers */
@@ -741,6 +741,7 @@
                             <option value="success">成功 (success)</option>
                             <option value="failed">失败 (failed)</option>
                             <option value="cancelled">已取消 (cancelled)</option>
+                            <option value="paused">维护挂起 (paused)</option>
                         </select>
                     </div>
 
@@ -1060,6 +1061,9 @@
                             } else if (o.status === 'cancelled') {
                                 statusClass = 'cancelled';
                                 statusText = '已取消';
+                            } else if (o.status === 'paused') {
+                                statusClass = 'paused';
+                                statusText = '维护挂起';
                             }
 
                             const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:var(--slate-400);">${o.task_id || '-'}</span>` : '-';
@@ -1196,6 +1200,9 @@
                             } else if (r.status === 'cancelled') {
                                 statusClass = 'cancelled';
                                 statusText = '已取消';
+                            } else if (r.status === 'paused') {
+                                statusClass = 'paused';
+                                statusText = '维护挂起';
                             }
 
                             const detailsInfo = `

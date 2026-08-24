@@ -1944,7 +1944,9 @@ func TestSettingsAndConfigFlow(t *testing.T) {
 
 	// 6. POST /api/admin/settings WITH admin authentication (Update)
 	newTestURL := "https://www.yuque.com/test-new-link"
-	updateBody := fmt.Sprintf(`{"two_factor_tutorial_url": %q}`, newTestURL)
+	testWiFiSSID := "Office_WiFi_Lab_5G"
+	testWiFiPass := "SecretPass123456"
+	updateBody := fmt.Sprintf(`{"two_factor_tutorial_url": %q, "device_wifi_ssid": %q, "device_wifi_password": %q}`, newTestURL, testWiFiSSID, testWiFiPass)
 	reqAdminPostAuth := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(updateBody))
 	reqAdminPostAuth.AddCookie(sessionCookie)
 	rrAdminPostAuth := httptest.NewRecorder()
@@ -1983,6 +1985,12 @@ func TestSettingsAndConfigFlow(t *testing.T) {
 	settingsUpdated := adminGetRespUpdated["settings"].(map[string]interface{})
 	if settingsUpdated["two_factor_tutorial_url"] != newTestURL {
 		t.Errorf("expected updated URL in admin GET %q, got %q", newTestURL, settingsUpdated["two_factor_tutorial_url"])
+	}
+	if settingsUpdated["device_wifi_ssid"] != testWiFiSSID {
+		t.Errorf("expected updated device_wifi_ssid in admin GET %q, got %q", testWiFiSSID, settingsUpdated["device_wifi_ssid"])
+	}
+	if settingsUpdated["device_wifi_password"] != testWiFiPass {
+		t.Errorf("expected updated device_wifi_password in admin GET %q, got %q", testWiFiPass, settingsUpdated["device_wifi_password"])
 	}
 }
 
@@ -3614,8 +3622,8 @@ func TestAdminDeviceManagement(t *testing.T) {
 	// 1. Create superadmin session
 	adminCookie := createTestAdminSession(t, "device_admin", "admin", nil)
 
-	// 2. Test create device
-	createBody := `{"serial":"SN_TEST_DEV_001","name":"测试设备001","status":"active"}`
+	// 2. Test create device with priority
+	createBody := `{"serial":"SN_TEST_DEV_001","name":"测试设备001","priority":10,"status":"idle"}`
 	reqCreate := httptest.NewRequest(http.MethodPost, "/api/admin/devices/create", strings.NewReader(createBody))
 	reqCreate.AddCookie(adminCookie)
 	rrCreate := httptest.NewRecorder()
@@ -3635,8 +3643,18 @@ func TestAdminDeviceManagement(t *testing.T) {
 		t.Fatalf("expected valid device id, got %d", deviceID)
 	}
 
-	// 3. Test list devices (GET /api/admin/devices)
-	reqList := httptest.NewRequest(http.MethodGet, "/api/admin/devices?query=SN_TEST_DEV_001", nil)
+	// Create second device with higher priority (lower numerical value 2) and busy status
+	createBody2 := `{"serial":"SN_TEST_DEV_002","name":"测试设备002","priority":2,"status":"busy"}`
+	reqCreate2 := httptest.NewRequest(http.MethodPost, "/api/admin/devices/create", strings.NewReader(createBody2))
+	reqCreate2.AddCookie(adminCookie)
+	rrCreate2 := httptest.NewRecorder()
+	requirePermission("devices", handleAdminDevicesCreate)(rrCreate2, reqCreate2)
+	if rrCreate2.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for device 2 create, got %d", rrCreate2.Code)
+	}
+
+	// 3. Test list devices (GET /api/admin/devices) and verify priority ASC sorting
+	reqList := httptest.NewRequest(http.MethodGet, "/api/admin/devices?query=SN_TEST_DEV_", nil)
 	reqList.AddCookie(adminCookie)
 	rrList := httptest.NewRecorder()
 	requirePermission("devices", handleAdminDevices)(rrList, reqList)
@@ -3650,12 +3668,17 @@ func TestAdminDeviceManagement(t *testing.T) {
 	if listResp["success"] != true {
 		t.Fatalf("expected success true for device list, got %v", listResp)
 	}
-	if listResp["total"].(float64) < 1 {
-		t.Errorf("expected at least 1 total device, got %v", listResp["total"])
+	if listResp["total"].(float64) < 2 {
+		t.Errorf("expected at least 2 total devices, got %v", listResp["total"])
+	}
+	devicesList := listResp["devices"].([]interface{})
+	firstDev := devicesList[0].(map[string]interface{})
+	if firstDev["serial"] != "SN_TEST_DEV_002" || int(firstDev["priority"].(float64)) != 2 {
+		t.Errorf("expected highest priority device SN_TEST_DEV_002 with priority 2 to be first, got serial=%v, priority=%v", firstDev["serial"], firstDev["priority"])
 	}
 
-	// 4. Test update device status (POST /api/admin/devices/update_status) -> disabled
-	updateStatusBody := fmt.Sprintf(`{"id":%d,"status":"disabled"}`, deviceID)
+	// 4. Test update device status (POST /api/admin/devices/update_status) -> busy
+	updateStatusBody := fmt.Sprintf(`{"id":%d,"status":"busy"}`, deviceID)
 	reqUpdateStatus := httptest.NewRequest(http.MethodPost, "/api/admin/devices/update_status", strings.NewReader(updateStatusBody))
 	reqUpdateStatus.AddCookie(adminCookie)
 	rrUpdateStatus := httptest.NewRecorder()
@@ -3665,18 +3688,18 @@ func TestAdminDeviceManagement(t *testing.T) {
 		t.Fatalf("expected status 200 for update_status, got %d. Body: %s", rrUpdateStatus.Code, rrUpdateStatus.Body.String())
 	}
 
-	// Verify in DB that status is now 'disabled'
+	// Verify in DB that status is now 'busy'
 	var dbStatus string
 	err := db.QueryRow("SELECT status FROM devices WHERE id = ?", deviceID).Scan(&dbStatus)
 	if err != nil {
 		t.Fatalf("failed to query updated device: %v", err)
 	}
-	if dbStatus != "disabled" {
-		t.Errorf("expected device status 'disabled', got '%s'", dbStatus)
+	if dbStatus != "busy" {
+		t.Errorf("expected device status 'busy', got '%s'", dbStatus)
 	}
 
-	// 5. Test update device name & status (POST /api/admin/devices/update) -> maintenance
-	updateBody := fmt.Sprintf(`{"id":%d,"name":"修改后的测试设备","status":"maintenance"}`, deviceID)
+	// 5. Test update device name, priority & status (POST /api/admin/devices/update) -> priority 1, maintenance
+	updateBody := fmt.Sprintf(`{"id":%d,"name":"修改后的测试设备","priority":1,"status":"maintenance"}`, deviceID)
 	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/devices/update", strings.NewReader(updateBody))
 	reqUpdate.AddCookie(adminCookie)
 	rrUpdate := httptest.NewRecorder()
@@ -3687,12 +3710,13 @@ func TestAdminDeviceManagement(t *testing.T) {
 	}
 
 	var dbName string
-	err = db.QueryRow("SELECT name, status FROM devices WHERE id = ?", deviceID).Scan(&dbName, &dbStatus)
+	var dbPriority int
+	err = db.QueryRow("SELECT name, priority, status FROM devices WHERE id = ?", deviceID).Scan(&dbName, &dbPriority, &dbStatus)
 	if err != nil {
 		t.Fatalf("failed to query updated device: %v", err)
 	}
-	if dbName != "修改后的测试设备" || dbStatus != "maintenance" {
-		t.Errorf("expected device name '修改后的测试设备' and status 'maintenance', got name='%s', status='%s'", dbName, dbStatus)
+	if dbName != "修改后的测试设备" || dbPriority != 1 || dbStatus != "maintenance" {
+		t.Errorf("expected device name '修改后的测试设备', priority=1, status 'maintenance', got name='%s', priority=%d, status='%s'", dbName, dbPriority, dbStatus)
 	}
 
 	// 6. Test delete device (POST /api/admin/devices/delete)

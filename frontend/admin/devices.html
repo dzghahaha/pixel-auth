@@ -4,9 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>设备列表管理 - Pixel 订阅管理</title>
-    <link rel="stylesheet" href="./admin.css?v=1.0.2">
-    <script src="./admin.js?v=1.0.8"></script>
+    <link rel="stylesheet" href="./admin.css?v=1.1.0">
+    <script src="./admin.js?v=1.1.0"></script>
     <style>
+        /* Status Badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 9999px;
+            border: 1px solid transparent;
+            line-height: 1.2;
+        }
+        .status-badge::before {
+            content: "";
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .status-badge.idle,
+        .status-badge.active {
+            background-color: #ecfdf5 !important;
+            color: #065f46 !important;
+            border-color: #a7f3d0 !important;
+        }
+        .status-badge.idle::before,
+        .status-badge.active::before {
+            background-color: #10b981 !important;
+        }
+
+        .status-badge.busy {
+            background-color: #eff6ff !important;
+            color: #1d4ed8 !important;
+            border-color: #bfdbfe !important;
+        }
+        .status-badge.busy::before {
+            background-color: #3b82f6 !important;
+            animation: pulse 1.5s infinite ease-in-out !important;
+        }
+
+        .status-badge.maintenance {
+            background-color: #fffbeb !important;
+            color: #b45309 !important;
+            border-color: #fde68a !important;
+        }
+        .status-badge.maintenance::before {
+            background-color: #f59e0b !important;
+        }
+
+        .status-badge.disabled {
+            background-color: #fef2f2 !important;
+            color: #991b1b !important;
+            border-color: #fecaca !important;
+        }
+        .status-badge.disabled::before {
+            background-color: #ef4444 !important;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -182,8 +247,8 @@
             </div>
             <div class="stat-card">
                 <div class="stat-info">
-                    <span class="stat-label">正常在线</span>
-                    <span class="stat-value" id="stat-active" style="color: #059669;">0</span>
+                    <span class="stat-label">空闲就绪</span>
+                    <span class="stat-value" id="stat-idle" style="color: #059669;">0</span>
                 </div>
                 <div class="stat-icon" style="background: #d1fae5; color: #059669;">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -194,13 +259,12 @@
             </div>
             <div class="stat-card">
                 <div class="stat-info">
-                    <span class="stat-label">已停用 / 禁用</span>
-                    <span class="stat-value" id="stat-disabled" style="color: #dc2626;">0</span>
+                    <span class="stat-label">繁忙执行中</span>
+                    <span class="stat-value" id="stat-busy" style="color: #2563eb;">0</span>
                 </div>
-                <div class="stat-icon" style="background: #fee2e2; color: #dc2626;">
+                <div class="stat-icon" style="background: #dbeafe; color: #2563eb;">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                     </svg>
                 </div>
             </div>
@@ -224,8 +288,7 @@
                 <select id="filter-status" class="status-select">
                     <option value="">所有状态</option>
                     <option value="idle">空闲 (idle)</option>
-                    <option value="active">正常 (active)</option>
-                    <option value="disabled">禁用 (disabled)</option>
+                    <option value="busy">繁忙中 (busy)</option>
                     <option value="maintenance">维护中 (maintenance)</option>
                 </select>
                 <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
@@ -239,18 +302,19 @@
                 <table class="result-table">
                     <thead>
                         <tr>
-                            <th style="width: 80px;">ID</th>
-                            <th style="width: 220px;">设备序列号 (SN)</th>
+                            <th style="width: 70px;">ID</th>
+                            <th style="width: 200px;">设备序列号 (SN)</th>
                             <th>设备名称</th>
-                            <th style="width: 120px;">当前状态</th>
-                            <th style="width: 170px;">创建时间</th>
-                            <th style="width: 170px;">更新时间</th>
-                            <th style="width: 160px; text-align: right; padding-right: 20px;">操作</th>
+                            <th style="width: 110px;">优先级</th>
+                            <th style="width: 110px;">当前状态</th>
+                            <th style="width: 160px;">创建时间</th>
+                            <th style="width: 160px;">更新时间</th>
+                            <th style="width: 150px; text-align: right; padding-right: 20px;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="7" style="padding: 48px 0; text-align: center;">
+                            <td colspan="8" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载设备数据...</span>
@@ -296,11 +360,16 @@
                 </div>
 
                 <div class="form-group" style="margin-top: 14px;">
+                    <label for="edit-device-priority" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">优先级 (数值越小优先级越高)</label>
+                    <input type="number" id="edit-device-priority" class="form-input" placeholder="0" value="0">
+                    <span style="font-size: 11px; color: var(--slate-400); margin-top: 4px;">例如：0 为最高优先级，值越小越优先调度。</span>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
                     <label for="edit-device-status" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">设备状态</label>
                     <select id="edit-device-status" class="form-input" style="cursor: pointer; padding: 10px; font-size: 14px;">
                         <option value="idle">空闲 (idle) - 设备在线就绪</option>
-                        <option value="active">正常 (active) - 设备正常允许访问</option>
-                        <option value="disabled">禁用 (disabled) - 拒绝访问并停用</option>
+                        <option value="busy">繁忙中 (busy) - 正在执行任务</option>
                         <option value="maintenance">维护中 (maintenance) - 暂停使用维护</option>
                     </select>
                 </div>
@@ -331,11 +400,17 @@
                 </div>
 
                 <div class="form-group" style="margin-top: 14px;">
+                    <label for="create-device-priority" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">优先级 (数值越小优先级越高)</label>
+                    <input type="number" id="create-device-priority" class="form-input" placeholder="0" value="0">
+                    <span style="font-size: 11px; color: var(--slate-400); margin-top: 4px;">例如：0 为最高优先级，值越小越优先调度。</span>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
                     <label for="create-device-status" style="font-size: 12px; font-weight: 600; color: var(--slate-700);">初始状态</label>
                     <select id="create-device-status" class="form-input" style="cursor: pointer; padding: 10px; font-size: 14px;">
-                        <option value="active">正常 (active)</option>
-                        <option value="disabled">禁用 (disabled)</option>
-                        <option value="maintenance">维护中 (maintenance)</option>
+                        <option value="idle">空闲 (idle) - 设备在线就绪</option>
+                        <option value="busy">繁忙中 (busy) - 正在执行任务</option>
+                        <option value="maintenance">维护中 (maintenance) - 暂停使用维护</option>
                     </select>
                 </div>
             </div>
@@ -362,8 +437,8 @@
 
             const tableBody = document.getElementById('table-body');
             const statTotal = document.getElementById('stat-total');
-            const statActive = document.getElementById('stat-active');
-            const statDisabled = document.getElementById('stat-disabled');
+            const statIdle = document.getElementById('stat-idle');
+            const statBusy = document.getElementById('stat-busy');
             const statMaintenance = document.getElementById('stat-maintenance');
 
             const btnPrev = document.getElementById('btn-prev-page');
@@ -380,6 +455,7 @@
             const editDeviceId = document.getElementById('edit-device-id');
             const editDeviceSerial = document.getElementById('edit-device-serial');
             const editDeviceName = document.getElementById('edit-device-name');
+            const editDevicePriority = document.getElementById('edit-device-priority');
             const editDeviceStatus = document.getElementById('edit-device-status');
 
             // Create Modal elements
@@ -389,6 +465,7 @@
             const btnSaveCreate = document.getElementById('btn-save-create');
             const createDeviceSerial = document.getElementById('create-device-serial');
             const createDeviceName = document.getElementById('create-device-name');
+            const createDevicePriority = document.getElementById('create-device-priority');
             const createDeviceStatus = document.getElementById('create-device-status');
 
             let currentPage = 1;
@@ -461,14 +538,14 @@
 
                         // Stats update
                         if (data.stats) {
-                            statTotal.textContent = data.stats.total || 0;
-                            statActive.textContent = data.stats.active || 0;
-                            statDisabled.textContent = data.stats.disabled || 0;
-                            statMaintenance.textContent = data.stats.maintenance || 0;
+                            if (statTotal) statTotal.textContent = data.stats.total || 0;
+                            if (statIdle) statIdle.textContent = data.stats.idle || 0;
+                            if (statBusy) statBusy.textContent = data.stats.busy || 0;
+                            if (statMaintenance) statMaintenance.textContent = data.stats.maintenance || 0;
                         }
 
                         if (currentDevices.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的设备记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的设备记录</td></tr>';
                             return;
                         }
 
@@ -476,29 +553,33 @@
                         currentDevices.forEach(d => {
                             const tr = document.createElement('tr');
 
-                            let statusBadgeClass = 'active';
-                            let statusText = '正常';
-                            if (d.status === 'idle') {
-                                statusBadgeClass = 'idle';
-                                statusText = '空闲';
-                            } else if (d.status === 'disabled') {
-                                statusBadgeClass = 'disabled';
-                                statusText = '禁用';
+                            let statusBadgeClass = 'idle';
+                            let statusText = '空闲';
+                            if (d.status === 'busy') {
+                                statusBadgeClass = 'busy';
+                                statusText = '繁忙中';
                             } else if (d.status === 'maintenance') {
                                 statusBadgeClass = 'maintenance';
                                 statusText = '维护中';
-                            } else if (d.status === 'active') {
-                                statusBadgeClass = 'active';
-                                statusText = '正常';
+                            } else if (d.status === 'idle') {
+                                statusBadgeClass = 'idle';
+                                statusText = '空闲';
                             } else {
-                                statusBadgeClass = 'paused';
-                                statusText = d.status;
+                                statusBadgeClass = 'idle';
+                                statusText = d.status || '空闲';
                             }
+
+                            const priorityVal = d.priority !== undefined ? d.priority : 0;
 
                             tr.innerHTML = `
                                 <td>${d.id}</td>
                                 <td><span class="serial-badge">${d.serial || '-'}</span></td>
                                 <td style="font-weight: 600; color: var(--slate-800);">${d.name || '-'}</td>
+                                <td>
+                                    <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 28px; padding: 2px 8px; font-size: 12px; font-weight: 700; font-family: var(--font-mono, monospace); border-radius: 4px; background: var(--slate-100, #f1f5f9); color: var(--slate-700, #334155); border: 1px solid var(--slate-200, #e2e8f0);" title="数值越小优先级越高 (P${priorityVal})">
+                                        P${priorityVal}
+                                    </span>
+                                </td>
                                 <td><span class="status-badge ${statusBadgeClass}">${statusText}</span></td>
                                 <td style="font-size: 12px; color: var(--slate-500);">${formatDate(d.created_at)}</td>
                                 <td style="font-size: 12px; color: var(--slate-500);">${formatDate(d.updated_at)}</td>
@@ -528,11 +609,11 @@
                         });
 
                     } else {
-                        tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
+                        tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--danger);">加载失败: ${data.message || '未知错误'}</td></tr>`;
                     }
                 } catch (error) {
                     console.error(error);
-                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--danger);">请求失败，请检查网络连接</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--danger);">请求失败，请检查网络连接</td></tr>';
                 }
             }
 
@@ -544,7 +625,8 @@
                 editDeviceId.value = device.id;
                 editDeviceSerial.value = device.serial;
                 editDeviceName.value = device.name || '';
-                editDeviceStatus.value = device.status || 'active';
+                editDevicePriority.value = device.priority !== undefined ? device.priority : 0;
+                editDeviceStatus.value = (device.status === 'busy' || device.status === 'maintenance') ? device.status : 'idle';
 
                 editModal.classList.remove('hidden');
             }
@@ -560,6 +642,7 @@
             btnSaveEdit.addEventListener('click', async () => {
                 const id = parseInt(editDeviceId.value, 10);
                 const name = editDeviceName.value.trim();
+                const priority = parseInt(editDevicePriority.value, 10) || 0;
                 const status = editDeviceStatus.value;
 
                 if (!id) {
@@ -577,12 +660,13 @@
                         body: JSON.stringify({
                             id: id,
                             name: name,
+                            priority: priority,
                             status: status
                         })
                     });
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        showToast(data.message || '设备状态更新成功');
+                        showToast(data.message || '设备信息更新成功');
                         closeEditModalAction();
                         await loadDevices();
                     } else {
@@ -601,7 +685,8 @@
             btnOpenCreateModal.addEventListener('click', () => {
                 createDeviceSerial.value = '';
                 createDeviceName.value = '';
-                createDeviceStatus.value = 'active';
+                createDevicePriority.value = '0';
+                createDeviceStatus.value = 'idle';
                 createModal.classList.remove('hidden');
             });
 
@@ -616,6 +701,7 @@
             btnSaveCreate.addEventListener('click', async () => {
                 const serial = createDeviceSerial.value.trim();
                 const name = createDeviceName.value.trim();
+                const priority = parseInt(createDevicePriority.value, 10) || 0;
                 const status = createDeviceStatus.value;
 
                 if (!serial) {
@@ -633,6 +719,7 @@
                         body: JSON.stringify({
                             serial: serial,
                             name: name,
+                            priority: priority,
                             status: status
                         })
                     });

@@ -1642,6 +1642,8 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"maintenance_mode":        getSetting("maintenance_mode", "off"),
 				"log_cleanup_open":        getSetting("log_cleanup_open", "off"),
 				"log_cleanup_days":        getSetting("log_cleanup_days", "30"),
+				"device_wifi_ssid":        getSetting("device_wifi_ssid", ""),
+				"device_wifi_password":    getSetting("device_wifi_password", ""),
 			},
 		})
 	} else if r.Method == http.MethodPost {
@@ -1667,6 +1669,8 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			MaintenanceMode      string `json:"maintenance_mode"`
 			LogCleanupOpen       string `json:"log_cleanup_open"`
 			LogCleanupDays       string `json:"log_cleanup_days"`
+			DeviceWiFiSSID       string `json:"device_wifi_ssid"`
+			DeviceWiFiPassword   string `json:"device_wifi_password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -1782,6 +1786,8 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"maintenance_mode":        req.MaintenanceMode,
 			"log_cleanup_open":        req.LogCleanupOpen,
 			"log_cleanup_days":        req.LogCleanupDays,
+			"device_wifi_ssid":        req.DeviceWiFiSSID,
+			"device_wifi_password":    req.DeviceWiFiPassword,
 		}
 		for k, v := range settingsToSave {
 			_, err := db.Exec(`
@@ -2724,6 +2730,7 @@ type DeviceItem struct {
 	ID        int64     `json:"id"`
 	Serial    string    `json:"serial"`
 	Name      string    `json:"name"`
+	Priority  int       `json:"priority"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -2787,8 +2794,8 @@ func handleAdminDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Fetch paginated devices
-	selectQuery := fmt.Sprintf("SELECT id, serial, COALESCE(name, ''), status, COALESCE(created_at, updated_at, NOW()), COALESCE(updated_at, NOW()) FROM devices WHERE %s ORDER BY id DESC LIMIT ? OFFSET ?", whereSQL)
+	// 2. Fetch paginated devices (sorted by priority ASC, then id DESC)
+	selectQuery := fmt.Sprintf("SELECT id, serial, COALESCE(name, ''), priority, status, COALESCE(created_at, updated_at, NOW()), COALESCE(updated_at, NOW()) FROM devices WHERE %s ORDER BY priority ASC, id DESC LIMIT ? OFFSET ?", whereSQL)
 	queryArgs := append(args, pageSize, offset)
 
 	rows, err := db.Query(selectQuery, queryArgs...)
@@ -2805,7 +2812,7 @@ func handleAdminDevices(w http.ResponseWriter, r *http.Request) {
 	devices := []DeviceItem{}
 	for rows.Next() {
 		var d DeviceItem
-		if errScan := rows.Scan(&d.ID, &d.Serial, &d.Name, &d.Status, &d.CreatedAt, &d.UpdatedAt); errScan == nil {
+		if errScan := rows.Scan(&d.ID, &d.Serial, &d.Name, &d.Priority, &d.Status, &d.CreatedAt, &d.UpdatedAt); errScan == nil {
 			devices = append(devices, d)
 		}
 	}
@@ -2813,9 +2820,8 @@ func handleAdminDevices(w http.ResponseWriter, r *http.Request) {
 	// 3. Stats for header badges
 	stats := map[string]int{
 		"total":       0,
-		"active":      0,
 		"idle":        0,
-		"disabled":    0,
+		"busy":        0,
 		"maintenance": 0,
 	}
 	statRows, errStat := db.Query("SELECT status, COUNT(*) FROM devices GROUP BY status")
@@ -2912,7 +2918,7 @@ func handleAdminDevicesUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAdminDevicesUpdate updates device details (status and name)
+// handleAdminDevicesUpdate updates device details (status, name and priority)
 func handleAdminDevicesUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -2920,10 +2926,11 @@ func handleAdminDevicesUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ID     int64  `json:"id"`
-		Serial string `json:"serial"`
-		Name   string `json:"name"`
-		Status string `json:"status"`
+		ID       int64  `json:"id"`
+		Serial   string `json:"serial"`
+		Name     string `json:"name"`
+		Priority int    `json:"priority"`
+		Status   string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -2948,9 +2955,9 @@ func handleAdminDevicesUpdate(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	if req.ID > 0 {
-		res, err = db.Exec("UPDATE devices SET name = ?, status = ?, updated_at = ? WHERE id = ?", req.Name, req.Status, now, req.ID)
+		res, err = db.Exec("UPDATE devices SET name = ?, priority = ?, status = ?, updated_at = ? WHERE id = ?", req.Name, req.Priority, req.Status, now, req.ID)
 	} else if strings.TrimSpace(req.Serial) != "" {
-		res, err = db.Exec("UPDATE devices SET name = ?, status = ?, updated_at = ? WHERE serial = ?", req.Name, req.Status, now, strings.TrimSpace(req.Serial))
+		res, err = db.Exec("UPDATE devices SET name = ?, priority = ?, status = ?, updated_at = ? WHERE serial = ?", req.Name, req.Priority, req.Status, now, strings.TrimSpace(req.Serial))
 	} else {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
@@ -2991,9 +2998,10 @@ func handleAdminDevicesCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Serial string `json:"serial"`
-		Name   string `json:"name"`
-		Status string `json:"status"`
+		Serial   string `json:"serial"`
+		Name     string `json:"name"`
+		Priority int    `json:"priority"`
+		Status   string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -3015,12 +3023,12 @@ func handleAdminDevicesCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Status == "" {
-		req.Status = "active"
+		req.Status = "idle"
 	}
 
 	now := time.Now()
-	res, err := db.Exec("INSERT INTO devices (serial, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		req.Serial, req.Name, req.Status, now, now)
+	res, err := db.Exec("INSERT INTO devices (serial, name, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Serial, req.Name, req.Priority, req.Status, now, now)
 
 	if err != nil {
 		log.Printf("Create device error: %v\n", err)

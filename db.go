@@ -297,10 +297,12 @@ func createTables() {
 		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 		serial VARCHAR(64) NOT NULL DEFAULT '',
 		name VARCHAR(128) NOT NULL DEFAULT '',
-		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		priority INT NOT NULL DEFAULT 0,
+		status VARCHAR(32) NOT NULL DEFAULT 'idle',
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		UNIQUE KEY idx_serial (serial)
+		UNIQUE KEY idx_serial (serial),
+		INDEX idx_priority (priority)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 	if _, err := db.Exec(adminSessionsDDL); err != nil {
@@ -349,6 +351,7 @@ func createTables() {
 
 	// Migration: Add columns to devices table if they don't exist
 	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN name VARCHAR(128) NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN priority INT NOT NULL DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
 
 	// Insert default vendors if not present

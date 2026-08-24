@@ -601,30 +601,33 @@ select {
     background-color: #f59e0b;
 }
 
-.status-badge.active {
-    background-color: rgba(16, 185, 129, 0.1);
+.status-badge.active,
+.status-badge.idle {
+    background-color: #ecfdf5;
     color: #065f46;
-    border-color: rgba(16, 185, 129, 0.2);
+    border-color: #a7f3d0;
 }
 
-.status-badge.active::before {
+.status-badge.active::before,
+.status-badge.idle::before {
     background-color: #10b981;
 }
 
-.status-badge.idle {
-    background-color: rgba(99, 102, 241, 0.1);
-    color: #4338ca;
-    border-color: rgba(99, 102, 241, 0.2);
+.status-badge.busy {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
 }
 
-.status-badge.idle::before {
-    background-color: #6366f1;
+.status-badge.busy::before {
+    background-color: #3b82f6;
+    animation: pulse 1.5s infinite ease-in-out;
 }
 
 .status-badge.disabled {
-    background-color: rgba(239, 68, 68, 0.1);
+    background-color: #fef2f2;
     color: #991b1b;
-    border-color: rgba(239, 68, 68, 0.2);
+    border-color: #fecaca;
 }
 
 .status-badge.disabled::before {
@@ -632,9 +635,9 @@ select {
 }
 
 .status-badge.maintenance {
-    background-color: rgba(245, 158, 11, 0.12);
+    background-color: #fffbeb;
     color: #b45309;
-    border-color: rgba(245, 158, 11, 0.25);
+    border-color: #fde68a;
 }
 
 .status-badge.maintenance::before {

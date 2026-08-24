@@ -223,7 +223,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(*) 
 		FROM account_records r 
 		JOIN orders o ON r.order_id = o.id 
-		WHERE o.card_secret = ? AND r.status IN ('pending', 'running')`,
+		WHERE o.card_secret = ? AND r.status IN ('pending', 'running', 'paused')`,
 		req.CardSecret).Scan(&activeCount)
 	if errCheckActive != nil {
 		log.Printf("Database error checking active orders: %v\n", errCheckActive)
@@ -602,7 +602,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	for i := range records {
 		rec := &records[i]
-		if rec.Vendor == "pass.aisale.one" && rec.TaskID != "" && rec.Status != "success" && rec.Status != "failed" && rec.Status != "cancelled" {
+		if rec.Vendor == "pass.aisale.one" && rec.TaskID != "" && rec.Status != "success" && rec.Status != "failed" && rec.Status != "cancelled" && rec.Status != "paused" {
 			wg.Add(1)
 			go func(r *QueryRecord) {
 				defer wg.Done()
@@ -968,10 +968,10 @@ func handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if status != "pending" {
+	if status != "pending" && status != "paused" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
-			"message": "当前状态不是排队中，无法取消",
+			"message": "当前状态不是排队中或维护挂起，无法取消",
 		})
 		return
 	}
@@ -991,14 +991,14 @@ func handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 
-	if isSelfOperated {
+	if isSelfOperated || status == "paused" {
 		// Update status directly
 		_, errUpdate := db.Exec(`
 			UPDATE account_records 
 			SET status = 'cancelled', message = '已取消', completed_at = ?, updated_at = ? 
-			WHERE id = ? AND status = 'pending'`, now, now, recordID)
+			WHERE id = ? AND status IN ('pending', 'paused')`, now, now, recordID)
 		if errUpdate != nil {
-			log.Printf("Error updating self-operated record status to cancelled: %v\n", errUpdate)
+			log.Printf("Error updating self-operated/paused record status to cancelled: %v\n", errUpdate)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "更新订单状态失败",

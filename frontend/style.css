@@ -565,6 +565,16 @@ textarea {
     background-color: var(--text-secondary);
 }
 
+.status-paused {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+.status-paused::before {
+    background-color: #f59e0b;
+}
+
 @keyframes pulse {
     0% { transform: scale(0.9); opacity: 0.6; }
     50% { transform: scale(1.2); opacity: 1; }

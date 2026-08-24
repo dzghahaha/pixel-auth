@@ -580,13 +580,13 @@ func handleResetKeys(w http.ResponseWriter, r *http.Request) {
 			originalKey = oldKey
 		}
 
-		// Check if there are active tasks (status NOT in 'success', 'failed') associated with this key (card_secret)
+		// Check if there are active tasks (status IN ('pending', 'running')) associated with this key (card_secret)
 		var runningCount int
 		errRunningCheck := tx.QueryRow(`
 			SELECT COUNT(*) 
 			FROM account_records r
 			JOIN orders o ON r.order_id = o.id
-			WHERE o.card_secret = ? AND r.status NOT IN ('success', 'failed')`, oldKey).Scan(&runningCount)
+			WHERE o.card_secret = ? AND r.status IN ('pending', 'running')`, oldKey).Scan(&runningCount)
 		if errRunningCheck != nil {
 			log.Printf("Error checking active tasks for key %s: %v\n", oldKey, errRunningCheck)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
