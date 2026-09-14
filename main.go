@@ -27,6 +27,9 @@ func main() {
 	// 3. API - Submit card secret and accounts
 	http.HandleFunc("/api/submit", limit(handleSubmit))
 
+	// API - Jio Subscription Redeem
+	http.HandleFunc("/api/jio/redeem", limit(handleJioRedeem))
+
 	// 4. API - Query status of a card secret
 	http.HandleFunc("/api/query", limit(handleQuery))
 	http.HandleFunc("/api/query/cancel", limit(handleCancelSubscription))
@@ -76,6 +79,7 @@ func main() {
 	http.HandleFunc("/api/admin/vendors/delete", limit(requirePermission("vendors", handleAdminVendorsDelete)))
 	http.HandleFunc("/api/admin/dashboard/stats", limit(requirePermission("dashboard", handleAdminDashboardStats)))
 	http.HandleFunc("/api/admin/settings", limit(requirePermission("settings", handleAdminSettings)))
+	http.HandleFunc("/api/admin/jio/test_proxy", limit(requirePermission("settings", handleAdminJioTestProxy)))
 	http.HandleFunc("/api/admin/logs", limit(requirePermission("logs", handleAdminLogs)))
 	http.HandleFunc("/api/admin/devices/selector", limit(requirePermission("logs", handleAdminDevicesSelector)))
 	http.HandleFunc("/api/admin/devices", limit(requirePermission("devices", handleAdminDevices)))

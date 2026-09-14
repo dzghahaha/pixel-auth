@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pixel 订阅</title>
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                if (data && data.success && data.maintenance_mode === 'page') {
+                    window.location.replace('/maintenance.html');
+                }
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,6 +37,7 @@
                 <span class="header-title">Pixel 订阅</span>
             </div>
             <div class="header-right" style="display: flex; gap: 8px;">
+                <a href="/jio.html" class="back-link-btn" style="background-color: #059669; border-color: #059669; color: white;">Jio 订阅</a>
                 <a href="/doc.html" class="back-link-btn" style="background-color: var(--primary); border-color: var(--primary); color: white;">API 文档</a>
                 <a href="/query.html" class="back-link-btn">订单查询</a>
             </div>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>系统维护中 - Pixel 订阅</title>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .maintenance-container {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .maintenance-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 44px 32px 36px;
+            text-align: center;
+            box-shadow: var(--shadow-xl);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+            animation: cardEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes cardEntrance {
+            from {
+                opacity: 0;
+                transform: translateY(12px) scale(0.97);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: #fef3c7;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-radius: 9999px;
+            color: #92400e;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #f59e0b;
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            animation: pulseRing 1.8s infinite;
+        }
+
+        @keyframes pulseRing {
+            0% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+            }
+        }
+
+        .icon-bubble {
+            width: 72px;
+            height: 72px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #b45309;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.3);
+            margin: 4px 0 2px;
+        }
+
+        .icon-bubble svg {
+            width: 34px;
+            height: 34px;
+        }
+
+        .title {
+            font-size: 23px;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 440px;
+        }
+
+        .security-tip {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px 16px;
+            color: #475569;
+            font-size: 12.5px;
+            line-height: 1.55;
+            text-align: left;
+            width: 100%;
+        }
+
+        .security-tip svg {
+            width: 18px;
+            height: 18px;
+            color: #10b981;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .action-container {
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        .btn-check {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--primary);
+            color: #ffffff;
+            border: 1px solid var(--primary);
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+            transition: all 0.18s ease;
+        }
+
+        .btn-check:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+        }
+
+        .btn-check:active {
+            transform: translateY(0);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0f172a;
+            color: #ffffff;
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 100;
+            display: none;
+        }
+
+        .toast.show {
+            display: block;
+            animation: toastPop 0.2s ease-out;
+        }
+
+        @keyframes toastPop {
+            from { opacity: 0; transform: translate(-50%, 8px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="maintenance-container">
+        <div class="maintenance-card">
+            <div class="status-badge">
+                <span class="pulse-dot"></span>
+                <span>系统例行维护中</span>
+            </div>
+
+            <div class="icon-bubble">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                </svg>
+            </div>
+
+            <h1 class="title">服务升级与例行维护</h1>
+
+            <p class="desc">
+                为了提供更稳定、高效的服务体验，平台当前正在进行核心服务维护与升级。<br>
+                维护期间暂停所有前台业务操作（包括新订单提交、查询与重置）。
+            </p>
+
+            <div class="security-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>所有已提交的历史数据与卡密资产安全受保护，维护结束后将自动恢复正常服务。</span>
+            </div>
+
+            <div class="action-container">
+                <button type="button" id="btn-check" class="btn-check">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    <span>检查服务状态 / 重新进入</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnCheck = document.getElementById('btn-check');
+            const toast = document.getElementById('toast');
+
+            function showToast(msg, duration = 2500) {
+                toast.textContent = msg;
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, duration);
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentService = urlParams.get('service') || 'pixel';
+            const returnUrl = currentService === 'jio' ? '/jio.html' : '/';
+
+            function isServiceUnderMaintenance(data) {
+                if (!data) return true;
+                if (currentService === 'jio') {
+                    return data.maintenance_mode_jio === 'page';
+                }
+                return data.maintenance_mode_pixel === 'page' || data.maintenance_mode === 'page';
+            }
+
+            async function checkStatus() {
+                btnCheck.disabled = true;
+                const originalText = btnCheck.innerHTML;
+                btnCheck.innerHTML = '<span>正在检查服务状态...</span>';
+
+                try {
+                    const res = await fetch('/api/config');
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        if (!isServiceUnderMaintenance(data)) {
+                            showToast('服务维护已结束，正在为您跳转...');
+                            setTimeout(() => {
+                                window.location.replace(returnUrl);
+                            }, 800);
+                            return;
+                        } else {
+                            showToast('当前服务仍在维护中，请稍后再试');
+                        }
+                    } else {
+                        showToast('暂时无法连接至服务');
+                    }
+                } catch (e) {
+                    showToast('网络连接失败，请稍后重试');
+                } finally {
+                    btnCheck.disabled = false;
+                    btnCheck.innerHTML = originalText;
+                }
+            }
+
+            btnCheck.addEventListener('click', checkStatus);
+
+            // Auto-check once on load
+            (async function autoCheck() {
+                try {
+                    const res = await fetch('/api/config');
+                    const data = await res.json();
+                    if (res.ok && data.success && !isServiceUnderMaintenance(data)) {
+                        window.location.replace(returnUrl);
+                    }
+                } catch(e) {}
+            })();
+        });
+    </script>
+</body>
+</html>

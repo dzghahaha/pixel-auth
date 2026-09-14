@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jio 订阅兑换中心</title>
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                if (data && data.success && data.maintenance_mode_jio === 'page') {
+                    window.location.replace('/maintenance.html?service=jio');
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Jio Guide Banner (Impeccable Emerald Theme) */
+        .jio-guide-banner {
+            background-color: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        .jio-guide-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #065f46;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .jio-guide-header svg {
+            width: 18px;
+            height: 18px;
+            stroke: #059669;
+            flex-shrink: 0;
+        }
+
+        .jio-guide-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 13.5px;
+            color: #047857;
+            line-height: 1.6;
+        }
+
+        .jio-guide-step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .jio-step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background-color: #059669;
+            color: #ffffff;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .jio-guide-warning {
+            padding-top: 10px;
+            border-top: 1px dashed #6ee7b7;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #b45309;
+            font-size: 12.5px;
+            font-weight: 600;
+        }
+
+        .jio-guide-warning svg {
+            width: 16px;
+            height: 16px;
+            stroke: #d97706;
+            flex-shrink: 0;
+        }
+
+        /* Result Area */
+        .jio-result-card {
+            margin-top: 20px;
+            padding: 16px 18px;
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeInResult 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeInResult {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .jio-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .jio-status-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+
+        .jio-status-tag.paused {
+            background-color: #fef3c7;
+            color: #b45309;
+        }
+
+        .jio-link-combo {
+            display: flex;
+            gap: 8px;
+        }
+
+        .jio-link-input {
+            flex: 1;
+            padding: 10px 12px;
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 13px;
+            color: #0f172a;
+            font-weight: 600;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #059669;
+            --primary-hover: #047857;
+            --border-focus: #059669;
+        }
+
+        .query-btn {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25) !important;
+        }
+
+        .query-btn:hover {
+            background: #047857 !important;
+        }
+
+        .jio-link-input:focus {
+            border-color: #059669;
+        }
+
+        .jio-btn-copy {
+            padding: 0 16px;
+            background-color: #059669;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .jio-btn-copy:hover {
+            background-color: #047857;
+        }
+
+        .jio-result-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .jio-open-link {
+            color: #059669;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .jio-open-link:hover {
+            text-decoration: underline;
+            color: #047857;
+        }
+
+        .jio-hint-text {
+            color: #94a3b8;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载过渡动画 -->
+    <div id="page-loader" class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- Jio 专属标识 -->
+                <div style="width: 26px; height: 26px; border-radius: 6px; background-color: #059669; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 14px;">J</div>
+                <span class="header-title" style="margin-left: 8px;">Jio 订阅</span>
+                <span style="font-size: 11px; font-weight: 600; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 4px; padding: 2px 6px; margin-left: 4px;">兑换链接</span>
+            </div>
+            <div class="header-right" style="display: flex; gap: 8px;">
+                <a href="/jio_doc.html" class="back-link-btn" style="background-color: #059669; border-color: #059669; color: white;">API 文档</a>
+                <a href="/jio_query.html" class="back-link-btn" style="background-color: #ecfdf5; border-color: #a7f3d0; color: #047857; font-weight: 700;">订单查询</a>
+            </div>
+        </header>
+
+        <!-- 兑换链接使用说明 -->
+        <div class="jio-guide-banner">
+            <div class="jio-guide-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>兑换链接使用说明</span>
+            </div>
+
+            <div class="jio-guide-steps">
+                <div class="jio-guide-step-item">
+                    <span class="jio-step-num">1</span>
+                    <span>手机或者电脑登录好你要领取的账号</span>
+                </div>
+                <div class="jio-guide-step-item">
+                    <span class="jio-step-num">2</span>
+                    <span>将收到的兑换链接粘贴到您的谷歌浏览器中打开</span>
+                </div>
+                <div class="jio-guide-step-item">
+                    <span class="jio-step-num">3</span>
+                    <span>然后单击“<strong style="color: #2563eb;">蓝色按钮</strong>”激活优惠。您的将成功激活。</span>
+                </div>
+            </div>
+
+            <div class="jio-guide-warning">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>温馨提示：链接 6-12 小时内失效，获取后请尽快完成激活！</span>
+            </div>
+        </div>
+
+        <!-- Jio 卡密主表单卡片 -->
+        <div class="card form-card">
+            <!-- 标题区域 -->
+            <div class="card-header">
+                <svg class="cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                </svg>
+                <div class="card-title-group">
+                    <span class="card-title">Jio 专属卡密兑换</span>
+                    <span class="card-subtitle">仅需输入卡密，下方即可即时生成专属兑换链接</span>
+                </div>
+            </div>
+
+            <!-- 卡密输入框 -->
+            <div class="form-group required">
+                <label for="jio-card-secret">卡密</label>
+                <input type="text" id="jio-card-secret" placeholder="请输入 Jio 兑换卡密" autocomplete="off" spellcheck="false" required>
+            </div>
+
+            <!-- 提示行 -->
+            <div class="info-row">
+                <svg class="doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span class="info-text">无需输入账号密码，输入卡密即可换取激活链接</span>
+            </div>
+
+            <!-- 获取兑换链接大按钮 -->
+            <button type="button" id="btn-jio-redeem" class="submit-btn" style="background: linear-gradient(135deg, #059669 0%, #047857 100%);">
+                <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                <span id="btn-jio-text">获取兑换链接</span>
+            </button>
+
+            <!-- 兑换链接展示结果区 (动态展示) -->
+            <div id="jio-result-area" class="jio-result-card" style="display: none;">
+                <div class="jio-result-header">
+                    <span id="jio-result-title">下方兑换链接：</span>
+                    <span id="jio-result-badge" class="jio-status-tag">● 兑换成功</span>
+                </div>
+
+                <div class="jio-link-combo">
+                    <input type="text" id="jio-result-url" class="jio-link-input" readonly value="">
+                    <button type="button" id="btn-copy-link" class="jio-btn-copy">复制链接</button>
+                </div>
+
+                <div class="jio-result-footer">
+                    <a href="#" id="jio-open-url" class="jio-open-link" target="_blank" rel="noopener noreferrer">直接在浏览器中打开 ↗</a>
+                    <span id="jio-result-tip" class="jio-hint-text">已关联保存，随时可使用卡密查验</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部查询模块 -->
+        <div class="card query-card">
+            <div class="query-combo">
+                <input type="text" id="query-card-secret" placeholder="输入卡密查询状态或找回链接">
+                <button type="button" id="btn-query" class="query-btn">查询</button>
+            </div>
+
+            <div class="info-bar">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span class="info-bar-text">开放查询・输入卡密即可查看订单及已生成的链接</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示组件 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Dismiss loader
+            const loader = document.getElementById('page-loader');
+            if (loader) {
+                setTimeout(() => {
+                    loader.classList.add('fade-out');
+                }, 150);
+            }
+
+            const toast = document.getElementById('toast');
+            function showToast(msg, duration = 3000) {
+                if (!toast) return;
+                toast.textContent = msg;
+                toast.classList.remove('hidden');
+                toast.classList.add('show');
+                clearTimeout(toast.__timeout);
+                toast.__timeout = setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.classList.add('hidden'), 300);
+                }, duration);
+            }
+
+            const inputSecret = document.getElementById('jio-card-secret');
+            const btnRedeem = document.getElementById('btn-jio-redeem');
+            const btnText = document.getElementById('btn-jio-text');
+            const resultArea = document.getElementById('jio-result-area');
+            const resultTitle = document.getElementById('jio-result-title');
+            const resultBadge = document.getElementById('jio-result-badge');
+            const resultUrl = document.getElementById('jio-result-url');
+            const btnCopyLink = document.getElementById('btn-copy-link');
+            const openUrl = document.getElementById('jio-open-url');
+            const resultTip = document.getElementById('jio-result-tip');
+
+            // 复制链接
+            if (btnCopyLink) {
+                btnCopyLink.addEventListener('click', async () => {
+                    const text = resultUrl.value;
+                    if (!text) return;
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showToast('兑换链接已成功复制到剪贴板！');
+                    } catch (e) {
+                        resultUrl.select();
+                        document.execCommand('copy');
+                        showToast('兑换链接已复制！');
+                    }
+                });
+            }
+
+            // 获取兑换链接
+            async function handleRedeem() {
+                const cardSecret = inputSecret.value.trim();
+                if (!cardSecret) {
+                    showToast('请输入 Jio 卡密');
+                    inputSecret.focus();
+                    return;
+                }
+
+                btnRedeem.disabled = true;
+                btnText.textContent = '正在获取链接...';
+
+                try {
+                    const res = await fetch('/api/jio/redeem', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ card_secret: cardSecret })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        const info = data.data || {};
+                        resultArea.style.display = 'flex';
+
+                        if (info.status === 'paused') {
+                            resultTitle.textContent = '订单已挂起暂存：';
+                            resultBadge.textContent = '● 系统维护中';
+                            resultBadge.className = 'jio-status-tag paused';
+                            resultUrl.value = '系统维护挂起中，暂无链接';
+                            btnCopyLink.style.display = 'none';
+                            openUrl.style.display = 'none';
+                            resultTip.textContent = info.message || '维护结束后将自动恢复并生成兑换链接';
+                            showToast(data.message || 'Jio系统维护中，订单已暂存挂起');
+                        } else {
+                            resultTitle.textContent = '下方兑换链接：';
+                            resultBadge.textContent = '● 兑换成功';
+                            resultBadge.className = 'jio-status-tag';
+                            resultUrl.value = info.offer_url || '';
+                            btnCopyLink.style.display = 'block';
+                            openUrl.style.display = 'inline-block';
+                            openUrl.href = info.offer_url || '#';
+                            resultTip.textContent = '链接已关联卡密永久保存，6~12小时内有效';
+                            showToast('获取成功！请查看下方兑换链接');
+                        }
+
+                        // 平滑滚动至结果区域
+                        resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    } else {
+                        showToast(data.message || '获取失败，请核对卡密');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络请求失败，请稍后重试');
+                } finally {
+                    btnRedeem.disabled = false;
+                    btnText.textContent = '获取兑换链接';
+                }
+            }
+
+            btnRedeem.addEventListener('click', handleRedeem);
+            inputSecret.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleRedeem();
+            });
+
+            // 底部查询跳转 (与主站行为完全统一)
+            const querySecret = document.getElementById('query-card-secret');
+            const btnQuery = document.getElementById('btn-query');
+            function handleQuery() {
+                const s = querySecret.value.trim();
+                if (!s) {
+                    showToast('请输入要查询的卡密');
+                    querySecret.focus();
+                    return;
+                }
+                window.location.href = `/jio_query.html?card_secret=${encodeURIComponent(s)}`;
+            }
+
+            if (btnQuery) btnQuery.addEventListener('click', handleQuery);
+            if (querySecret) {
+                querySecret.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleQuery();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -540,6 +540,11 @@
                     <option value="cancelled">已取消 (Cancelled)</option>
                     <option value="paused">维护挂起 (Paused)</option>
                 </select>
+                <select id="filter-service-type" class="status-select">
+                    <option value="">全部业务</option>
+                    <option value="pixel">Pixel 订单</option>
+                    <option value="jio">Jio 订单</option>
+                </select>
                 <select id="filter-creator" class="status-select admin-only">
                     <option value="">所有创建人</option>
                 </select>
@@ -622,6 +627,7 @@
                         <tr>
                             <th class="admin-only">ID</th>
                             <th>系统卡密</th>
+                            <th>业务分类</th>
                             <th>源Key</th>
                             <th>卡密备注</th>
                             <th>提交方式</th>
@@ -635,7 +641,7 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="11" style="padding: 48px 0; text-align: center;">
+                            <td colspan="12" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载订单列表数据...</span>
@@ -861,6 +867,7 @@
             const searchOriginalKey = document.getElementById('search-original-key');
             const searchNote = document.getElementById('search-note');
             const statusSelect = document.getElementById('filter-status');
+            const serviceTypeSelect = document.getElementById('filter-service-type');
             const creatorSelect = document.getElementById('filter-creator');
             const filterStartTime = document.getElementById('filter-start-time');
             const filterEndTime = document.getElementById('filter-end-time');
@@ -999,11 +1006,12 @@
 
             // Fetch and render unique orders
             async function loadOrders() {
-                tableBody.innerHTML = getTableLoadingHTML(11, '正在读取数据...');
+                tableBody.innerHTML = getTableLoadingHTML(12, '正在读取数据...');
                 const queryVal = searchInput.value.trim();
                 const originalKeyVal = searchOriginalKey.value.trim();
                 const noteVal = searchNote.value.trim();
                 const statusVal = statusSelect.value;
+                const serviceTypeVal = serviceTypeSelect ? serviceTypeSelect.value : '';
                 const creatorVal = creatorSelect ? creatorSelect.value : '';
 
                 let startTimeVal = '';
@@ -1023,7 +1031,7 @@
                 }
 
                 try {
-                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}&start_time=${startTimeVal}&end_time=${endTimeVal}&creator_id=${creatorVal}`;
+                    const url = `/api/admin/orders?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&service_type=${encodeURIComponent(serviceTypeVal)}&original_key=${encodeURIComponent(originalKeyVal)}&note=${encodeURIComponent(noteVal)}&start_time=${startTimeVal}&end_time=${endTimeVal}&creator_id=${creatorVal}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -1039,7 +1047,7 @@
                         btnNext.disabled = currentPage >= totalPages;
 
                         if (currentOrders.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密订单记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密订单记录</td></tr>';
                             return;
                         }
 
@@ -1068,12 +1076,17 @@
 
                             const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:var(--slate-400);">${o.task_id || '-'}</span>` : '-';
 
+                            const serviceBadge = o.service_type === 'jio'
+                                ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>'
+                                : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
+
                             tr.innerHTML = `
                                 <td class="admin-only">${o.id}</td>
                                 <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${o.card_secret}</td>
+                                <td>${serviceBadge}</td>
                                 <td style="font-family: monospace; font-size: 12px; color: var(--slate-600);">${o.original_key || '-'}</td>
                                 <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
-                                <td style="font-size:13px; color: var(--slate-600);">${o.mode === 'single' ? '单账号' : '批量'}</td>
+                                <td style="font-size:13px; color: var(--slate-600);">${o.mode === 'single' ? '单账号' : (o.mode === 'jio' ? '链接兑换' : '批量')}</td>
                                 <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
@@ -2060,6 +2073,27 @@
                 currentPage = 1;
                 loadOrders();
             });
+
+            if (statusSelect) {
+                statusSelect.addEventListener('change', () => {
+                    currentPage = 1;
+                    loadOrders();
+                });
+            }
+
+            if (serviceTypeSelect) {
+                serviceTypeSelect.addEventListener('change', () => {
+                    currentPage = 1;
+                    loadOrders();
+                });
+            }
+
+            if (creatorSelect) {
+                creatorSelect.addEventListener('change', () => {
+                    currentPage = 1;
+                    loadOrders();
+                });
+            }
 
             const btnResumePaused = document.getElementById('btn-resume-paused');
             if (btnResumePaused) {

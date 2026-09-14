@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2793,11 +2795,62 @@ func TestCancelSubscription(t *testing.T) {
 		t.Errorf("expected vendor cancel failure (non-200), got %d. Body: %s", rrFail.Code, rrFail.Body.String())
 	}
 
-	// Verify status in DB: should STILL be 'pending' (rolled back!)
-	var dbStatusFail string
-	db.QueryRow("SELECT status FROM account_records WHERE card_secret = ? AND username = ?", "ck-vendor-cancel", "vendorfailuser@gmail.com").Scan(&dbStatusFail)
-	if dbStatusFail != "pending" {
-		t.Errorf("expected status 'pending' (rolled back), got '%s'", dbStatusFail)
+	// --- D. Paused Status and Multi-Record History Cancel Test ---
+	// 1. Insert an older failed record for user 'multihistory@gmail.com'
+	_, _ = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "ck-self-cancel", "multihistory@gmail.com", "pwd123", "2FA", "failed", "二步验证失败", now.Add(-10*time.Minute), now.Add(-10*time.Minute))
+
+	// 2. Insert a newer paused record for the same user
+	resPaused, _ := db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "ck-self-cancel", "multihistory@gmail.com", "pwd123", "2FA", "paused", "系统维护中，已挂起", now, now)
+	pausedRecordID, _ := resPaused.LastInsertId()
+
+	// 3. Cancel with RecordID
+	cancelReqPaused := CancelSubscriptionRequest{
+		RecordID:   pausedRecordID,
+		CardSecret: "ck-self-cancel",
+		Username:   "multihistory@gmail.com",
+	}
+	bodyBytesPaused, _ := json.Marshal(cancelReqPaused)
+	reqPaused := httptest.NewRequest(http.MethodPost, "/api/query/cancel", bytes.NewBuffer(bodyBytesPaused))
+	rrPaused := httptest.NewRecorder()
+	handleCancelSubscription(rrPaused, reqPaused)
+
+	if rrPaused.Code != http.StatusOK {
+		t.Errorf("expected paused cancel with RecordID 200, got %d. Body: %s", rrPaused.Code, rrPaused.Body.String())
+	}
+
+	// Verify status of the paused record in DB
+	var pausedStatus, pausedMessage string
+	db.QueryRow("SELECT status, message FROM account_records WHERE id = ?", pausedRecordID).Scan(&pausedStatus, &pausedMessage)
+	if pausedStatus != "cancelled" || pausedMessage != "已取消" {
+		t.Errorf("expected status 'cancelled' and message '已取消', got '%s'/'%s'", pausedStatus, pausedMessage)
+	}
+
+	// 4. Test fallback without RecordID when an older failed record exists
+	_, _ = db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "ck-self-cancel", "multihistory2@gmail.com", "pwd123", "2FA", "failed", "二步验证失败", now.Add(-5*time.Minute), now.Add(-5*time.Minute))
+	resPaused2New, _ := db.Exec("INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		orderID, "ck-self-cancel", "multihistory2@gmail.com", "pwd123", "2FA", "paused", "系统维护中，已挂起", now, now)
+	paused2NewID, _ := resPaused2New.LastInsertId()
+
+	cancelReqNoID := CancelSubscriptionRequest{
+		CardSecret: "ck-self-cancel",
+		Username:   "multihistory2@gmail.com",
+	}
+	bodyBytesNoID, _ := json.Marshal(cancelReqNoID)
+	reqNoID := httptest.NewRequest(http.MethodPost, "/api/query/cancel", bytes.NewBuffer(bodyBytesNoID))
+	rrNoID := httptest.NewRecorder()
+	handleCancelSubscription(rrNoID, reqNoID)
+
+	if rrNoID.Code != http.StatusOK {
+		t.Errorf("expected cancel without RecordID to prioritize paused record (200), got %d. Body: %s", rrNoID.Code, rrNoID.Body.String())
+	}
+
+	var p2Status string
+	db.QueryRow("SELECT status FROM account_records WHERE id = ?", paused2NewID).Scan(&p2Status)
+	if p2Status != "cancelled" {
+		t.Errorf("expected newest paused record status 'cancelled', got '%s'", p2Status)
 	}
 }
 
@@ -3736,6 +3789,817 @@ func TestAdminDeviceManagement(t *testing.T) {
 		t.Errorf("expected device to be deleted, but still found in DB")
 	}
 }
+
+func TestJioRedeemSuccess(t *testing.T) {
+	initTestDB(t)
+
+	// 1. Insert an active Jio key
+	jioKey := "JIO-TEST-KEY-SUCCESS-001"
+	_, err := db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, created_at, updated_at)
+		VALUES (?, 'ai.deard.fun', 'VKEY-001', 'active', 'jio', '', 'Jio测试卡密', NOW(), NOW())`,
+		jioKey)
+	if err != nil {
+		t.Fatalf("failed to insert test jio key: %v", err)
+	}
+
+	// 2. Perform Jio redeem
+	reqBody := fmt.Sprintf(`{"card_secret":"%s"}`, jioKey)
+	req := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr := httptest.NewRecorder()
+	handleJioRedeem(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for jio redeem, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			CardSecret string `json:"card_secret"`
+			OfferURL   string `json:"offer_url"`
+			CreatedAt  string `json:"created_at"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if !resp.Success || resp.Data.OfferURL == "" {
+		t.Fatalf("expected success true with offer_url, got: %+v", resp)
+	}
+	if !strings.Contains(resp.Data.OfferURL, "https://one.google.com/promo/") {
+		t.Errorf("unexpected offer url format: %s", resp.Data.OfferURL)
+	}
+
+	// 3. Verify database state
+	var keyStatus, keyServiceType string
+	err = db.QueryRow("SELECT status, service_type FROM system_keys WHERE system_key = ?", jioKey).Scan(&keyStatus, &keyServiceType)
+	if err != nil {
+		t.Fatalf("failed to query system_key: %v", err)
+	}
+	if keyStatus != "inactive" {
+		t.Errorf("expected system_key status 'inactive', got '%s'", keyStatus)
+	}
+	if keyServiceType != "jio" {
+		t.Errorf("expected service_type 'jio', got '%s'", keyServiceType)
+	}
+
+	var orderServiceType string
+	err = db.QueryRow("SELECT service_type FROM orders WHERE card_secret = ?", jioKey).Scan(&orderServiceType)
+	if err != nil {
+		t.Fatalf("failed to query order: %v", err)
+	}
+	if orderServiceType != "jio" {
+		t.Errorf("expected order service_type 'jio', got '%s'", orderServiceType)
+	}
+
+	// 4. Test idempotency (repeated call should return existing offer_url)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr2 := httptest.NewRecorder()
+	handleJioRedeem(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for repeated jio redeem, got %d. Body: %s", rr2.Code, rr2.Body.String())
+	}
+	var resp2 struct {
+		Success bool `json:"success"`
+		Data    struct {
+			OfferURL string `json:"offer_url"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(rr2.Body.Bytes(), &resp2)
+	if resp2.Data.OfferURL != resp.Data.OfferURL {
+		t.Errorf("expected idempotent offer URL '%s', got '%s'", resp.Data.OfferURL, resp2.Data.OfferURL)
+	}
+
+	// 5. Test query endpoint (/api/query)
+	reqQuery := httptest.NewRequest(http.MethodGet, "/api/query?card_secret="+jioKey, nil)
+	rrQuery := httptest.NewRecorder()
+	handleQuery(rrQuery, reqQuery)
+
+	if rrQuery.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for query, got %d", rrQuery.Code)
+	}
+	var respQuery struct {
+		Success     bool   `json:"success"`
+		ServiceType string `json:"service_type"`
+		Records     []struct {
+			DiscountURL string `json:"discount_url"`
+		} `json:"records"`
+	}
+	_ = json.Unmarshal(rrQuery.Body.Bytes(), &respQuery)
+	if respQuery.ServiceType != "jio" {
+		t.Errorf("expected service_type 'jio' in query response, got '%s'", respQuery.ServiceType)
+	}
+	if len(respQuery.Records) == 0 || respQuery.Records[0].DiscountURL != resp.Data.OfferURL {
+		t.Errorf("query records mismatch, got: %+v", respQuery.Records)
+	}
+}
+
+func TestJioRedeemCardTypeMismatch(t *testing.T) {
+	initTestDB(t)
+
+	// 1. Insert Pixel key
+	pixelKey := "PIXEL-TEST-KEY-MISMATCH-001"
+	_, _ = db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, created_at, updated_at)
+		VALUES (?, 'ai.deard.fun', 'VKEY-002', 'active', 'pixel', '', 'Pixel测试卡密', NOW(), NOW())`,
+		pixelKey)
+
+	// 2. Submit Pixel key to Jio endpoint -> expect 400
+	reqJio := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(fmt.Sprintf(`{"card_secret":"%s"}`, pixelKey)))
+	rrJio := httptest.NewRecorder()
+	handleJioRedeem(rrJio, reqJio)
+
+	if rrJio.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for pixel key to jio redeem, got %d. Body: %s", rrJio.Code, rrJio.Body.String())
+	}
+	if !strings.Contains(rrJio.Body.String(), "非 Jio") {
+		t.Errorf("expected mismatch error message, got: %s", rrJio.Body.String())
+	}
+
+	// 3. Insert Jio key
+	jioKey := "JIO-TEST-KEY-MISMATCH-002"
+	_, _ = db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, created_at, updated_at)
+		VALUES (?, 'ai.deard.fun', 'VKEY-003', 'active', 'jio', '', 'Jio测试卡密', NOW(), NOW())`,
+		jioKey)
+
+	// 4. Submit Jio key to Pixel endpoint -> expect 400
+	pixelSubmitBody := fmt.Sprintf(`{
+		"card_secret":"%s",
+		"mode":"single",
+		"accounts":[{"username":"testuser@gmail.com","password":"pwd","two_factor":"ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}]
+	}`, jioKey)
+	reqPixel := httptest.NewRequest(http.MethodPost, "/api/submit", strings.NewReader(pixelSubmitBody))
+	rrPixel := httptest.NewRecorder()
+	handleSubmit(rrPixel, reqPixel)
+
+	if rrPixel.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for jio key to pixel submit, got %d. Body: %s", rrPixel.Code, rrPixel.Body.String())
+	}
+	if !strings.Contains(rrPixel.Body.String(), "Jio 订阅专属卡密") {
+		t.Errorf("expected jio key rejection message, got: %s", rrPixel.Body.String())
+	}
+}
+
+func TestAdminSettingsJioProvider(t *testing.T) {
+	initTestDB(t)
+
+	adminCookie := createTestAdminSession(t, "admin_jio", "admin", nil)
+
+	// 1. GET settings - should contain default jio_active_provider
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	reqGet.AddCookie(adminCookie)
+	rrGet := httptest.NewRecorder()
+	handleAdminSettings(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET settings, got %d", rrGet.Code)
+	}
+
+	var getResp struct {
+		Success  bool `json:"success"`
+		Settings struct {
+			JioActiveProvider string `json:"jio_active_provider"`
+			JioProviderConfig string `json:"jio_provider_config"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal(rrGet.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("failed to unmarshal GET settings response: %v", err)
+	}
+	if getResp.Settings.JioActiveProvider != "mock" {
+		t.Errorf("expected default jio_active_provider 'mock', got: %s", getResp.Settings.JioActiveProvider)
+	}
+
+	// 2. POST update jio settings
+	postBody := `{
+		"two_factor_tutorial_url": "https://example.com/2fa",
+		"key_price": "19.99",
+		"jio_active_provider": "external_api",
+		"jio_provider_config": "{\"api_url\":\"https://api.jio.test/v1\",\"api_key\":\"secret123\"}"
+	}`
+	reqPost := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(postBody))
+	reqPost.AddCookie(adminCookie)
+	rrPost := httptest.NewRecorder()
+	handleAdminSettings(rrPost, reqPost)
+
+	if rrPost.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST settings, got %d. Body: %s", rrPost.Code, rrPost.Body.String())
+	}
+
+	// 3. Verify updated in DB
+	var providerVal, configVal string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'jio_active_provider'").Scan(&providerVal)
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'jio_provider_config'").Scan(&configVal)
+
+	if providerVal != "external_api" {
+		t.Errorf("expected providerVal 'external_api', got '%s'", providerVal)
+	}
+	if !strings.Contains(configVal, "https://api.jio.test/v1") {
+		t.Errorf("expected configVal to contain test url, got '%s'", configVal)
+	}
+}
+
+func TestJioRedeemMaintenanceMode(t *testing.T) {
+	initTestDB(t)
+
+	// 1. Set maintenance_mode_jio = 'on'
+	_, errSet := db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('maintenance_mode_jio', 'on', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'on'")
+	if errSet != nil {
+		t.Fatalf("failed to set maintenance_mode_jio: %v", errSet)
+	}
+
+	// 2. Insert active Jio key
+	jioKey := "JIO-MAINT-TEST-001"
+	_, errKey := db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, created_at, updated_at) 
+		VALUES (?, 'ai.deard.fun', '', 'active', 'jio', ?, NOW(), NOW())`, jioKey, jioKey)
+	if errKey != nil {
+		t.Fatalf("failed to insert test jio key: %v", errKey)
+	}
+
+	// 3. Redeem Jio key during maintenance
+	reqBody := fmt.Sprintf(`{"card_secret":"%s"}`, jioKey)
+	req := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr := httptest.NewRecorder()
+	handleJioRedeem(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 during jio maintenance, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	// 4. Verify account_records is 'paused' and system_keys is 'inactive'
+	var recordStatus, recordMsg string
+	errRecord := db.QueryRow("SELECT status, message FROM account_records WHERE card_secret = ?", jioKey).Scan(&recordStatus, &recordMsg)
+	if errRecord != nil {
+		t.Fatalf("failed to query account_records: %v", errRecord)
+	}
+	if recordStatus != "paused" {
+		t.Errorf("expected record status 'paused', got '%s'", recordStatus)
+	}
+
+	var keyStatus string
+	_ = db.QueryRow("SELECT status FROM system_keys WHERE system_key = ?", jioKey).Scan(&keyStatus)
+	if keyStatus != "inactive" {
+		t.Errorf("expected key status 'inactive', got '%s'", keyStatus)
+	}
+
+	// 5. Admin resumes paused orders
+	adminCookie := createTestAdminSession(t, "admin_resume", "admin", nil)
+	reqResume := httptest.NewRequest(http.MethodPost, "/api/admin/orders/resume_paused", nil)
+	reqResume.AddCookie(adminCookie)
+	rrResume := httptest.NewRecorder()
+	handleAdminOrdersResumePaused(rrResume, reqResume)
+
+	if rrResume.Code != http.StatusOK {
+		t.Fatalf("expected 200 for resume paused, got %d. Body: %s", rrResume.Code, rrResume.Body.String())
+	}
+
+	// 6. Verify record is now 'success' with discount_url and system_keys also has discount_url!
+	var newStatus, discountURL string
+	errNew := db.QueryRow("SELECT status, discount_url FROM account_records WHERE card_secret = ?", jioKey).Scan(&newStatus, &discountURL)
+	if errNew != nil {
+		t.Fatalf("failed to query resumed account record: %v", errNew)
+	}
+	if newStatus != "success" {
+		t.Errorf("expected record status 'success' after resume, got '%s'", newStatus)
+	}
+	if !strings.Contains(discountURL, "promo/hasoffer") {
+		t.Errorf("expected valid discountURL in account_records, got '%s'", discountURL)
+	}
+
+	var keyDiscountURL string
+	_ = db.QueryRow("SELECT COALESCE(discount_url, '') FROM system_keys WHERE system_key = ?", jioKey).Scan(&keyDiscountURL)
+	if keyDiscountURL != discountURL {
+		t.Errorf("expected system_keys.discount_url '%s' to match account_records.discount_url '%s'", keyDiscountURL, discountURL)
+	}
+}
+
+func TestAcczoneJioProvider(t *testing.T) {
+	initTestDB(t)
+
+	// 1. Mock HTTP server simulating api.acczone.xyz
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.URL.Query().Get("apikey")
+		serviceKey := r.URL.Query().Get("service_key")
+		quantity := r.URL.Query().Get("quantity")
+
+		if apiKey == "invalid_key" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"message":"API key is invalid or expired"}`))
+			return
+		}
+		if apiKey == "empty_stock" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+
+		if apiKey == "valid_key" && serviceKey == "gemini" && quantity == "1" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[
+				{
+					"id": 12345,
+					"service_key": "gemini",
+					"code_type": "text",
+					"code_value": "https://one.google.com/promo/hasoffer?token=ACCZONE_COUPON_SAMPLE_TOKEN_999",
+					"is_used": 1,
+					"used_by": 123456789,
+					"used_at": "2026-09-09 07:10:07",
+					"extracted_code": null
+				}
+			]`))
+			return
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"unexpected parameters"}`))
+	}))
+	defer mockServer.Close()
+
+	// 2. Set provider config to point to mockServer
+	cfgJSON := fmt.Sprintf(`{"apikey":"valid_key","service_key":"gemini","api_url":"%s/buyCpn"}`, mockServer.URL)
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_provider_config', ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = ?", cfgJSON, cfgJSON)
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'acczone', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'acczone'")
+
+	provider, err := GetJioProvider("acczone")
+	if err != nil {
+		t.Fatalf("failed to get acczone provider: %v", err)
+	}
+
+	link, errLink := provider.GetOfferLink(context.Background(), "JIO-ACC-001", "")
+	if errLink != nil {
+		t.Fatalf("expected successful link retrieval from acczone, got error: %v", errLink)
+	}
+	expectedLink := "https://one.google.com/promo/hasoffer?token=ACCZONE_COUPON_SAMPLE_TOKEN_999"
+	if link != expectedLink {
+		t.Errorf("expected link '%s', got '%s'", expectedLink, link)
+	}
+
+	// 3. Test empty stock
+	cfgEmpty := fmt.Sprintf(`{"apikey":"empty_stock","service_key":"gemini","api_url":"%s/buyCpn"}`, mockServer.URL)
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'jio_provider_config'", cfgEmpty)
+
+	_, errEmpty := provider.GetOfferLink(context.Background(), "JIO-ACC-002", "")
+	if errEmpty == nil || !strings.Contains(errEmpty.Error(), "空卡券列表") {
+		t.Errorf("expected empty stock error, got: %v", errEmpty)
+	}
+
+	// 4. Test invalid api key error message
+	cfgInvalid := fmt.Sprintf(`{"apikey":"invalid_key","service_key":"gemini","api_url":"%s/buyCpn"}`, mockServer.URL)
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'jio_provider_config'", cfgInvalid)
+
+	_, errInvalid := provider.GetOfferLink(context.Background(), "JIO-ACC-003", "")
+	if errInvalid == nil || !strings.Contains(errInvalid.Error(), "API key is invalid") {
+		t.Errorf("expected invalid apikey error message, got: %v", errInvalid)
+	}
+}
+
+type mockLongURLProvider struct {
+	targetURL string
+}
+
+func (m *mockLongURLProvider) Name() string {
+	return "mock_long_url"
+}
+
+func (m *mockLongURLProvider) GetOfferLink(ctx context.Context, cardSecret, vendorKey string) (string, error) {
+	return m.targetURL, nil
+}
+
+func TestJioRedeemLongGoogleOfferURLWithEmptyVendorKey(t *testing.T) {
+	initTestDB(t)
+
+	longOfferURL := "https://serviceactivation.google.com/subscription/new/AQCpiIFRlbOZfjKFR-4TYu_dfbgV73_BYiiRILFPISRKR8TlvyUicaDw3LUyaa6FlCdcMFlWathbfm1l3d6698oJSPixySuKBTOMm0qJ7HjziwixlIxahQCKDKHWvZC5RwylLsQg85crg3WWKhybHJmJIi6MrB6eL4Qkc75ulN5qTR1UeYrVjmF4J76yBopoaByQQE7ORDNDE8asN4dZ5iGBlIm7Mr5Vy-r8G-7btuLclYF8Q3wNMWh96s-9EGkrJmgZ13YyAFX3Booucg=="
+	RegisterJioProvider(&mockLongURLProvider{targetURL: longOfferURL})
+
+	// Set active provider to mock_long_url
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'mock_long_url', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'mock_long_url'")
+	defer func() {
+		_, _ = db.Exec("UPDATE system_settings SET setting_value = 'mock' WHERE setting_key = 'jio_active_provider'")
+	}()
+
+	// Insert active Jio key with EMPTY vendor_key
+	jioKey := "JIO-LONG-URL-TEST-001"
+	_, err := db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, created_at, updated_at)
+		VALUES (?, 'ai.deard.fun', '', 'active', 'jio', '', 'Jio长链接测试卡密', NOW(), NOW())`,
+		jioKey)
+	if err != nil {
+		t.Fatalf("failed to insert test jio key: %v", err)
+	}
+
+	// Perform Jio redeem
+	reqBody := fmt.Sprintf(`{"card_secret":"%s"}`, jioKey)
+	req := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr := httptest.NewRecorder()
+	handleJioRedeem(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for long url jio redeem, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			CardSecret string `json:"card_secret"`
+			OfferURL   string `json:"offer_url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if !resp.Success || resp.Data.OfferURL != longOfferURL {
+		t.Fatalf("expected success with long offer_url, got: %+v", resp)
+	}
+
+	// Verify database state: status should be inactive and discount_url saved
+	var keyStatus, keyDiscountURL string
+	err = db.QueryRow("SELECT status, COALESCE(discount_url, '') FROM system_keys WHERE system_key = ?", jioKey).Scan(&keyStatus, &keyDiscountURL)
+	if err != nil {
+		t.Fatalf("failed to query system_key: %v", err)
+	}
+	if keyStatus != "inactive" {
+		t.Errorf("expected system_key status 'inactive', got '%s'", keyStatus)
+	}
+	if keyDiscountURL != longOfferURL {
+		t.Errorf("expected discount_url to match longOfferURL, got '%s'", keyDiscountURL)
+	}
+}
+
+type mockCountingProvider struct {
+	mu        sync.Mutex
+	callCount int
+	targetURL string
+}
+
+func (m *mockCountingProvider) Name() string { return "mock_counting" }
+func (m *mockCountingProvider) GetOfferLink(ctx context.Context, cardSecret, vendorKey string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.callCount++
+	return m.targetURL, nil
+}
+
+func TestJioRedeemIdempotencyAndNoDuplicateCall(t *testing.T) {
+	initTestDB(t)
+
+	counterProv := &mockCountingProvider{
+		targetURL: "https://serviceactivation.google.com/subscription/new/MOCK_IDEMPOTENT_LINK_123",
+	}
+	RegisterJioProvider(counterProv)
+
+	// Set active provider to mock_counting
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'mock_counting', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'mock_counting'")
+	defer func() {
+		_, _ = db.Exec("UPDATE system_settings SET setting_value = 'mock' WHERE setting_key = 'jio_active_provider'")
+	}()
+
+	jioKey := "JIO-IDEMPOTENCY-KEY-999"
+	_, err := db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, created_at, updated_at)
+		VALUES (?, 'ai.deard.fun', '', 'active', 'jio', '', 'Jio幂等性防重复调用测试卡密', NOW(), NOW())`,
+		jioKey)
+	if err != nil {
+		t.Fatalf("failed to insert test jio key: %v", err)
+	}
+
+	// First redeem call
+	reqBody := fmt.Sprintf(`{"card_secret":"%s"}`, jioKey)
+	req1 := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr1 := httptest.NewRecorder()
+	handleJioRedeem(rr1, req1)
+
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first redeem failed: %d, body: %s", rr1.Code, rr1.Body.String())
+	}
+
+	if counterProv.callCount != 1 {
+		t.Fatalf("expected provider call count 1 after first redeem, got %d", counterProv.callCount)
+	}
+
+	// Second redeem call with the SAME card secret
+	req2 := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", strings.NewReader(reqBody))
+	rr2 := httptest.NewRecorder()
+	handleJioRedeem(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("second redeem should succeed idempotently with status 200, got %d, body: %s", rr2.Code, rr2.Body.String())
+	}
+
+	// CRITICAL ASSERTION: Call count must STILL be 1! (Never called provider second time)
+	if counterProv.callCount != 1 {
+		t.Fatalf("VIOLATION: provider was called %d times! It should only be called once to prevent multiple billing!", counterProv.callCount)
+	}
+
+	// Check response content of second call
+	var resp2 struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			OfferURL string `json:"offer_url"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(rr2.Body.Bytes(), &resp2)
+	if !resp2.Success || resp2.Data.OfferURL != counterProv.targetURL {
+		t.Fatalf("second redeem should return existing offer_url, got: %+v", resp2)
+	}
+}
+
+func TestJioProviderProxyConfiguration(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 验证 buildJioHTTPClient URL 解析与各种协议支持
+	c1 := buildJioHTTPClient("", 10*time.Second)
+	if c1 == nil || c1.Transport == nil {
+		t.Fatal("expected non-nil client and transport for empty proxy")
+	}
+
+	c2 := buildJioHTTPClient("http://127.0.0.1:7890", 10*time.Second)
+	tr2, ok := c2.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected *http.Transport")
+	}
+	reqDummy, _ := http.NewRequest("GET", "http://example.com", nil)
+	proxyURL, err := tr2.Proxy(reqDummy)
+	if err != nil || proxyURL == nil || proxyURL.Host != "127.0.0.1:7890" {
+		t.Fatalf("expected proxy 127.0.0.1:7890, got: %v, err: %v", proxyURL, err)
+	}
+
+	c3 := buildJioHTTPClient("socks5://127.0.0.1:1080", 10*time.Second)
+	tr3 := c3.Transport.(*http.Transport)
+	proxyURL3, err := tr3.Proxy(reqDummy)
+	if err != nil || proxyURL3 == nil || proxyURL3.Scheme != "socks5" {
+		t.Fatalf("expected socks5 scheme, got: %v", proxyURL3)
+	}
+
+	// 验证未带协议前缀时自动补全 http://
+	c4 := buildJioHTTPClient("127.0.0.1:8888", 10*time.Second)
+	tr4 := c4.Transport.(*http.Transport)
+	proxyURL4, err := tr4.Proxy(reqDummy)
+	if err != nil || proxyURL4 == nil || proxyURL4.Host != "127.0.0.1:8888" {
+		t.Fatalf("expected auto-completed http://127.0.0.1:8888, got: %v", proxyURL4)
+	}
+
+	// 2. 验证实际经由独立 jio_proxy 配置优先发送第三方请求（JSON 参数中不包含 proxy）
+	var proxyHit bool
+	proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxyHit = true
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":1,"service_key":"gemini","code_value":"https://serviceactivation.google.com/test_proxy","is_used":1}]`))
+	}))
+	defer proxyServer.Close()
+
+	// 业务参数 JSON 中仅包含 apikey 与 service_key
+	cfgJSON := `{"apikey":"test_key","service_key":"gemini","api_url":"http://upstream.invalid/buyCpn"}`
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_provider_config', ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = ?", cfgJSON, cfgJSON)
+	// 代理地址配置在独立的 jio_proxy 设置项中，并开启代理开关
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_proxy', ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = ?", proxyServer.URL, proxyServer.URL)
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_proxy_enabled', 'on', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'on'")
+
+	prov := &AcczoneJioProvider{}
+	link, err := prov.GetOfferLink(context.Background(), "JIO-TEST-PROXY", "")
+	if err != nil {
+		t.Fatalf("expected successful link via independent jio_proxy, got err: %v", err)
+	}
+	if !proxyHit {
+		t.Fatal("expected request to be routed through independent jio_proxy proxyServer, but proxyServer was not hit!")
+	}
+	if link != "https://serviceactivation.google.com/test_proxy" {
+		t.Fatalf("expected link from proxy response, got: %s", link)
+	}
+
+	// 3. 验证 Admin Settings API 对独立 jio_proxy 的保存与读取（确保与 JSON 参数彻底解耦）
+	adminCookie := createTestAdminSession(t, "admin_proxy_test", "admin", nil)
+	postBody := `{
+		"two_factor_tutorial_url": "https://example.com/2fa",
+		"key_price": "19.99",
+		"jio_active_provider": "acczone",
+		"jio_provider_config": "{\"apikey\":\"my_api_key\",\"service_key\":\"gemini\"}",
+		"jio_proxy": "http://127.0.0.1:8899"
+	}`
+	reqPost := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(postBody))
+	reqPost.AddCookie(adminCookie)
+	rrPost := httptest.NewRecorder()
+	handleAdminSettings(rrPost, reqPost)
+
+	if rrPost.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST settings with jio_proxy, got %d. Body: %s", rrPost.Code, rrPost.Body.String())
+	}
+
+	var savedProxy string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'jio_proxy'").Scan(&savedProxy)
+	if savedProxy != "http://127.0.0.1:8899" {
+		t.Errorf("expected saved jio_proxy 'http://127.0.0.1:8899', got '%s'", savedProxy)
+	}
+
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	reqGet.AddCookie(adminCookie)
+	rrGet := httptest.NewRecorder()
+	handleAdminSettings(rrGet, reqGet)
+
+	var getResp struct {
+		Success  bool `json:"success"`
+		Settings struct {
+			JioProxy          string `json:"jio_proxy"`
+			JioProxyEnabled   string `json:"jio_proxy_enabled"`
+			JioProviderConfig string `json:"jio_provider_config"`
+		} `json:"settings"`
+	}
+	_ = json.Unmarshal(rrGet.Body.Bytes(), &getResp)
+	if getResp.Settings.JioProxy != "http://127.0.0.1:8899" {
+		t.Errorf("expected get settings jio_proxy 'http://127.0.0.1:8899', got '%s'", getResp.Settings.JioProxy)
+	}
+	if strings.Contains(getResp.Settings.JioProviderConfig, "proxy") {
+		t.Errorf("expected JioProviderConfig NOT to contain proxy field, got: %s", getResp.Settings.JioProviderConfig)
+	}
+
+	// 4. 验证代理开关选择性开启/关闭 (jio_proxy_enabled = 'off' 时即使配置了代理也强制直连)
+	proxyHit = false
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = 'off' WHERE setting_key = 'jio_proxy_enabled'")
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'jio_proxy'", proxyServer.URL)
+
+	// 当上游 api_url 设为非代理服务器且直连无法访问时，应因直连失败而返回错误（不走 proxyServer）
+	cfgJSONInvalid := `{"apikey":"test_key","service_key":"gemini","api_url":"http://127.0.0.1:59999/invalid"}`
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'jio_provider_config'", cfgJSONInvalid)
+
+	_, errOff := prov.GetOfferLink(context.Background(), "JIO-TEST-OFF", "")
+	if errOff == nil {
+		t.Errorf("expected connection error when proxy is disabled and direct upstream is unreachable")
+	}
+	if proxyHit {
+		t.Errorf("expected proxyServer NOT to be hit when jio_proxy_enabled = 'off'")
+	}
+
+	// 验证 Admin Settings API 保存 jio_proxy_enabled = 'on'
+	postBodyToggle := `{
+		"two_factor_tutorial_url": "https://example.com/2fa",
+		"key_price": "19.99",
+		"jio_proxy": "http://127.0.0.1:8899",
+		"jio_proxy_enabled": "on"
+	}`
+	reqPostToggle := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(postBodyToggle))
+	reqPostToggle.AddCookie(adminCookie)
+	rrPostToggle := httptest.NewRecorder()
+	handleAdminSettings(rrPostToggle, reqPostToggle)
+	if rrPostToggle.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST settings with jio_proxy_enabled, got %d", rrPostToggle.Code)
+	}
+
+	var savedEnabled string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'jio_proxy_enabled'").Scan(&savedEnabled)
+	if savedEnabled != "on" {
+		t.Errorf("expected saved jio_proxy_enabled 'on', got '%s'", savedEnabled)
+	}
+
+	// 5. 验证结构化代理配置字段 (formatJioProxyURL & parseJioProxyURL 及结构化保存)
+	formatted := formatJioProxyURL("socks5", "10.0.0.1", "1080", "alice", "secret123")
+	if formatted != "socks5://alice:secret123@10.0.0.1:1080" {
+		t.Errorf("expected formatted proxy url 'socks5://alice:secret123@10.0.0.1:1080', got '%s'", formatted)
+	}
+	pProto, pHost, pPort, pUser, pPass := parseJioProxyURL(formatted)
+	if pProto != "socks5" || pHost != "10.0.0.1" || pPort != "1080" || pUser != "alice" || pPass != "secret123" {
+		t.Errorf("unexpected parse result: proto=%s, host=%s, port=%s, user=%s, pass=%s", pProto, pHost, pPort, pUser, pPass)
+	}
+
+	// 测试无密码与无账号形式
+	noAuthFormatted := formatJioProxyURL("http", "127.0.0.1", "7890", "", "")
+	if noAuthFormatted != "http://127.0.0.1:7890" {
+		t.Errorf("expected 'http://127.0.0.1:7890', got '%s'", noAuthFormatted)
+	}
+
+	// 通过 Settings API 保存结构化参数
+	postBodyStructured := `{
+		"two_factor_tutorial_url": "https://example.com/2fa",
+		"key_price": "19.99",
+		"jio_proxy_enabled": "on",
+		"jio_proxy_protocol": "socks5",
+		"jio_proxy_host": "hk.proxy.com",
+		"jio_proxy_port": "1088",
+		"jio_proxy_username": "myuser",
+		"jio_proxy_password": "mypassword"
+	}`
+	reqPostStruct := httptest.NewRequest(http.MethodPost, "/api/admin/settings", strings.NewReader(postBodyStructured))
+	reqPostStruct.AddCookie(adminCookie)
+	rrPostStruct := httptest.NewRecorder()
+	handleAdminSettings(rrPostStruct, reqPostStruct)
+	if rrPostStruct.Code != http.StatusOK {
+		t.Fatalf("expected 200 for structured proxy settings, got %d", rrPostStruct.Code)
+	}
+
+	// 验证自动同步至 jio_proxy 并能被 GET 接口结构化完整回显
+	reqGetStruct := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	reqGetStruct.AddCookie(adminCookie)
+	rrGetStruct := httptest.NewRecorder()
+	handleAdminSettings(rrGetStruct, reqGetStruct)
+
+	var getStructResp struct {
+		Success  bool `json:"success"`
+		Settings struct {
+			JioProxy         string `json:"jio_proxy"`
+			JioProxyEnabled  string `json:"jio_proxy_enabled"`
+			JioProxyProtocol string `json:"jio_proxy_protocol"`
+			JioProxyHost     string `json:"jio_proxy_host"`
+			JioProxyPort     string `json:"jio_proxy_port"`
+			JioProxyUsername string `json:"jio_proxy_username"`
+			JioProxyPassword string `json:"jio_proxy_password"`
+		} `json:"settings"`
+	}
+	_ = json.Unmarshal(rrGetStruct.Body.Bytes(), &getStructResp)
+	if getStructResp.Settings.JioProxy != "socks5://myuser:mypassword@hk.proxy.com:1088" {
+		t.Errorf("expected auto assembled jio_proxy 'socks5://myuser:mypassword@hk.proxy.com:1088', got '%s'", getStructResp.Settings.JioProxy)
+	}
+	if getStructResp.Settings.JioProxyHost != "hk.proxy.com" || getStructResp.Settings.JioProxyPort != "1088" {
+		t.Errorf("expected structured host/port to match, got host='%s', port='%s'", getStructResp.Settings.JioProxyHost, getStructResp.Settings.JioProxyPort)
+	}
+	if getStructResp.Settings.JioProxyUsername != "myuser" || getStructResp.Settings.JioProxyPassword != "mypassword" {
+		t.Errorf("expected structured auth to match, got user='%s', pass='%s'", getStructResp.Settings.JioProxyUsername, getStructResp.Settings.JioProxyPassword)
+	}
+}
+
+func TestAdminJioTestProxyAPI(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 测试未填写 host 时的参数校验
+	reqEmpty := httptest.NewRequest(http.MethodPost, "/api/admin/jio/test_proxy", strings.NewReader(`{"host":""}`))
+	rrEmpty := httptest.NewRecorder()
+	handleAdminJioTestProxy(rrEmpty, reqEmpty)
+
+	if rrEmpty.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when proxy host is missing, got %d", rrEmpty.Code)
+	}
+
+	// 2. 启动模拟远端目标服务
+	mockTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer mockTarget.Close()
+
+	// 3. 启动模拟代理服务（接收到请求直接转发或返回成功）
+	var proxyHit bool
+	mockProxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxyHit = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("proxy ok"))
+	}))
+	defer mockProxy.Close()
+
+	u, _ := url.Parse(mockProxy.URL)
+	testHost := u.Hostname()
+	testPort := u.Port()
+
+	// 4. 调用接口测试连通性成功
+	bodySuccess := fmt.Sprintf(`{"protocol":"http","host":"%s","port":"%s","target_url":"%s"}`, testHost, testPort, mockTarget.URL)
+	reqSuccess := httptest.NewRequest(http.MethodPost, "/api/admin/jio/test_proxy", strings.NewReader(bodySuccess))
+	rrSuccess := httptest.NewRecorder()
+	handleAdminJioTestProxy(rrSuccess, reqSuccess)
+
+	if rrSuccess.Code != http.StatusOK {
+		t.Fatalf("expected 200 for proxy test, got %d", rrSuccess.Code)
+	}
+
+	var respSuccess struct {
+		Success   bool   `json:"success"`
+		Message   string `json:"message"`
+		LatencyMS int64  `json:"latency_ms"`
+	}
+	if err := json.Unmarshal(rrSuccess.Body.Bytes(), &respSuccess); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !respSuccess.Success {
+		t.Fatalf("expected proxy test success, got error: %s", respSuccess.Message)
+	}
+	if !proxyHit {
+		t.Fatal("expected mock proxy to be hit during proxy test")
+	}
+
+	// 5. 测试不可达代理地址
+	bodyFail := fmt.Sprintf(`{"protocol":"http","host":"127.0.0.1","port":"59998","target_url":"%s"}`, mockTarget.URL)
+	reqFail := httptest.NewRequest(http.MethodPost, "/api/admin/jio/test_proxy", strings.NewReader(bodyFail))
+	rrFail := httptest.NewRecorder()
+	handleAdminJioTestProxy(rrFail, reqFail)
+
+	if rrFail.Code != http.StatusOK {
+		t.Fatalf("expected 200 for fail proxy test response, got %d", rrFail.Code)
+	}
+
+	var respFail struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(rrFail.Body.Bytes(), &respFail)
+	if respFail.Success {
+		t.Fatal("expected proxy test to fail for invalid proxy port, but got success")
+	}
+}
+
+
+
 
 
 

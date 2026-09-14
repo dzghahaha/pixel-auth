@@ -120,8 +120,9 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var vendorKey string
 	var keyStatus string
 	var creatorID sql.NullInt64
-	errKeyQuery := db.QueryRow("SELECT vendor, vendor_key, status, creator_id FROM system_keys WHERE system_key = ?", req.CardSecret).
-		Scan(&vendor, &vendorKey, &keyStatus, &creatorID)
+	var serviceType string
+	errKeyQuery := db.QueryRow("SELECT vendor, vendor_key, status, creator_id, COALESCE(service_type, 'pixel') FROM system_keys WHERE system_key = ?", req.CardSecret).
+		Scan(&vendor, &vendorKey, &keyStatus, &creatorID, &serviceType)
 
 	if errKeyQuery == sql.ErrNoRows || keyStatus != "active" {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -134,6 +135,14 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
 			"message": "数据库服务故障，请稍后重试",
+		})
+		return
+	}
+
+	if serviceType == "jio" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "此卡密为 Jio 订阅专属卡密，请前往 Jio 独立页面兑换",
 		})
 		return
 	}
@@ -242,8 +251,11 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var maintenanceMode string
-	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode'").Scan(&maintenanceMode)
-	isMaintenance := (maintenanceMode == "on")
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode_pixel'").Scan(&maintenanceMode)
+	if maintenanceMode == "" {
+		_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode'").Scan(&maintenanceMode)
+	}
+	isMaintenance := (maintenanceMode == "on" || maintenanceMode == "page")
 
 	type AccountSubmitResult struct {
 		Username   string
@@ -339,7 +351,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	if errQuery == sql.ErrNoRows {
-		result, errInsert := tx.Exec("INSERT INTO orders (card_secret, mode, vendor, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		result, errInsert := tx.Exec("INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) VALUES (?, ?, ?, ?, 'pixel', ?, ?)",
 			req.CardSecret, req.Mode, vendor, creatorID, now, now)
 		if errInsert != nil {
 			log.Printf("Error inserting order: %v\n", errInsert)
@@ -702,6 +714,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	respRecords := []AccountRecord{}
 	for _, r := range records {
 		rec := AccountRecord{
+			ID:          r.ID,
 			Username:    r.Username,
 			Password:    r.Password,
 			TwoFactor:   r.TwoFactor,
@@ -732,11 +745,23 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		respRecords = append(respRecords, rec)
 	}
 
+	var orderServiceType string
+	if orderID > 0 {
+		_ = db.QueryRow("SELECT COALESCE(service_type, 'pixel') FROM orders WHERE id = ?", orderID).Scan(&orderServiceType)
+	}
+	if orderServiceType == "" {
+		_ = db.QueryRow("SELECT COALESCE(service_type, 'pixel') FROM system_keys WHERE system_key = ?", cardSecret).Scan(&orderServiceType)
+	}
+	if orderServiceType == "" {
+		orderServiceType = "pixel"
+	}
+
 	// Respond with results (empty list is sent if no records found, frontend will format cleanly)
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"success":     true,
-		"card_secret": cardSecret,
-		"records":     respRecords,
+		"success":      true,
+		"card_secret":  cardSecret,
+		"service_type": orderServiceType,
+		"records":      respRecords,
 	})
 }
 
@@ -755,9 +780,30 @@ func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 			tutorialURL = "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1"
 		}
 	}
+	var maintenanceMode string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode'").Scan(&maintenanceMode)
+	if maintenanceMode == "" {
+		maintenanceMode = "off"
+	}
+
+	var maintenanceModePixel string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode_pixel'").Scan(&maintenanceModePixel)
+	if maintenanceModePixel == "" {
+		maintenanceModePixel = maintenanceMode
+	}
+
+	var maintenanceModeJio string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode_jio'").Scan(&maintenanceModeJio)
+	if maintenanceModeJio == "" {
+		maintenanceModeJio = "off"
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":                 true,
 		"two_factor_tutorial_url": tutorialURL,
+		"maintenance_mode":        maintenanceMode,
+		"maintenance_mode_pixel":  maintenanceModePixel,
+		"maintenance_mode_jio":    maintenanceModeJio,
 	})
 }
 
@@ -902,6 +948,7 @@ func handleOpenCancel(w http.ResponseWriter, r *http.Request) {
 
 // CancelSubscriptionRequest represents request body to cancel a subscription
 type CancelSubscriptionRequest struct {
+	RecordID   int64  `json:"record_id,omitempty"`
 	CardSecret string `json:"card_secret"`
 	Username   string `json:"username"`
 }
@@ -946,12 +993,25 @@ func handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
 	var recordID int64
 	var status string
 	var taskID string
-	errQuery := db.QueryRow(`
-		SELECT r.id, o.vendor, r.status, r.task_id
-		FROM account_records r
-		JOIN orders o ON r.order_id = o.id
-		WHERE r.card_secret = ? AND r.username = ?`, 
-		req.CardSecret, req.Username).Scan(&recordID, &vendor, &status, &taskID)
+	var errQuery error
+
+	if req.RecordID > 0 {
+		errQuery = db.QueryRow(`
+			SELECT r.id, o.vendor, r.status, r.task_id
+			FROM account_records r
+			JOIN orders o ON r.order_id = o.id
+			WHERE r.id = ? AND (r.card_secret = ? OR o.card_secret = ?)`,
+			req.RecordID, req.CardSecret, req.CardSecret).Scan(&recordID, &vendor, &status, &taskID)
+	} else {
+		errQuery = db.QueryRow(`
+			SELECT r.id, o.vendor, r.status, r.task_id
+			FROM account_records r
+			JOIN orders o ON r.order_id = o.id
+			WHERE (r.card_secret = ? OR o.card_secret = ?) AND r.username = ?
+			ORDER BY (CASE WHEN r.status IN ('pending', 'paused') THEN 0 ELSE 1 END), r.id DESC
+			LIMIT 1`,
+			req.CardSecret, req.CardSecret, req.Username).Scan(&recordID, &vendor, &status, &taskID)
+	}
 
 	if errQuery == sql.ErrNoRows {
 		respondJSON(w, http.StatusNotFound, map[string]interface{}{
@@ -1192,4 +1252,334 @@ func isPersonalGoogleEmail(email string) bool {
 		}
 	}
 	return false
+}
+
+// JioRedeemRequest represents the JSON request for Jio redemption
+type JioRedeemRequest struct {
+	CardSecret string `json:"card_secret"`
+}
+
+// handleJioRedeem processes the Jio card secret redemption and returns an offer URL
+func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "读取请求体失败",
+		})
+		return
+	}
+
+	var req JioRedeemRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "无效的JSON格式数据",
+		})
+		return
+	}
+
+	req.CardSecret = strings.TrimSpace(req.CardSecret)
+	if req.CardSecret == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "卡密不能为空",
+		})
+		return
+	}
+
+	// Transparent card replacement detection
+	var currentCardSecret string
+	errReplaceQuery := db.QueryRow(`
+		SELECT o.card_secret 
+		FROM orders o
+		JOIN account_records r ON r.order_id = o.id
+		WHERE r.card_secret = ?
+		LIMIT 1`, req.CardSecret).Scan(&currentCardSecret)
+
+	if errReplaceQuery == nil && currentCardSecret != "" && currentCardSecret != req.CardSecret {
+		log.Printf("[Transparent Redirect - Jio] Replaced card secret detected. Swapping from %s to %s\n", req.CardSecret, currentCardSecret)
+		req.CardSecret = currentCardSecret
+	}
+
+	// Lock the card secret to prevent concurrent duplicate submissions
+	if _, loaded := activeSubmissions.LoadOrStore(req.CardSecret, struct{}{}); loaded {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该卡密正在处理中，请勿重复提交",
+		})
+		return
+	}
+	defer activeSubmissions.Delete(req.CardSecret)
+
+	// Query system_keys for verification
+	var vendor, vendorKey, keyStatus, serviceType, existingDiscountURL string
+	var creatorID sql.NullInt64
+	errKeyQuery := db.QueryRow(`
+		SELECT vendor, vendor_key, status, creator_id, COALESCE(service_type, 'pixel'), COALESCE(discount_url, '') 
+		FROM system_keys 
+		WHERE system_key = ?`, req.CardSecret).
+		Scan(&vendor, &vendorKey, &keyStatus, &creatorID, &serviceType, &existingDiscountURL)
+
+	if errKeyQuery == sql.ErrNoRows {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "卡密无效，请检查输入",
+		})
+		return
+	} else if errKeyQuery != nil {
+		log.Printf("Database error querying system key for jio redeem: %v\n", errKeyQuery)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "数据库服务故障，请稍后重试",
+		})
+		return
+	}
+
+	if strings.ToLower(serviceType) != "jio" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "此卡密非 Jio 订阅专属卡密，请前往对应页面使用",
+		})
+		return
+	}
+
+	// 1. 终极幂等优先拦截：无论卡密当前状态是什么，只要已经生成过有效链接，直接返回历史链接，绝对不重复调用第三方！
+	if existingDiscountURL != "" {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "获取成功（已兑换链接）",
+			"data": map[string]interface{}{
+				"card_secret": req.CardSecret,
+				"offer_url":   existingDiscountURL,
+				"created_at":  time.Now().Format("2006-01-02 15:04:05"),
+			},
+		})
+		return
+	}
+
+	// 2. 检查 account_records 历史记录是否已有兑换成功的链接
+	var existingHistURL string
+	var existingCreatedAt time.Time
+	errHist := db.QueryRow(`
+		SELECT r.discount_url, r.created_at 
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		WHERE (o.card_secret = ? OR r.card_secret = ?) AND r.discount_url != '' AND r.status = 'success'
+		ORDER BY r.id DESC LIMIT 1`, req.CardSecret, req.CardSecret).Scan(&existingHistURL, &existingCreatedAt)
+	if errHist == nil && existingHistURL != "" {
+		// 顺便补齐 system_keys 的 discount_url 和 inactive 状态
+		_, _ = db.Exec("UPDATE system_keys SET discount_url = ?, status = 'inactive' WHERE system_key = ?", existingHistURL, req.CardSecret)
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "获取成功（已兑换历史链接）",
+			"data": map[string]interface{}{
+				"card_secret": req.CardSecret,
+				"offer_url":   existingHistURL,
+				"created_at":  existingCreatedAt.Format("2006-01-02 15:04:05"),
+			},
+		})
+		return
+	}
+
+	// 3. 校验卡密可用状态
+	if keyStatus == "processing" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该卡密正在兑换处理中，请稍候刷新重试，切勿重复提交",
+		})
+		return
+	}
+	if keyStatus != "active" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "卡密已作废或已被使用",
+		})
+		return
+	}
+
+	// Check Jio specific maintenance mode
+	var maintenanceModeJio string
+	_ = db.QueryRow("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode_jio'").Scan(&maintenanceModeJio)
+	isMaintenanceJio := (maintenanceModeJio == "on" || maintenanceModeJio == "page")
+
+	now := time.Now()
+
+	// If Jio is in maintenance mode, pause the order and defer link acquisition
+	if isMaintenanceJio {
+		tx, errTx := db.Begin()
+		if errTx != nil {
+			log.Printf("Database error beginning transaction for jio maintenance paused order: %v\n", errTx)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "数据库服务故障，请稍后重试",
+			})
+			return
+		}
+		defer tx.Rollback()
+
+		// Lock/invalidate key in system_keys so it cannot be used elsewhere
+		_, errUpdateKey := tx.Exec(`
+			UPDATE system_keys 
+			SET status = 'inactive', updated_at = ? 
+			WHERE system_key = ? AND status = 'active'`, now, req.CardSecret)
+		if errUpdateKey != nil {
+			log.Printf("Failed to update system_key status for maintenance paused jio order: %v\n", errUpdateKey)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "更新卡密状态失败",
+			})
+			return
+		}
+
+		// Create order
+		var orderID int64
+		errQueryOrder := tx.QueryRow("SELECT id FROM orders WHERE card_secret = ?", req.CardSecret).Scan(&orderID)
+		if errQueryOrder == sql.ErrNoRows {
+			resOrder, errInsertOrder := tx.Exec(`
+				INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
+				VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
+				req.CardSecret, vendor, creatorID, now, now)
+			if errInsertOrder != nil {
+				log.Printf("Failed to insert jio paused order: %v\n", errInsertOrder)
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"success": false,
+					"message": "创建订单记录失败",
+				})
+				return
+			}
+			orderID, _ = resOrder.LastInsertId()
+		} else if errQueryOrder != nil {
+			log.Printf("Error querying jio order: %v\n", errQueryOrder)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "查询订单记录失败",
+			})
+			return
+		}
+
+		// Insert paused account record
+		_, errInsertRecord := tx.Exec(`
+			INSERT INTO account_records 
+			(order_id, card_secret, username, password, two_factor, status, message, discount_url, created_at, updated_at) 
+			VALUES (?, ?, '-', '-', '-', 'paused', 'Jio系统维护中，订单已暂存挂起，维护结束后将恢复处理', '', ?, ?)`,
+			orderID, req.CardSecret, now, now)
+		if errInsertRecord != nil {
+			log.Printf("Failed to insert jio paused account record: %v\n", errInsertRecord)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "创建兑换记录失败",
+			})
+			return
+		}
+
+		if errCommit := tx.Commit(); errCommit != nil {
+			log.Printf("Failed to commit jio paused order transaction: %v\n", errCommit)
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "提交事务失败",
+			})
+			return
+		}
+
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "Jio系统维护中，订单已暂存挂起，维护结束后将恢复处理并生成链接",
+			"data": map[string]interface{}{
+				"card_secret": req.CardSecret,
+				"status":      "paused",
+				"offer_url":   "",
+				"message":     "Jio系统维护中，订单已暂存挂起，维护结束后将恢复处理并生成链接",
+				"created_at":  now.Format("2006-01-02 15:04:05"),
+			},
+		})
+		return
+	}
+
+	// 4. 原子预占卡密状态为 processing，防止任何并发穿透调用第三方
+	resLock, errLock := db.Exec(`
+		UPDATE system_keys 
+		SET status = 'processing', updated_at = ? 
+		WHERE system_key = ? AND status = 'active'`, now, req.CardSecret)
+	if errLock != nil {
+		log.Printf("Failed to lock system key to processing: %v\n", errLock)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "系统繁忙，请稍后重试",
+		})
+		return
+	}
+	rowsAff, _ := resLock.RowsAffected()
+	if rowsAff == 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "该卡密正在处理中或已被使用，请勿重复提交",
+		})
+		return
+	}
+
+	// 5. 调用第三方供应商接口获取兑换链接
+	provider := GetActiveJioProvider()
+	offerURL, errProvider := provider.GetOfferLink(r.Context(), req.CardSecret, vendorKey)
+	if errProvider != nil {
+		log.Printf("Jio provider (%s) error for key %s: %v\n", provider.Name(), req.CardSecret, errProvider)
+		// 调用第三方失败（如上游余额不足、网络异常），将状态安全回滚为 active，允许排查后重试
+		_, _ = db.Exec(`UPDATE system_keys SET status = 'active', updated_at = ? WHERE system_key = ? AND status = 'processing'`, time.Now(), req.CardSecret)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("获取兑换链接失败: %v", errProvider),
+		})
+		return
+	}
+
+	// 6. 第三方调用成功：已产生扣费，必须第一时间将 offerURL 牢牢持久化到 system_keys 并置为 inactive
+	_, errSaveKey := db.Exec(`
+		UPDATE system_keys 
+		SET status = 'inactive', discount_url = ?, updated_at = ? 
+		WHERE system_key = ?`, offerURL, now, req.CardSecret)
+	if errSaveKey != nil {
+		log.Printf("CRITICAL: Failed to update system_key status to inactive: %v, URL: %s\n", errSaveKey, offerURL)
+	}
+
+	// 7. 创建或复用订单记录
+	var orderID int64
+	errQueryOrder := db.QueryRow("SELECT id FROM orders WHERE card_secret = ?", req.CardSecret).Scan(&orderID)
+	if errQueryOrder == sql.ErrNoRows {
+		resOrder, errInsertOrder := db.Exec(`
+			INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
+			VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
+			req.CardSecret, vendor, creatorID, now, now)
+		if errInsertOrder == nil {
+			orderID, _ = resOrder.LastInsertId()
+		} else {
+			log.Printf("Warning: failed to insert order for jio: %v\n", errInsertOrder)
+		}
+	}
+
+	// 8. 写入 account_records 兑换明细
+	if orderID > 0 {
+		_, errInsertRecord := db.Exec(`
+			INSERT INTO account_records 
+			(order_id, card_secret, username, password, two_factor, status, message, discount_url, completed_at, created_at, updated_at) 
+			VALUES (?, ?, '-', '-', '-', 'success', '兑换链接获取成功', ?, ?, ?, ?)`,
+			orderID, req.CardSecret, offerURL, now, now, now)
+		if errInsertRecord != nil {
+			log.Printf("Warning: failed to insert jio account record: %v\n", errInsertRecord)
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "获取成功",
+		"data": map[string]interface{}{
+			"card_secret": req.CardSecret,
+			"offer_url":   offerURL,
+			"created_at":  now.Format("2006-01-02 15:04:05"),
+		},
+	})
 }

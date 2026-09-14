@@ -13,6 +13,7 @@ import (
 
 // AccountRecord represents a single account status within a card order
 type AccountRecord struct {
+	ID             int64      `json:"id,omitempty"`
 	Username       string     `json:"username"`
 	Password       string     `json:"password"`
 	TwoFactor      string     `json:"two_factor"`
@@ -31,9 +32,10 @@ type AccountRecord struct {
 
 // CardOrder holds the order history for a single card secret
 type CardOrder struct {
-	CardSecret string          `json:"card_secret"`
-	Mode       string          `json:"mode"`
-	Records    []AccountRecord `json:"records"`
+	CardSecret  string          `json:"card_secret"`
+	Mode        string          `json:"mode"`
+	ServiceType string          `json:"service_type,omitempty"`
+	Records     []AccountRecord `json:"records"`
 }
 
 // Global DB connection pool
@@ -118,10 +120,12 @@ func createTables() {
 		mode VARCHAR(32) NOT NULL,
 		vendor VARCHAR(64) NOT NULL DEFAULT '',
 		creator_id BIGINT UNSIGNED DEFAULT NULL,
+		service_type VARCHAR(32) NOT NULL DEFAULT 'pixel',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		UNIQUE KEY idx_card_secret (card_secret),
-		KEY idx_orders_creator_id (creator_id)
+		KEY idx_orders_creator_id (creator_id),
+		KEY idx_orders_service_type (service_type)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 	recordsDDL := `
@@ -152,15 +156,18 @@ func createTables() {
 		vendor VARCHAR(64) NOT NULL,
 		vendor_key VARCHAR(128) NOT NULL,
 		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		service_type VARCHAR(32) NOT NULL DEFAULT 'pixel',
 		original_key VARCHAR(128) NOT NULL DEFAULT '',
 		note VARCHAR(255) NOT NULL DEFAULT '',
+		discount_url TEXT DEFAULT NULL,
 		creator_id BIGINT UNSIGNED DEFAULT NULL,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		UNIQUE KEY idx_system_key (system_key),
 		KEY idx_vendor_key (vendor_key),
 		KEY idx_original_key (original_key),
-		KEY idx_system_keys_creator_id (creator_id)
+		KEY idx_system_keys_creator_id (creator_id),
+		KEY idx_sk_service_type (service_type)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 	adminsDDL := `
@@ -248,6 +255,7 @@ func createTables() {
 		vendor VARCHAR(64) NOT NULL DEFAULT 'ai.deard.fun',
 		vendor_key VARCHAR(256) NOT NULL DEFAULT '',
 		status VARCHAR(32) NOT NULL DEFAULT 'available',
+		service_type VARCHAR(32) NOT NULL DEFAULT 'pixel',
 		original_key VARCHAR(128) NOT NULL DEFAULT '',
 		note VARCHAR(256) NOT NULL DEFAULT '',
 		creator_id BIGINT UNSIGNED DEFAULT NULL,
@@ -255,7 +263,8 @@ func createTables() {
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		UNIQUE KEY idx_card_key (card_key),
-		KEY idx_status (status)
+		KEY idx_status (status),
+		KEY idx_cs_service_type (service_type)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
 	keyVendorsDDL := `
@@ -354,6 +363,19 @@ func createTables() {
 	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN priority INT NOT NULL DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE devices ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
 
+	// Migration: Add service_type to orders, system_keys, card_stock if they don't exist
+	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
+	_, _ = db.Exec("ALTER TABLE orders ADD KEY idx_orders_service_type (service_type)")
+
+	_, _ = db.Exec("ALTER TABLE system_keys ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
+	_, _ = db.Exec("ALTER TABLE system_keys ADD KEY idx_sk_service_type (service_type)")
+	_, _ = db.Exec("ALTER TABLE system_keys ADD COLUMN discount_url TEXT DEFAULT NULL")
+	_, _ = db.Exec("ALTER TABLE system_keys MODIFY COLUMN vendor_key VARCHAR(512) NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE account_records MODIFY COLUMN discount_url TEXT DEFAULT NULL")
+
+	_, _ = db.Exec("ALTER TABLE card_stock ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
+	_, _ = db.Exec("ALTER TABLE card_stock ADD KEY idx_cs_service_type (service_type)")
+
 	// Insert default vendors if not present
 	defaultVendors := []struct {
 		Name        string
@@ -375,6 +397,20 @@ func createTables() {
 	// Insert default settings if not present
 	defaultSettings := map[string]string{
 		"two_factor_tutorial_url": "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1",
+		"jio_active_provider":     "mock",
+		"jio_provider_config":     "{}",
+		"jio_proxy":               "",
+		"jio_proxy_enabled":       "off",
+		"jio_proxy_protocol":      "http",
+		"jio_proxy_host":          "",
+		"jio_proxy_port":          "",
+		"jio_proxy_username":      "",
+		"jio_proxy_password":      "",
+		"proxy_enabled":           "off",
+		"proxy_url":               "",
+		"maintenance_mode":        "off",
+		"maintenance_mode_pixel":  "off",
+		"maintenance_mode_jio":    "off",
 		"epay_pid":                "1668",
 		"epay_key":                "",
 		"epay_url":                "https://pay.vansdesign.cn/",

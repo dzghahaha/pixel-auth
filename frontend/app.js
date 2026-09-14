@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to load system config:', e);
         }
     }
+
     loadConfig();
 
     // Mode Switch Handlers

@@ -77,6 +77,15 @@
                 </div>
             </div>
 
+            <!-- 业务分类选择 -->
+            <div class="form-group required">
+                <label for="select-service-type">业务分类 (Service Type)</label>
+                <select id="select-service-type">
+                    <option value="pixel">Pixel 订阅</option>
+                    <option value="jio">Jio 订阅</option>
+                </select>
+            </div>
+
             <!-- 供应商选择 -->
             <div class="form-group required">
                 <label for="select-vendor">选择供应商</label>
@@ -389,6 +398,9 @@
                 const originalText = btnConvert.innerHTML;
                 btnConvert.innerText = '正在生成并入库中...';
 
+                const selectServiceType = document.getElementById('select-service-type');
+                const serviceTypeVal = selectServiceType ? selectServiceType.value : 'pixel';
+
                 try {
                     const response = await fetch('/api/convert_keys', {
                         method: 'POST',
@@ -396,6 +408,7 @@
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
+                            service_type: serviceTypeVal,
                             vendor: vendor,
                             vendor_keys: vendorKeys,
                             multiplier: multiplier,

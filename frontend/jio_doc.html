@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>API 开放接口文档 - Jio 订阅</title>
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                if (data && data.success && data.maintenance_mode_jio === 'page') {
+                    window.location.replace('/maintenance.html?service=jio');
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --primary: #059669;
+            --primary-hover: #047857;
+            --success: #10b981;
+            --success-bg: #ecfdf5;
+            --success-text: #047857;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+            --danger-text: #b91c1c;
+            --warning: #f59e0b;
+            --warning-bg: #fffbeb;
+            --warning-text: #92400e;
+            --bg-code: #0f172a;
+            --text-code: #f1f5f9;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .header-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .header-badge {
+            font-size: 11px;
+            font-weight: 700;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            border-radius: 4px;
+            padding: 3px 8px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .back-btn:hover {
+            border-color: #cbd5e1;
+            color: var(--text-primary);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+
+        .api-meta-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .api-meta-label {
+            width: 100px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .badge-method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            background-color: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .badge-method.get {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        .endpoint-url {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background-color: var(--bg-main);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5px;
+            margin-top: 12px;
+            margin-bottom: 16px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--bg-main);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 12.5px;
+        }
+
+        .type-tag {
+            font-family: monospace;
+            color: var(--primary);
+            font-size: 12px;
+        }
+
+        .code-block {
+            background-color: var(--bg-code);
+            color: var(--text-code);
+            padding: 16px;
+            border-radius: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: auto;
+            margin-top: 8px;
+            margin-bottom: 16px;
+        }
+
+        .guide-box {
+            background-color: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+            font-size: 13.5px;
+            color: #065f46;
+            line-height: 1.6;
+        }
+
+        .warning-box {
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: #92400e;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title-group">
+                <div style="width: 28px; height: 28px; border-radius: 7px; background-color: #059669; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 15px;">J</div>
+                <div class="header-title">Jio 订阅开放 API 协议</div>
+                <span class="header-badge">v1.0</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="/jio.html" class="back-btn">← 返回 Jio 兑换</a>
+                <a href="/jio_query.html" class="back-btn">Jio 订单查询</a>
+            </div>
+        </header>
+
+        <!-- 业务说明与规则 -->
+        <div class="card">
+            <h2>📖 业务规则与兑换指南</h2>
+            <div class="guide-box">
+                <strong>兑换链接使用三步法：</strong><br>
+                ① 手机或者电脑登录好你要领取的账号<br>
+                ② 将收到的兑换链接粘贴到您的谷歌浏览器中打开<br>
+                ③ 然后单击“<strong>蓝色按钮</strong>”激活优惠。您的将成功激活。
+            </div>
+            <div class="warning-box">
+                ⏳ 提示：兑换链接有效期为 6~12 小时，通过 API 获取后请指示用户及时在谷歌浏览器中打开并激活！
+            </div>
+        </div>
+
+        <!-- 接口 1：卡密兑换 -->
+        <div class="card">
+            <h2>1. Jio 卡密核销兑换接口</h2>
+            <p>调用该接口核销 Jio 专属卡密，系统立即返回对应的 Google One 优惠兑换链接。接口具备防并发重放机制与历史订单幂等保护。</p>
+
+            <div class="api-meta-item">
+                <span class="api-meta-label">接口地址：</span>
+                <span class="endpoint-url">/api/jio/redeem</span>
+            </div>
+            <div class="api-meta-item">
+                <span class="api-meta-label">请求方式：</span>
+                <span class="badge-method">POST</span>
+            </div>
+            <div class="api-meta-item">
+                <span class="api-meta-label">Content-Type：</span>
+                <span class="endpoint-url">application/json</span>
+            </div>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">请求参数 (Request Body)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>参数名</th>
+                        <th>类型</th>
+                        <th>必填</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>card_secret</code></td>
+                        <td><span class="type-tag">string</span></td>
+                        <td>是</td>
+                        <td>购买的有效 Jio 专属卡密字符串</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">请求示例 (cURL)</h3>
+            <div class="code-block">curl -X POST "https://YOUR_DOMAIN/api/jio/redeem" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_secret": "JIO-9876-ABCD-1234"
+  }'</div>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">成功响应 (Response 200)</h3>
+            <div class="code-block">{
+  "success": true,
+  "message": "获取成功",
+  "data": {
+    "card_secret": "JIO-9876-ABCD-1234",
+    "offer_url": "https://one.google.com/promo/hasoffer?token=JIO_OFFER_SAMPLE_TOKEN",
+    "created_at": "2026-09-14 15:30:00"
+  }
+}</div>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">维护挂起响应 (系统维护开启时)</h3>
+            <div class="code-block">{
+  "success": true,
+  "message": "Jio系统维护中，订单已暂存挂起，维护结束后将恢复处理并生成链接",
+  "data": {
+    "card_secret": "JIO-9876-ABCD-1234",
+    "status": "paused",
+    "offer_url": "",
+    "message": "Jio系统维护中，订单已暂存挂起，维护结束后将恢复处理并生成链接"
+  }
+}</div>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">失败响应 (Response 400 / 500)</h3>
+            <div class="code-block">{
+  "success": false,
+  "message": "此卡密非 Jio 专用卡密，请前往对应页面使用"
+}</div>
+        </div>
+
+        <!-- 接口 2：订单查询 -->
+        <div class="card">
+            <h2>2. Jio 订单状态与历史链接查询</h2>
+            <p>通过卡密查询该卡密的历史核销记录及已生成的兑换链接，若链接未失效可重复取回。</p>
+
+            <div class="api-meta-item">
+                <span class="api-meta-label">接口地址：</span>
+                <span class="endpoint-url">/api/query</span>
+            </div>
+            <div class="api-meta-item">
+                <span class="api-meta-label">请求方式：</span>
+                <span class="badge-method get">GET</span>
+            </div>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">请求参数 (Query Parameters)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>参数名</th>
+                        <th>类型</th>
+                        <th>必填</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>card_secret</code></td>
+                        <td><span class="type-tag">string</span></td>
+                        <td>是</td>
+                        <td>已兑换的 Jio 卡密</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size: 14px; margin-top: 18px; margin-bottom: 8px;">成功响应 (Response 200)</h3>
+            <div class="code-block">{
+  "success": true,
+  "service_type": "jio",
+  "card_secret": "JIO-9876-ABCD-1234",
+  "created_at": "2026-09-14 15:30:00",
+  "records": [
+    {
+      "id": 108,
+      "status": "success",
+      "message": "兑换链接获取成功",
+      "discount_url": "https://one.google.com/promo/hasoffer?token=...",
+      "completed_at": "2026-09-14 15:30:01"
+    }
+  ]
+}</div>
+        </div>
+    </div>
+</body>
+</html>

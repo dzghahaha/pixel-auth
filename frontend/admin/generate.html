@@ -119,6 +119,14 @@
 
             <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
                 <div>
+                    <label for="service-type-select" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">业务分类 (Service Type)</label>
+                    <select id="service-type-select" class="form-select">
+                        <option value="pixel">Pixel 订阅</option>
+                        <option value="jio">Jio 订阅</option>
+                    </select>
+                </div>
+
+                <div>
                     <label for="vendor-select" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">卡密供应商 (Vendor)</label>
                     <select id="vendor-select" class="form-select">
                         <option value="ai.deard.fun">系统直接生成 (ai.deard.fun)</option>
@@ -175,6 +183,7 @@
             const btnLogout = document.getElementById('btn-logout');
             const toast = document.getElementById('toast');
 
+            const serviceTypeSelect = document.getElementById('service-type-select');
             const btnGenerate = document.getElementById('btn-generate');
             const vendorSelect = document.getElementById('vendor-select');
             const quantityInput = document.getElementById('quantity');
@@ -279,6 +288,7 @@
                 const note = noteInput.value.trim();
                 
                 let payload = {
+                    service_type: serviceTypeSelect ? serviceTypeSelect.value : 'pixel',
                     vendor: vendor,
                     note: note
                 };

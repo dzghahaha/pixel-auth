@@ -57,11 +57,12 @@ type VendorQueryResponse struct {
 
 // ConvertKeysRequest represents request parameters for keys conversion
 type ConvertKeysRequest struct {
-	Vendor     string   `json:"vendor"`
-	VendorKeys []string `json:"vendor_keys"`
-	Multiplier int      `json:"multiplier"`
-	Note       string   `json:"note"`
-	CreatorID  *int64   `json:"creator_id,omitempty"`
+	Vendor      string   `json:"vendor"`
+	VendorKeys  []string `json:"vendor_keys"`
+	Multiplier  int      `json:"multiplier"`
+	Note        string   `json:"note"`
+	CreatorID   *int64   `json:"creator_id,omitempty"`
+	ServiceType string   `json:"service_type,omitempty"`
 }
 
 // ConvertKeysResponse represents response parameters for keys conversion
@@ -383,6 +384,10 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 		req.Multiplier = 1
 	}
 
+	if req.ServiceType == "" {
+		req.ServiceType = "pixel"
+	}
+
 	adminID, ok := getAdminID(r)
 	var creatorID interface{} = nil
 	if ok {
@@ -432,8 +437,8 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 
 			originalKey := sysKey
 
-			_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				sysKey, req.Vendor, "", "active", originalKey, now, now, req.Note, creatorID)
+			_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				sysKey, req.Vendor, "", "active", req.ServiceType, originalKey, now, now, req.Note, creatorID)
 			if errInsert != nil {
 				log.Printf("Error inserting system key: %v\n", errInsert)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -465,8 +470,8 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 
 				originalKey := sysKey
 
-				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-					sysKey, req.Vendor, vKey, "active", originalKey, now, now, req.Note, creatorID)
+				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					sysKey, req.Vendor, vKey, "active", req.ServiceType, originalKey, now, now, req.Note, creatorID)
 				if errInsert != nil {
 					log.Printf("Error inserting system key: %v\n", errInsert)
 					respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -557,8 +562,9 @@ func handleResetKeys(w http.ResponseWriter, r *http.Request) {
 		var originalKey string
 		var note string
 		var creatorID sql.NullInt64
-		errQuery := tx.QueryRow("SELECT vendor, vendor_key, status, original_key, note, creator_id FROM system_keys WHERE system_key = ?", oldKey).
-			Scan(&vendor, &vendorKey, &status, &originalKey, &note, &creatorID)
+		var serviceType string
+		errQuery := tx.QueryRow("SELECT vendor, vendor_key, status, original_key, note, creator_id, COALESCE(service_type, 'pixel') FROM system_keys WHERE system_key = ?", oldKey).
+			Scan(&vendor, &vendorKey, &status, &originalKey, &note, &creatorID, &serviceType)
 
 		if errQuery == sql.ErrNoRows {
 			continue
@@ -623,8 +629,8 @@ func handleResetKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			newKey, vendor, vendorKey, "active", originalKey, now, now, note, creatorID)
+		_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, created_at, updated_at, note, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			newKey, vendor, vendorKey, "active", serviceType, originalKey, now, now, note, creatorID)
 		if errInsert != nil {
 			log.Printf("Error inserting new system key: %v\n", errInsert)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{

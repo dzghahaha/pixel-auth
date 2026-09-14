@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>订单查询 - Pixel 订阅</title>
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                if (data && data.success && (data.maintenance_mode_pixel === 'page' || (!data.maintenance_mode_pixel && data.maintenance_mode === 'page'))) {
+                    window.location.replace('/maintenance.html?service=pixel');
+                }
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="style.css">
     <style>
         .switch-toggle {
@@ -172,8 +183,9 @@
                 <span class="header-title">订单查询</span>
             </div>
             <div class="header-right" style="display: flex; gap: 8px;">
+                <a href="/jio.html" class="back-link-btn" style="background-color: #059669; border-color: #059669; color: white;">Jio 订阅</a>
                 <a href="/doc.html" class="back-link-btn" style="background-color: var(--primary); border-color: var(--primary); color: white;">API 文档</a>
-                <a href="/" class="back-link-btn">返回提交</a>
+                <a href="/" class="back-link-btn">Pixel 提交</a>
             </div>
         </header>
 
@@ -590,6 +602,7 @@
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
+                                                record_id: rec.id,
                                                 card_secret: cardSecret,
                                                 username: rec.username
                                             })

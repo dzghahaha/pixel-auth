@@ -415,6 +415,11 @@
                     <option value="active">生效中 (Active)</option>
                     <option value="inactive">已作废 (Inactive)</option>
                 </select>
+                <select id="filter-service-type" class="status-select">
+                    <option value="">全部业务</option>
+                    <option value="pixel">Pixel 订阅</option>
+                    <option value="jio">Jio 订阅</option>
+                </select>
                 <select id="filter-vendor" class="status-select admin-only">
                     <option value="">所有厂商</option>
                 </select>
@@ -500,6 +505,7 @@
                         <tr>
                             <th class="admin-only">ID</th>
                             <th>系统卡密</th>
+                            <th>业务分类</th>
                             <th class="admin-only">运营商</th>
                             <th class="admin-only">运营商密钥 (vendor_key)</th>
                             <th>当前状态</th>
@@ -512,7 +518,7 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="10" style="padding: 48px 0; text-align: center;">
+                            <td colspan="11" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载密钥数据...</span>
@@ -558,6 +564,7 @@
             const tableBody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-query');
             const statusSelect = document.getElementById('filter-status');
+            const serviceTypeSelect = document.getElementById('filter-service-type');
             const vendorSelect = document.getElementById('filter-vendor');
             const creatorSelect = document.getElementById('filter-creator');
             const btnSearch = document.getElementById('btn-search');
@@ -925,16 +932,17 @@
 
             // Fetch and render keys
             async function loadKeys() {
-                tableBody.innerHTML = getTableLoadingHTML(10, '正在读取卡密数据...');
+                tableBody.innerHTML = getTableLoadingHTML(11, '正在读取卡密数据...');
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
+                const serviceTypeVal = serviceTypeSelect ? serviceTypeSelect.value : '';
                 const vendorVal = vendorSelect.value;
                 const creatorVal = creatorSelect.value;
                 const startVal = filterStartTime ? filterStartTime.value : '';
                 const endVal = filterEndTime ? filterEndTime.value : '';
 
                 try {
-                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
+                    const url = `/api/admin/keys?page=${currentPage}&page_size=${pageSize}&query=${encodeURIComponent(queryVal)}&status=${statusVal}&service_type=${encodeURIComponent(serviceTypeVal)}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -965,7 +973,7 @@
                         }
 
                         if (currentKeys.length === 0) {
-                            tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
+                            tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 32px; color: var(--slate-400);">暂无符合条件的卡密记录</td></tr>';
                             return;
                         }
 
@@ -989,11 +997,16 @@
                                 actionBtnHtml = `<button type="button" class="btn-page" style="padding: 4px 8px; font-size:11px;" disabled>已作废</button>`;
                             }
 
+                            const serviceBadge = k.service_type === 'jio' 
+                                ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>' 
+                                : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
+
                             tr.innerHTML = `
                                 <td class="admin-only">${k.id}</td>
                                 <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${k.system_key}</td>
+                                <td>${serviceBadge}</td>
                                 <td class="admin-only" style="font-size:13px; color: var(--slate-600);">${k.vendor || '-'}</td>
-                                <td class="admin-only" style="font-family: monospace; font-size: 12px;">${k.vendor_key}</td>
+                                <td class="admin-only" style="font-family: monospace; font-size: 12px;">${k.discount_url ? `<a href="${k.discount_url}" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-weight:600;" title="${k.discount_url}">订阅链接 ↗</a>` : (k.vendor_key || '-')}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-family: monospace; font-size:12px; color: var(--slate-600);">${k.original_key || '-'}</td>
                                 <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${k.note || ''}">${k.note || '-'}</td>
@@ -1135,6 +1148,12 @@
                 currentPage = 1;
                 loadKeys();
             });
+            if (serviceTypeSelect) {
+                serviceTypeSelect.addEventListener('change', () => {
+                    currentPage = 1;
+                    loadKeys();
+                });
+            }
             vendorSelect.addEventListener('change', () => {
                 currentPage = 1;
                 loadKeys();
@@ -1149,6 +1168,7 @@
             btnExport.addEventListener('click', async () => {
                 const queryVal = searchInput.value.trim();
                 const statusVal = statusSelect.value;
+                const serviceTypeVal = serviceTypeSelect ? serviceTypeSelect.value : '';
                 const vendorVal = vendorSelect.value;
                 const creatorVal = creatorSelect.value;
                 const startVal = filterStartTime ? filterStartTime.value : '';
@@ -1159,7 +1179,7 @@
                 btnExport.textContent = '正在导出...';
 
                 try {
-                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
+                    const url = `/api/admin/keys?export=true&query=${encodeURIComponent(queryVal)}&status=${statusVal}&service_type=${encodeURIComponent(serviceTypeVal)}&vendor=${encodeURIComponent(vendorVal)}&creator_id=${creatorVal}&start_date=${encodeURIComponent(startVal)}&end_date=${encodeURIComponent(endVal)}`;
                     const res = await fetch(url);
                     const data = await res.json();
 

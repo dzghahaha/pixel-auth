@@ -110,6 +110,120 @@
             color: var(--primary);
             background: var(--primary-light, #f0f7ff);
         }
+
+        /* Jio Proxy Card, Badge & Smooth Collapse */
+        .jio-proxy-box {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 4px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .jio-proxy-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .jio-proxy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .jio-proxy-badge.active {
+            background: rgba(34, 197, 94, 0.12);
+            color: #16a34a;
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }
+        .jio-proxy-badge.inactive {
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .jio-proxy-badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        .jio-proxy-details-wrap {
+            max-height: 800px;
+            opacity: 1;
+            overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, margin-top 0.3s ease;
+            margin-top: 14px;
+        }
+        .jio-proxy-details-wrap.is-collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            pointer-events: none;
+        }
+        .jio-proxy-collapsed-hint {
+            display: none;
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            align-items: center;
+            gap: 8px;
+            line-height: 1.5;
+        }
+        .jio-proxy-collapsed-hint.show {
+            display: flex;
+        }
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .password-input-wrapper input {
+            padding-right: 38px !important;
+        }
+        .password-toggle-btn {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            padding: 0;
+            transition: color 0.15s ease, background-color 0.15s ease;
+        }
+        .password-toggle-btn:hover {
+            color: var(--text-primary);
+            background: rgba(0, 0, 0, 0.06);
+        }
+        .password-toggle-btn:focus-visible {
+            outline: 2px solid var(--accent-color, #2563eb);
+            outline-offset: 1px;
+        }
+        #btn-test-jio-proxy {
+            transition: all 0.2s ease;
+        }
+        #btn-test-jio-proxy:hover {
+            border-color: var(--text-secondary);
+            background: var(--bg-highlight, #f8fafc);
+        }
     </style>
 </head>
 <body>
@@ -445,12 +559,12 @@
             </div>
         </div>
 
-        <!-- 7. 系统维护挂起模式配置 -->
+        <!-- 7. 系统维护挂起模式配置 (Pixel 与 Jio 独立控制) -->
         <div class="card settings-container card-collapsible" id="card-maintenance" style="margin-top: 20px;">
             <div class="card-header card-collapsible-header">
                 <div class="card-title-group">
-                    <span class="card-title">系统维护挂起模式</span>
-                    <span class="card-subtitle">开启后用户提交的任务将暂存为“维护挂起”状态，避免向第三方下发任务导致报错</span>
+                    <span class="card-title">系统维护挂起模式 (Pixel 与 Jio 独立)</span>
+                    <span class="card-subtitle">分别控制 Pixel 订阅与 Jio 订阅的维护级别与用户访问策略</span>
                 </div>
                 <div class="card-collapse-toggle">
                     <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -462,13 +576,168 @@
                 <div class="card-collapsible-content">
                     <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
                         <div>
-                            <label for="setting-maintenance-mode" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">维护挂起模式开关</label>
-                            <select id="setting-maintenance-mode" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                                <option value="off">关闭 - 正常处理订单 (OFF)</option>
-                                <option value="on">开启 - 挂起新建订单 (ON)</option>
+                            <label for="setting-maintenance-mode-pixel" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">Pixel 订阅维护模式</label>
+                            <select id="setting-maintenance-mode-pixel" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="off">关闭 - 正常处理 Pixel 订单 (OFF)</option>
+                                <option value="on">开启 - 挂起新建订单 (暂存维护挂起，不调度设备)</option>
+                                <option value="page">开启 - 页面维护提示 (C端 /index.html 展示维护中界面)</option>
                             </select>
                         </div>
+
+                        <div>
+                            <label for="setting-maintenance-mode-jio" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">Jio 订阅维护模式</label>
+                            <select id="setting-maintenance-mode-jio" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="off">关闭 - 正常生成 Jio 兑换链接 (OFF)</option>
+                                <option value="on">开启 - 挂起新建订单 (暂存维护挂起，维护结束后恢复生成)</option>
+                                <option value="page">开启 - 页面维护提示 (C端 /jio.html 展示维护中界面)</option>
+                            </select>
+                        </div>
+
+                        <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                            • <strong>关闭</strong>：该业务功能正常运行，订单立即进入队列执行或生成兑换链接。<br>
+                            • <strong>挂起新建订单</strong>：用户仍可输入卡密提交，但订单会被暂存为“维护挂起”状态，可在订单管理一键恢复处理。<br>
+                            • <strong>页面维护提示</strong>：对应的前端页面直接展示“系统维护中”界面，暂停用户提交操作。
+                        </div>
+
+                        <!-- 隐藏的旧字段兼容 -->
+                        <input type="hidden" id="setting-maintenance-mode" value="off">
+
                         <button type="button" id="btn-save-maintenance" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存维护配置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. Jio 订阅第三方服务商配置 -->
+        <div class="card settings-container card-collapsible" id="card-jio" style="margin-top: 20px;">
+            <div class="card-header card-collapsible-header">
+                <div class="card-title-group">
+                    <span class="card-title">Jio 订阅第三方服务商配置</span>
+                    <span class="card-subtitle">配置用于获取 Jio 兑换链接的第三方供应商 API 与参数</span>
+                </div>
+                <div class="card-collapse-toggle">
+                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="card-collapsible-body">
+                <div class="card-collapsible-content">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label for="setting-jio-active-provider" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">当前启用第三方供应商</label>
+                            <select id="setting-jio-active-provider" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
+                                <option value="mock">测试环境模拟供应商 (Mock Provider)</option>
+                                <option value="acczone">Acczone 采购平台 (api.acczone.xyz)</option>
+                                <option value="external_api">第三方通用 API 接口 (待接入)</option>
+                            </select>
+                        </div>
+                        <!-- 专属网络代理配置卡片/区域 -->
+                        <div class="jio-proxy-box">
+                            <div class="jio-proxy-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-weight: 600; font-size: 14px;">Jio 专属网络代理配置</span>
+                                    <span id="jio-proxy-status-badge" class="jio-proxy-badge inactive">
+                                        <span class="jio-proxy-badge-dot"></span>
+                                        <span id="jio-proxy-status-badge-text">直连模式 (已关闭代理)</span>
+                                    </span>
+                                </div>
+                                <span style="font-size: 12px; font-weight: normal; color: var(--text-secondary);">仅对 Jio 第三方接口调用生效</span>
+                            </div>
+
+                            <!-- 代理总开关行 -->
+                            <div style="margin-top: 12px;">
+                                <label for="setting-jio-proxy-enabled" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理启用状态</label>
+                                <select id="setting-jio-proxy-enabled" class="status-select" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;">
+                                    <option value="off">关闭 (直连上游接口，不使用代理)</option>
+                                    <option value="on">开启 (通过配置的代理访问 Jio 上游)</option>
+                                </select>
+                            </div>
+
+                            <!-- 折叠直连提示横条（关闭状态展示） -->
+                            <div id="jio-proxy-collapsed-hint" class="jio-proxy-collapsed-hint show">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                <span>当前已选择直连，未启用代理。Jio 第三方采购请求将直接由本服务器发起直连；如需翻墙访问上游，请将上方状态切换为【开启】。</span>
+                            </div>
+
+                            <!-- 代理详细配置容器（关闭时平滑收缩隐藏，开启时平滑展开） -->
+                            <div id="jio-proxy-details-wrap" class="jio-proxy-details-wrap is-collapsed">
+                                <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                    <div>
+                                        <label for="setting-jio-proxy-protocol" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理协议类型</label>
+                                        <select id="setting-jio-proxy-protocol" class="status-select" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;">
+                                            <option value="http">HTTP 代理</option>
+                                            <option value="https">HTTPS 代理</option>
+                                            <option value="socks5">SOCKS5 代理</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="setting-jio-proxy-host" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理服务器主机 (Host / IP)</label>
+                                        <input type="text" id="setting-jio-proxy-host" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="例如: 127.0.0.1 或 hk.proxy.com">
+                                    </div>
+                                    <div>
+                                        <label for="setting-jio-proxy-port" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">端口 (Port)</label>
+                                        <input type="text" id="setting-jio-proxy-port" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="例如: 7890 或 1080">
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label for="setting-jio-proxy-username" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">认证账号 (Username，可选)</label>
+                                        <input type="text" id="setting-jio-proxy-username" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="无认证请留空">
+                                    </div>
+                                    <div>
+                                        <label for="setting-jio-proxy-password" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">认证密码 (Password，可选)</label>
+                                        <div class="password-input-wrapper">
+                                            <input type="password" id="setting-jio-proxy-password" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="无认证请留空">
+                                            <button type="button" id="btn-toggle-jio-proxy-password" class="password-toggle-btn" aria-label="切换密码可见性" title="显示/隐藏密码">
+                                                <!-- 睁眼图标 (密码隐藏时显示此图标，点击显示明文) -->
+                                                <svg id="icon-eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                </svg>
+                                                <!-- 闭眼图标 (密码显示时显示此图标，点击隐藏密文) -->
+                                                <svg id="icon-eye-closed" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <input type="hidden" id="setting-jio-proxy">
+
+                                <!-- 代理测试与状态反馈栏 -->
+                                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <button type="button" id="btn-test-jio-proxy" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                                            <span id="btn-test-jio-proxy-text">测试代理连通性</span>
+                                        </button>
+                                        <span id="jio-proxy-test-result" style="font-size: 13px; display: none; align-items: center; gap: 6px; font-weight: 500;"></span>
+                                    </div>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">支持在保存前即时测试当前填写的配置</span>
+                                </div>
+
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 12px; line-height: 1.6; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                                    • <strong>业务严格隔离</strong>：本代理配置<strong>仅且仅对 Jio 订阅第三方服务商接口调用生效</strong>，Pixel 设备心跳/调度、支付网关一律直连不受影响。<br>
+                                    • <strong>随时启停</strong>：即使配置了代理主机与账号，若开关选为【关闭】，系统也会保持直连。
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="setting-jio-provider-config" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">供应商业务参数 (JSON)</label>
+                            <textarea id="setting-jio-provider-config" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace; font-size: 13px; width: 100%; height: 80px; box-sizing: border-box; resize: vertical;" placeholder='{"apikey": "YOUR_API_KEY", "service_key": "gemini"}'></textarea>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                                • 选择 <strong>Acczone 采购平台</strong> 时，请配置 <code>{"apikey": "您的API秘钥", "service_key": "gemini"}</code>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-save-jio" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存 Jio 配置</button>
                     </div>
                 </div>
             </div>
@@ -531,7 +800,21 @@
 
             // 7. 维护模式
             const settingMaintenanceMode = document.getElementById('setting-maintenance-mode');
+            const settingMaintenanceModePixel = document.getElementById('setting-maintenance-mode-pixel');
+            const settingMaintenanceModeJio = document.getElementById('setting-maintenance-mode-jio');
             const btnSaveMaintenance = document.getElementById('btn-save-maintenance');
+
+            // 8. Jio 配置
+            const settingJioActiveProvider = document.getElementById('setting-jio-active-provider');
+            const settingJioProxyEnabled = document.getElementById('setting-jio-proxy-enabled');
+            const settingJioProxyProtocol = document.getElementById('setting-jio-proxy-protocol');
+            const settingJioProxyHost = document.getElementById('setting-jio-proxy-host');
+            const settingJioProxyPort = document.getElementById('setting-jio-proxy-port');
+            const settingJioProxyUsername = document.getElementById('setting-jio-proxy-username');
+            const settingJioProxyPassword = document.getElementById('setting-jio-proxy-password');
+            const settingJioProxy = document.getElementById('setting-jio-proxy');
+            const settingJioProviderConfig = document.getElementById('setting-jio-provider-config');
+            const btnSaveJio = document.getElementById('btn-save-jio');
 
             // 折叠卡片状态管理
             const COLLAPSE_STORAGE_KEY = 'pixel_auth_settings_collapsed_map';
@@ -733,6 +1016,17 @@
                         settingLogCleanupOpen.value = data.settings.log_cleanup_open || 'off';
                         settingLogCleanupDays.value = data.settings.log_cleanup_days || '30';
                         if (settingMaintenanceMode) settingMaintenanceMode.value = data.settings.maintenance_mode || 'off';
+                        if (settingMaintenanceModePixel) settingMaintenanceModePixel.value = data.settings.maintenance_mode_pixel || data.settings.maintenance_mode || 'off';
+                        if (settingMaintenanceModeJio) settingMaintenanceModeJio.value = data.settings.maintenance_mode_jio || 'off';
+                        if (settingJioActiveProvider) settingJioActiveProvider.value = data.settings.jio_active_provider || 'mock';
+                        if (settingJioProxyEnabled) settingJioProxyEnabled.value = data.settings.jio_proxy_enabled || 'off';
+                        if (settingJioProxyProtocol) settingJioProxyProtocol.value = data.settings.jio_proxy_protocol || 'http';
+                        if (settingJioProxyHost) settingJioProxyHost.value = data.settings.jio_proxy_host || '';
+                        if (settingJioProxyPort) settingJioProxyPort.value = data.settings.jio_proxy_port || '';
+                        if (settingJioProxyUsername) settingJioProxyUsername.value = data.settings.jio_proxy_username || '';
+                        if (settingJioProxyPassword) settingJioProxyPassword.value = data.settings.jio_proxy_password || '';
+                        if (settingJioProxy) settingJioProxy.value = data.settings.jio_proxy || '';
+                        if (settingJioProviderConfig) settingJioProviderConfig.value = data.settings.jio_provider_config || '{}';
 
                         if (data.settings.key_tier_prices) {
                             try {
@@ -745,6 +1039,7 @@
                             tierPricesData = [];
                         }
                         renderTierPrices();
+                        updateJioProxyUI(true);
                     } else {
                         showToast(data.message || '获取配置失败');
                     }
@@ -783,7 +1078,17 @@
                 const logCleanupOpenVal = settingLogCleanupOpen.value;
                 const logCleanupDaysVal = settingLogCleanupDays.value.trim();
 
-                const maintenanceModeVal = settingMaintenanceMode ? settingMaintenanceMode.value : 'off';
+                const maintenancePixelVal = settingMaintenanceModePixel ? settingMaintenanceModePixel.value : (settingMaintenanceMode ? settingMaintenanceMode.value : 'off');
+                const maintenanceJioVal = settingMaintenanceModeJio ? settingMaintenanceModeJio.value : 'off';
+                const jioActiveProviderVal = settingJioActiveProvider ? settingJioActiveProvider.value : 'mock';
+                const jioProviderConfigVal = settingJioProviderConfig ? settingJioProviderConfig.value.trim() : '{}';
+                const jioProxyEnabledVal = settingJioProxyEnabled ? settingJioProxyEnabled.value : 'off';
+                const jioProxyProtocolVal = settingJioProxyProtocol ? settingJioProxyProtocol.value : 'http';
+                const jioProxyHostVal = settingJioProxyHost ? settingJioProxyHost.value.trim() : '';
+                const jioProxyPortVal = settingJioProxyPort ? settingJioProxyPort.value.trim() : '';
+                const jioProxyUsernameVal = settingJioProxyUsername ? settingJioProxyUsername.value.trim() : '';
+                const jioProxyPasswordVal = settingJioProxyPassword ? settingJioProxyPassword.value.trim() : '';
+                const jioProxyVal = settingJioProxy ? settingJioProxy.value.trim() : '';
 
                 if (!tutorialVal) {
                     showToast('二步验证教程链接不能为空');
@@ -819,7 +1124,7 @@
                     }
                 }
 
-                const allButtons = [btnSaveSettings, btnSaveDeviceSettings, btnSavePriceSettings, btnSaveApi, btnSaveEpay, btnSaveLogCleanup, btnSaveMaintenance];
+                const allButtons = [btnSaveSettings, btnSaveDeviceSettings, btnSavePriceSettings, btnSaveApi, btnSaveEpay, btnSaveLogCleanup, btnSaveMaintenance, btnSaveJio];
                 allButtons.forEach(btn => {
                     if (btn) {
                         btn.disabled = true;
@@ -852,9 +1157,20 @@
                             api_whitelist: apiWhitelistVal,
                             log_cleanup_open: logCleanupOpenVal,
                             log_cleanup_days: logCleanupDaysVal,
-                            maintenance_mode: maintenanceModeVal,
+                            maintenance_mode: maintenancePixelVal,
+                            maintenance_mode_pixel: maintenancePixelVal,
+                            maintenance_mode_jio: maintenanceJioVal,
                             device_wifi_ssid: deviceWifiSsidVal,
-                            device_wifi_password: deviceWifiPasswordVal
+                            device_wifi_password: deviceWifiPasswordVal,
+                            jio_active_provider: jioActiveProviderVal,
+                            jio_provider_config: jioProviderConfigVal,
+                            jio_proxy: jioProxyVal,
+                            jio_proxy_enabled: jioProxyEnabledVal,
+                            jio_proxy_protocol: jioProxyProtocolVal,
+                            jio_proxy_host: jioProxyHostVal,
+                            jio_proxy_port: jioProxyPortVal,
+                            jio_proxy_username: jioProxyUsernameVal,
+                            jio_proxy_password: jioProxyPasswordVal
                         })
                     });
                     const data = await res.json();
@@ -877,6 +1193,7 @@
                     if (btnSaveEpay) btnSaveEpay.textContent = '保存支付配置';
                     if (btnSaveLogCleanup) btnSaveLogCleanup.textContent = '保存日志配置';
                     if (btnSaveMaintenance) btnSaveMaintenance.textContent = '保存维护配置';
+                    if (btnSaveJio) btnSaveJio.textContent = '保存 Jio 配置';
                 }
             }
 
@@ -888,6 +1205,130 @@
             if (btnSaveApi) btnSaveApi.addEventListener('click', saveAllSettings);
             if (btnSaveLogCleanup) btnSaveLogCleanup.addEventListener('click', saveAllSettings);
             if (btnSaveMaintenance) btnSaveMaintenance.addEventListener('click', saveAllSettings);
+            if (btnSaveJio) btnSaveJio.addEventListener('click', saveAllSettings);
+
+            // Jio 专属代理连通性测试事件
+            const btnTestJioProxy = document.getElementById('btn-test-jio-proxy');
+            const btnTestJioProxyText = document.getElementById('btn-test-jio-proxy-text');
+            const jioProxyTestResult = document.getElementById('jio-proxy-test-result');
+
+            if (btnTestJioProxy) {
+                btnTestJioProxy.addEventListener('click', async () => {
+                    const host = settingJioProxyHost ? settingJioProxyHost.value.trim() : '';
+                    const port = settingJioProxyPort ? settingJioProxyPort.value.trim() : '';
+                    const protocol = settingJioProxyProtocol ? settingJioProxyProtocol.value : 'http';
+                    const username = settingJioProxyUsername ? settingJioProxyUsername.value.trim() : '';
+                    const password = settingJioProxyPassword ? settingJioProxyPassword.value.trim() : '';
+
+                    if (!host) {
+                        showToast('请先输入代理服务器主机 (Host / IP)');
+                        if (settingJioProxyHost) settingJioProxyHost.focus();
+                        return;
+                    }
+
+                    btnTestJioProxy.disabled = true;
+                    if (btnTestJioProxyText) btnTestJioProxyText.textContent = '正在拨测代理...';
+                    if (jioProxyTestResult) {
+                        jioProxyTestResult.style.display = 'inline-flex';
+                        jioProxyTestResult.style.color = 'var(--text-secondary)';
+                        jioProxyTestResult.textContent = '⏳ 正在尝试握手探测...';
+                    }
+
+                    try {
+                        const res = await fetch('/api/admin/jio/test_proxy', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                protocol,
+                                host,
+                                port,
+                                username,
+                                password
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            if (jioProxyTestResult) {
+                                jioProxyTestResult.style.display = 'inline-flex';
+                                jioProxyTestResult.style.color = '#16a34a';
+                                jioProxyTestResult.textContent = `✅ 连通成功！耗时 ${data.latency_ms || 0}ms (HTTP ${data.status_code || 200})`;
+                            }
+                            showToast(`代理连通测试成功 (${data.latency_ms || 0}ms)`);
+                        } else {
+                            if (jioProxyTestResult) {
+                                jioProxyTestResult.style.display = 'inline-flex';
+                                jioProxyTestResult.style.color = '#dc2626';
+                                jioProxyTestResult.textContent = `❌ ${data.message || '连通失败'}`;
+                            }
+                            showToast(data.message || '代理连通失败', 3000);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        if (jioProxyTestResult) {
+                            jioProxyTestResult.style.display = 'inline-flex';
+                            jioProxyTestResult.style.color = '#dc2626';
+                            jioProxyTestResult.textContent = '❌ 网络请求异常，无法发起测试';
+                        }
+                        showToast('网络请求异常，无法发起测试');
+                    } finally {
+                        btnTestJioProxy.disabled = false;
+                        if (btnTestJioProxyText) btnTestJioProxyText.textContent = '测试代理连通性';
+                    }
+                });
+            }
+
+            // Jio 专属代理密码显隐小眼睛
+            const btnToggleJioProxyPassword = document.getElementById('btn-toggle-jio-proxy-password');
+            const iconEyeOpen = document.getElementById('icon-eye-open');
+            const iconEyeClosed = document.getElementById('icon-eye-closed');
+
+            if (btnToggleJioProxyPassword && settingJioProxyPassword) {
+                btnToggleJioProxyPassword.addEventListener('click', () => {
+                    const isPassword = settingJioProxyPassword.type === 'password';
+                    settingJioProxyPassword.type = isPassword ? 'text' : 'password';
+                    if (iconEyeOpen) iconEyeOpen.style.display = isPassword ? 'none' : 'block';
+                    if (iconEyeClosed) iconEyeClosed.style.display = isPassword ? 'block' : 'none';
+                    btnToggleJioProxyPassword.title = isPassword ? '隐藏密码' : '显示密码';
+                });
+            }
+
+            // Jio 代理配置折叠收缩与开启联动
+            const jioProxyDetailsWrap = document.getElementById('jio-proxy-details-wrap');
+            const jioProxyCollapsedHint = document.getElementById('jio-proxy-collapsed-hint');
+            const jioProxyStatusBadge = document.getElementById('jio-proxy-status-badge');
+            const jioProxyStatusBadgeText = document.getElementById('jio-proxy-status-badge-text');
+
+            function updateJioProxyUI(isInitial = false) {
+                if (!settingJioProxyEnabled) return;
+                const isEnabled = settingJioProxyEnabled.value === 'on';
+
+                if (isEnabled) {
+                    if (jioProxyDetailsWrap) jioProxyDetailsWrap.classList.remove('is-collapsed');
+                    if (jioProxyCollapsedHint) jioProxyCollapsedHint.classList.remove('show');
+                    if (jioProxyStatusBadge) {
+                        jioProxyStatusBadge.className = 'jio-proxy-badge active';
+                    }
+                    if (jioProxyStatusBadgeText) {
+                        jioProxyStatusBadgeText.textContent = '代理就绪 (已开启)';
+                    }
+                    if (!isInitial && settingJioProxyHost && !settingJioProxyHost.value.trim()) {
+                        settingJioProxyHost.focus();
+                    }
+                } else {
+                    if (jioProxyDetailsWrap) jioProxyDetailsWrap.classList.add('is-collapsed');
+                    if (jioProxyCollapsedHint) jioProxyCollapsedHint.classList.add('show');
+                    if (jioProxyStatusBadge) {
+                        jioProxyStatusBadge.className = 'jio-proxy-badge inactive';
+                    }
+                    if (jioProxyStatusBadgeText) {
+                        jioProxyStatusBadgeText.textContent = '直连模式 (已关闭代理)';
+                    }
+                }
+            }
+
+            if (settingJioProxyEnabled) {
+                settingJioProxyEnabled.addEventListener('change', () => updateJioProxyUI(false));
+            }
 
             // Logout event
             if (btnLogout) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -47,6 +48,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * pageSize
 	searchTerm := r.URL.Query().Get("query")
 	statusFilter := r.URL.Query().Get("status")
+	serviceTypeFilter := r.URL.Query().Get("service_type")
 	originalKeyFilter := r.URL.Query().Get("original_key")
 	noteFilter := r.URL.Query().Get("note")
 	startTimeParam := r.URL.Query().Get("start_time")
@@ -95,6 +97,11 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	if statusFilter != "" {
 		whereClauses = append(whereClauses, "r.status = ?")
 		args = append(args, statusFilter)
+	}
+
+	if serviceTypeFilter != "" {
+		whereClauses = append(whereClauses, "COALESCE(o.service_type, 'pixel') = ?")
+		args = append(args, serviceTypeFilter)
 	}
 
 	if originalKeyFilter != "" {
@@ -154,7 +161,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT o.id, o.card_secret, o.mode, COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
+		SELECT o.id, o.card_secret, o.mode, COALESCE(o.service_type, 'pixel'), COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
 		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
 		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key,
 		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
@@ -190,6 +197,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		ID          int64      `json:"id"`
 		CardSecret  string     `json:"card_secret"`
 		Mode        string     `json:"mode"`
+		ServiceType string     `json:"service_type"`
 		Username    string     `json:"username"`
 		Password    string     `json:"password"`
 		TwoFactor   string     `json:"two_factor"`
@@ -216,6 +224,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 			&row.ID,
 			&row.CardSecret,
 			&row.Mode,
+			&row.ServiceType,
 			&row.Username,
 			&row.Password,
 			&row.TwoFactor,
@@ -331,6 +340,53 @@ func handleAdminOrdersResumePaused(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1. First resume and fulfill Jio paused orders
+	type JioPausedItem struct {
+		RecordID    int64
+		CardSecret  string
+		VendorKey   string
+		DiscountURL string
+	}
+	var jioPausedItems []JioPausedItem
+	rowsJio, errRows := db.Query(`
+		SELECT r.id, r.card_secret, COALESCE(sk.vendor_key, ''), COALESCE(sk.discount_url, '')
+		FROM account_records r
+		JOIN orders o ON r.order_id = o.id
+		LEFT JOIN system_keys sk ON r.card_secret = sk.system_key
+		WHERE r.status = 'paused' AND o.service_type = 'jio'`)
+	if errRows == nil {
+		for rowsJio.Next() {
+			var item JioPausedItem
+			if errScan := rowsJio.Scan(&item.RecordID, &item.CardSecret, &item.VendorKey, &item.DiscountURL); errScan == nil {
+				jioPausedItems = append(jioPausedItems, item)
+			}
+		}
+		rowsJio.Close()
+	}
+
+	provider := GetActiveJioProvider()
+	var jioFulfilledCount int64
+	for _, item := range jioPausedItems {
+		offerURL := item.DiscountURL
+		var errOffer error
+		if offerURL == "" {
+			offerURL, errOffer = provider.GetOfferLink(r.Context(), item.CardSecret, item.VendorKey)
+		}
+		now := time.Now()
+		if errOffer == nil && offerURL != "" {
+			_, _ = db.Exec(`
+				UPDATE account_records 
+				SET status = 'success', message = '兑换链接获取成功', discount_url = ?, completed_at = ?, updated_at = ? 
+				WHERE id = ?`, offerURL, now, now, item.RecordID)
+			_, _ = db.Exec(`
+				UPDATE system_keys 
+				SET discount_url = ?, updated_at = ? 
+				WHERE system_key = ?`, offerURL, now, item.CardSecret)
+			jioFulfilledCount++
+		}
+	}
+
+	// 2. Resume Pixel paused orders (or remaining paused orders) to pending
 	res, err := db.Exec(`
 		UPDATE account_records 
 		SET status = 'pending', message = '恢复排队处理', updated_at = NOW() 
@@ -345,10 +401,11 @@ func handleAdminOrdersResumePaused(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resumedCount, _ := res.RowsAffected()
+	totalResumed := resumedCount + jioFulfilledCount
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":       true,
-		"resumed_count": resumedCount,
-		"message":       fmt.Sprintf("成功将 %d 条挂起订单恢复为排队中", resumedCount),
+		"resumed_count": totalResumed,
+		"message":       fmt.Sprintf("成功恢复处理 %d 条挂起订单（Jio 链接兑换 %d 条，Pixel 恢复排队 %d 条）", totalResumed, jioFulfilledCount, resumedCount),
 	})
 }
 
@@ -1074,6 +1131,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * pageSize
 	searchTerm := r.URL.Query().Get("query")
 	statusFilter := r.URL.Query().Get("status")
+	serviceTypeFilter := r.URL.Query().Get("service_type")
 	vendorFilter := r.URL.Query().Get("vendor")
 	creatorFilter := r.URL.Query().Get("creator_id")
 	startTimeParam := r.URL.Query().Get("start_time")
@@ -1126,6 +1184,11 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	if statusFilter != "" {
 		whereClauses = append(whereClauses, "sk.status = ?")
 		args = append(args, statusFilter)
+	}
+
+	if serviceTypeFilter != "" {
+		whereClauses = append(whereClauses, "COALESCE(sk.service_type, 'pixel') = ?")
+		args = append(args, serviceTypeFilter)
 	}
 
 	if vendorFilter != "" {
@@ -1199,7 +1262,7 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT sk.id, sk.system_key, sk.vendor, sk.vendor_key, sk.status, sk.original_key, sk.created_at, sk.updated_at, sk.note,
+		SELECT sk.id, sk.system_key, sk.vendor, sk.vendor_key, sk.status, sk.original_key, COALESCE(sk.service_type, 'pixel'), COALESCE(sk.discount_url, ''), sk.created_at, sk.updated_at, sk.note,
 		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
 		FROM system_keys sk
 		LEFT JOIN admins a ON sk.creator_id = a.id
@@ -1226,6 +1289,8 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		VendorKey   string    `json:"vendor_key"`
 		Status      string    `json:"status"`
 		OriginalKey string    `json:"original_key"`
+		ServiceType string    `json:"service_type"`
+		DiscountURL string    `json:"discount_url"`
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
 		Note        string    `json:"note"`
@@ -1242,6 +1307,8 @@ func handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 			&row.VendorKey,
 			&row.Status,
 			&row.OriginalKey,
+			&row.ServiceType,
+			&row.DiscountURL,
 			&row.CreatedAt,
 			&row.UpdatedAt,
 			&row.Note,
@@ -1640,10 +1707,21 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 				"api_whitelist":           getSetting("api_whitelist", ""),
 				"deard_convert_open":      getSetting("deard_convert_open", "off"),
 				"maintenance_mode":        getSetting("maintenance_mode", "off"),
+				"maintenance_mode_pixel":  getSetting("maintenance_mode_pixel", getSetting("maintenance_mode", "off")),
+				"maintenance_mode_jio":    getSetting("maintenance_mode_jio", "off"),
 				"log_cleanup_open":        getSetting("log_cleanup_open", "off"),
 				"log_cleanup_days":        getSetting("log_cleanup_days", "30"),
 				"device_wifi_ssid":        getSetting("device_wifi_ssid", ""),
 				"device_wifi_password":    getSetting("device_wifi_password", ""),
+				"jio_active_provider":     getSetting("jio_active_provider", "mock"),
+				"jio_provider_config":     getSetting("jio_provider_config", "{}"),
+				"jio_proxy":               getSetting("jio_proxy", ""),
+				"jio_proxy_enabled":       getSetting("jio_proxy_enabled", "off"),
+				"jio_proxy_protocol":      getSetting("jio_proxy_protocol", "http"),
+				"jio_proxy_host":          getSetting("jio_proxy_host", ""),
+				"jio_proxy_port":          getSetting("jio_proxy_port", ""),
+				"jio_proxy_username":      getSetting("jio_proxy_username", ""),
+				"jio_proxy_password":      getSetting("jio_proxy_password", ""),
 			},
 		})
 	} else if r.Method == http.MethodPost {
@@ -1667,10 +1745,21 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			APIWhitelist         string `json:"api_whitelist"`
 			DeardConvertOpen     string `json:"deard_convert_open"`
 			MaintenanceMode      string `json:"maintenance_mode"`
+			MaintenanceModePixel string `json:"maintenance_mode_pixel"`
+			MaintenanceModeJio   string `json:"maintenance_mode_jio"`
 			LogCleanupOpen       string `json:"log_cleanup_open"`
 			LogCleanupDays       string `json:"log_cleanup_days"`
 			DeviceWiFiSSID       string `json:"device_wifi_ssid"`
 			DeviceWiFiPassword   string `json:"device_wifi_password"`
+			JioActiveProvider    string `json:"jio_active_provider"`
+			JioProviderConfig    string `json:"jio_provider_config"`
+			JioProxy             string `json:"jio_proxy"`
+			JioProxyEnabled      string `json:"jio_proxy_enabled"`
+			JioProxyProtocol     string `json:"jio_proxy_protocol"`
+			JioProxyHost         string `json:"jio_proxy_host"`
+			JioProxyPort         string `json:"jio_proxy_port"`
+			JioProxyUsername     string `json:"jio_proxy_username"`
+			JioProxyPassword     string `json:"jio_proxy_password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -1698,8 +1787,18 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		oldAPIOpen := getSetting("api_open", "off")
 		oldAPIBaseURL := getSetting("api_base_url", "")
 		oldMaintenanceMode := getSetting("maintenance_mode", "off")
+		oldMaintenancePixel := getSetting("maintenance_mode_pixel", oldMaintenanceMode)
+		oldMaintenanceJio := getSetting("maintenance_mode_jio", "off")
 		oldLogCleanupOpen := getSetting("log_cleanup_open", "off")
 		oldLogCleanupDays := getSetting("log_cleanup_days", "30")
+		oldJioProvider := getSetting("jio_active_provider", "mock")
+		oldJioConfig := getSetting("jio_provider_config", "{}")
+		oldJioProxyEnabled := getSetting("jio_proxy_enabled", "off")
+		oldJioProxyProto := getSetting("jio_proxy_protocol", "http")
+		oldJioProxyHost := getSetting("jio_proxy_host", "")
+		oldJioProxyPort := getSetting("jio_proxy_port", "")
+		oldJioProxyUser := getSetting("jio_proxy_username", "")
+		oldJioProxyPass := getSetting("jio_proxy_password", "")
 
 		if req.TwoFactorTutorialURL == "" {
 			req.TwoFactorTutorialURL = oldTutorial
@@ -1749,14 +1848,50 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		if req.APIBaseURL == "" {
 			req.APIBaseURL = oldAPIBaseURL
 		}
+		if req.MaintenanceModePixel == "" {
+			req.MaintenanceModePixel = req.MaintenanceMode
+		}
+		if req.MaintenanceModePixel == "" {
+			req.MaintenanceModePixel = oldMaintenancePixel
+		}
 		if req.MaintenanceMode == "" {
-			req.MaintenanceMode = oldMaintenanceMode
+			req.MaintenanceMode = req.MaintenanceModePixel
+		}
+		if req.MaintenanceModeJio == "" {
+			req.MaintenanceModeJio = oldMaintenanceJio
 		}
 		if req.LogCleanupOpen == "" {
 			req.LogCleanupOpen = oldLogCleanupOpen
 		}
 		if req.LogCleanupDays == "" {
 			req.LogCleanupDays = oldLogCleanupDays
+		}
+		if req.JioActiveProvider == "" {
+			req.JioActiveProvider = oldJioProvider
+		}
+		if req.JioProviderConfig == "" {
+			req.JioProviderConfig = oldJioConfig
+		}
+		if req.JioProxyEnabled == "" {
+			req.JioProxyEnabled = oldJioProxyEnabled
+		}
+		if req.JioProxyProtocol == "" {
+			req.JioProxyProtocol = oldJioProxyProto
+		}
+		if req.JioProxyHost != "" {
+			req.JioProxy = formatJioProxyURL(req.JioProxyProtocol, req.JioProxyHost, req.JioProxyPort, req.JioProxyUsername, req.JioProxyPassword)
+		} else if req.JioProxy != "" {
+			pProto, pHost, pPort, pUser, pPass := parseJioProxyURL(req.JioProxy)
+			req.JioProxyProtocol = pProto
+			req.JioProxyHost = pHost
+			req.JioProxyPort = pPort
+			req.JioProxyUsername = pUser
+			req.JioProxyPassword = pPass
+		} else {
+			req.JioProxyHost = oldJioProxyHost
+			req.JioProxyPort = oldJioProxyPort
+			req.JioProxyUsername = oldJioProxyUser
+			req.JioProxyPassword = oldJioProxyPass
 		}
 		// Allow saving empty whitelist
 		if r.Body != nil && !strings.Contains(r.URL.RawQuery, "partial") {
@@ -1784,10 +1919,21 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 			"api_whitelist":           req.APIWhitelist,
 			"deard_convert_open":      req.DeardConvertOpen,
 			"maintenance_mode":        req.MaintenanceMode,
+			"maintenance_mode_pixel":  req.MaintenanceModePixel,
+			"maintenance_mode_jio":    req.MaintenanceModeJio,
 			"log_cleanup_open":        req.LogCleanupOpen,
 			"log_cleanup_days":        req.LogCleanupDays,
 			"device_wifi_ssid":        req.DeviceWiFiSSID,
 			"device_wifi_password":    req.DeviceWiFiPassword,
+			"jio_active_provider":     req.JioActiveProvider,
+			"jio_provider_config":     req.JioProviderConfig,
+			"jio_proxy":               req.JioProxy,
+			"jio_proxy_enabled":       req.JioProxyEnabled,
+			"jio_proxy_protocol":      req.JioProxyProtocol,
+			"jio_proxy_host":          req.JioProxyHost,
+			"jio_proxy_port":          req.JioProxyPort,
+			"jio_proxy_username":      req.JioProxyUsername,
+			"jio_proxy_password":      req.JioProxyPassword,
 		}
 		for k, v := range settingsToSave {
 			_, err := db.Exec(`
@@ -1811,6 +1957,97 @@ func handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// handleAdminJioTestProxy 测试 Jio 专属网络代理连通性
+func handleAdminJioTestProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Protocol  string `json:"protocol"`
+		Host      string `json:"host"`
+		Port      string `json:"port"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		TargetURL string `json:"target_url"`
+	}
+
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	proto := strings.TrimSpace(req.Protocol)
+	host := strings.TrimSpace(req.Host)
+	port := strings.TrimSpace(req.Port)
+	username := strings.TrimSpace(req.Username)
+	password := strings.TrimSpace(req.Password)
+
+	// 若未显式传入 host，回退使用系统持久化配置
+	if host == "" {
+		proto = getSetting("jio_proxy_protocol", "http")
+		host = getSetting("jio_proxy_host", "")
+		port = getSetting("jio_proxy_port", "")
+		username = getSetting("jio_proxy_username", "")
+		password = getSetting("jio_proxy_password", "")
+	}
+
+	proxyURL := formatJioProxyURL(proto, host, port, username, password)
+	if proxyURL == "" {
+		proxyURL = strings.TrimSpace(getSetting("jio_proxy", ""))
+	}
+
+	if proxyURL == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请先填写代理服务器的主机地址 (Host / IP) 与端口",
+		})
+		return
+	}
+
+	targetURL := strings.TrimSpace(req.TargetURL)
+	if targetURL == "" {
+		targetURL = "https://www.google.com/generate_204"
+	}
+
+	// 构造 8 秒超时的独立代理客户端进行连通性拨测
+	client := buildJioHTTPClient(proxyURL, 8*time.Second)
+
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("构造探测请求失败: %v", err),
+		})
+		return
+	}
+	httpReq.Header.Set("User-Agent", "Pixel-Auth-Proxy-Test/1.0")
+
+	resp, err := client.Do(httpReq)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":    false,
+			"latency_ms": latency,
+			"message":    fmt.Sprintf("代理连通失败 (%dms): %v", latency, err),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"latency_ms":  latency,
+		"status_code": resp.StatusCode,
+		"target_url":  targetURL,
+		"message":     fmt.Sprintf("代理连通成功！耗时 %dms (HTTP 状态: %d)", latency, resp.StatusCode),
+	})
 }
 
 func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
@@ -2157,11 +2394,12 @@ func handleGenerateStockKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Vendor     string   `json:"vendor"`
-		Quantity   int      `json:"quantity"`
-		VendorKeys []string `json:"vendor_keys"`
-		Multiplier int      `json:"multiplier"`
-		Note       string   `json:"note"`
+		Vendor      string   `json:"vendor"`
+		Quantity    int      `json:"quantity"`
+		VendorKeys  []string `json:"vendor_keys"`
+		Multiplier  int      `json:"multiplier"`
+		Note        string   `json:"note"`
+		ServiceType string   `json:"service_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -2173,6 +2411,10 @@ func handleGenerateStockKeys(w http.ResponseWriter, r *http.Request) {
 
 	if req.Vendor == "" {
 		req.Vendor = "ai.deard.fun"
+	}
+
+	if req.ServiceType == "" {
+		req.ServiceType = "pixel"
 	}
 
 	adminID, ok := getAdminID(r)
@@ -2223,9 +2465,9 @@ func handleGenerateStockKeys(w http.ResponseWriter, r *http.Request) {
 			}
 
 			_, errInsert := tx.Exec(`
-				INSERT INTO card_stock (card_key, vendor, vendor_key, status, original_key, note, creator_id, created_at, updated_at) 
-				VALUES (?, 'ai.deard.fun', '', 'available', ?, ?, ?, ?, ?)`,
-				sysKey, sysKey, req.Note, creatorID, now, now)
+				INSERT INTO card_stock (card_key, vendor, vendor_key, status, service_type, original_key, note, creator_id, created_at, updated_at) 
+				VALUES (?, 'ai.deard.fun', '', 'available', ?, ?, ?, ?, ?, ?)`,
+				sysKey, req.ServiceType, sysKey, req.Note, creatorID, now, now)
 			if errInsert != nil {
 				log.Printf("Insert card_stock error: %v\n", errInsert)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -2269,9 +2511,9 @@ func handleGenerateStockKeys(w http.ResponseWriter, r *http.Request) {
 				}
 
 				_, errInsert := tx.Exec(`
-					INSERT INTO card_stock (card_key, vendor, vendor_key, status, original_key, note, creator_id, created_at, updated_at) 
-					VALUES (?, ?, ?, 'available', ?, ?, ?, ?, ?)`,
-					sysKey, req.Vendor, vKey, originalKey, req.Note, creatorID, now, now)
+					INSERT INTO card_stock (card_key, vendor, vendor_key, status, service_type, original_key, note, creator_id, created_at, updated_at) 
+					VALUES (?, ?, ?, 'available', ?, ?, ?, ?, ?, ?)`,
+					sysKey, req.Vendor, vKey, req.ServiceType, originalKey, req.Note, creatorID, now, now)
 				if errInsert != nil {
 					log.Printf("Insert card_stock error: %v\n", errInsert)
 					respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
