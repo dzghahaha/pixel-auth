@@ -459,6 +459,44 @@ select {
     border-color: #f59e0b;
 }
 
+/* Jio Subscription Link Button */
+.btn-sub-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    margin-left: 6px;
+}
+
+.btn-sub-link:hover {
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+    border-color: #6ee7b7;
+    color: #065f46;
+}
+
+.btn-sub-link.btn-no-sub-link {
+    background: #f8fafc;
+    color: var(--slate-400, #94a3b8);
+    border-color: var(--border-color, #e2e8f0);
+    opacity: 0.75;
+}
+
+.btn-sub-link.btn-no-sub-link:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: var(--slate-600, #475569);
+}
+
 /* Invalidate Card Secret Button */
 .btn-invalidate-key {
     display: inline-flex;

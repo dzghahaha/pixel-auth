@@ -4598,6 +4598,150 @@ func TestAdminJioTestProxyAPI(t *testing.T) {
 	}
 }
 
+func TestConvertKeysFromOfferLinksAndRedeem(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 测试按链接生成 Jio 卡密
+	testLink1 := "https://one.google.com/promo/hasoffer?token=TEST-JIO-LINK-TOKEN-001"
+	testLink2 := "https://one.google.com/promo/hasoffer?token=TEST-JIO-LINK-TOKEN-002"
+
+	convReq := ConvertKeysRequest{
+		ServiceType: "jio",
+		ConvertMode: "link",
+		OfferLinks:  []string{testLink1, testLink2},
+		Vendor:      "direct_link",
+		Multiplier:  1,
+		Note:        "批次链接测试",
+	}
+
+	bodyBytes, _ := json.Marshal(convReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/convert_keys", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+	handleConvertKeys(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for convert keys from links, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp ConvertKeysResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Fatalf("expected success true, got false: %s", resp.Message)
+	}
+	if len(resp.SystemKeys) != 2 {
+		t.Fatalf("expected 2 system keys, got %d", len(resp.SystemKeys))
+	}
+	if len(resp.KeyPairs) != 2 {
+		t.Fatalf("expected 2 key pairs, got %d", len(resp.KeyPairs))
+	}
+
+	key1 := resp.SystemKeys[0]
+	key2 := resp.SystemKeys[1]
+
+	// 2. 检查数据库中卡密属性
+	var status1, discountURL1, serviceType1 string
+	errQuery := db.QueryRow("SELECT status, discount_url, service_type FROM system_keys WHERE system_key = ?", key1).
+		Scan(&status1, &discountURL1, &serviceType1)
+	if errQuery != nil {
+		t.Fatalf("failed to query system key 1: %v", errQuery)
+	}
+	if status1 != "active" {
+		t.Errorf("expected status 'active', got '%s'", status1)
+	}
+	if discountURL1 != testLink1 {
+		t.Errorf("expected discount_url '%s', got '%s'", testLink1, discountURL1)
+	}
+	if serviceType1 != "jio" {
+		t.Errorf("expected service_type 'jio', got '%s'", serviceType1)
+	}
+
+	// 3. 模拟用户在前台通过 /api/jio/redeem 兑换 key1
+	redeemReqBody, _ := json.Marshal(JioRedeemRequest{CardSecret: key1})
+	reqRedeem := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", bytes.NewBuffer(redeemReqBody))
+	rrRedeem := httptest.NewRecorder()
+	handleJioRedeem(rrRedeem, reqRedeem)
+
+	if rrRedeem.Code != http.StatusOK {
+		t.Fatalf("expected 200 for jio redeem, got %d. Body: %s", rrRedeem.Code, rrRedeem.Body.String())
+	}
+
+	var redeemResp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			CardSecret string `json:"card_secret"`
+			OfferURL   string `json:"offer_url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rrRedeem.Body.Bytes(), &redeemResp); err != nil {
+		t.Fatalf("failed to parse redeem response: %v", err)
+	}
+	if !redeemResp.Success {
+		t.Fatalf("expected redeem success, got error: %s", redeemResp.Message)
+	}
+	if redeemResp.Data.OfferURL != testLink1 {
+		t.Errorf("expected offer_url '%s', got '%s'", testLink1, redeemResp.Data.OfferURL)
+	}
+
+	// 4. 验证兑换后系统卡密核销状态与订单记录
+	var newKeyStatus string
+	_ = db.QueryRow("SELECT status FROM system_keys WHERE system_key = ?", key1).Scan(&newKeyStatus)
+	if newKeyStatus != "inactive" {
+		t.Errorf("expected key status 'inactive' after redemption, got '%s'", newKeyStatus)
+	}
+
+	var orderID int64
+	var orderServiceType string
+	errOrder := db.QueryRow("SELECT id, service_type FROM orders WHERE card_secret = ?", key1).Scan(&orderID, &orderServiceType)
+	if errOrder != nil {
+		t.Fatalf("expected order created for redeemed key: %v", errOrder)
+	}
+	if orderServiceType != "jio" {
+		t.Errorf("expected order service_type 'jio', got '%s'", orderServiceType)
+	}
+
+	var recordStatus, recordURL string
+	errRecord := db.QueryRow("SELECT status, discount_url FROM account_records WHERE order_id = ?", orderID).
+		Scan(&recordStatus, &recordURL)
+	if errRecord != nil {
+		t.Fatalf("expected account record created for redeemed key: %v", errRecord)
+	}
+	if recordStatus != "success" {
+		t.Errorf("expected record status 'success', got '%s'", recordStatus)
+	}
+	if recordURL != testLink1 {
+		t.Errorf("expected record discount_url '%s', got '%s'", testLink1, recordURL)
+	}
+
+	// 5. 验证幂等性：用户再次请求兑换，应依然成功返回该链接
+	reqRedeemAgain := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", bytes.NewBuffer(redeemReqBody))
+	rrRedeemAgain := httptest.NewRecorder()
+	handleJioRedeem(rrRedeemAgain, reqRedeemAgain)
+	if rrRedeemAgain.Code != http.StatusOK {
+		t.Fatalf("expected 200 for idempotent redeem, got %d", rrRedeemAgain.Code)
+	}
+
+	// 6. 测试空链接校验
+	emptyReq := ConvertKeysRequest{
+		ServiceType: "jio",
+		ConvertMode: "link",
+		OfferLinks:  []string{"   ", ""},
+	}
+	emptyBody, _ := json.Marshal(emptyReq)
+	reqEmpty := httptest.NewRequest(http.MethodPost, "/api/convert_keys", bytes.NewBuffer(emptyBody))
+	rrEmpty := httptest.NewRecorder()
+	handleConvertKeys(rrEmpty, reqEmpty)
+	if rrEmpty.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty links, got %d", rrEmpty.Code)
+	}
+
+	_ = key2
+}
+
+
 
 
 

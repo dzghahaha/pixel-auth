@@ -162,7 +162,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 
 	dataQuery := fmt.Sprintf(`
 		SELECT o.id, o.card_secret, o.mode, COALESCE(o.service_type, 'pixel'), COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
-		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(r.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
+		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(NULLIF(r.discount_url, ''), sk.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
 		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key,
 		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
 		FROM orders o

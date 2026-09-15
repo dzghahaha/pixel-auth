@@ -1351,6 +1351,46 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 	// 1. 终极幂等优先拦截：无论卡密当前状态是什么，只要已经生成过有效链接，直接返回历史链接，绝对不重复调用第三方！
 	if existingDiscountURL != "" {
+		if keyStatus == "cancelled" {
+			var orderExists bool
+			_ = db.QueryRow("SELECT COUNT(*) > 0 FROM orders WHERE card_secret = ?", req.CardSecret).Scan(&orderExists)
+			if !orderExists {
+				respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+					"success": false,
+					"message": "卡密已作废",
+				})
+				return
+			}
+		}
+
+		if keyStatus == "active" {
+			// 预置链接卡密（如按链接直接生成的卡密）的首次激活核销
+			now := time.Now()
+			resLock, errLock := db.Exec(`
+				UPDATE system_keys 
+				SET status = 'inactive', updated_at = ? 
+				WHERE system_key = ? AND status = 'active'`, now, req.CardSecret)
+			if errLock == nil {
+				if rowsAff, _ := resLock.RowsAffected(); rowsAff > 0 {
+					var orderID int64
+					resOrder, errInsertOrder := db.Exec(`
+						INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
+						VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
+						req.CardSecret, vendor, creatorID, now, now)
+					if errInsertOrder == nil {
+						orderID, _ = resOrder.LastInsertId()
+					}
+					if orderID > 0 {
+						_, _ = db.Exec(`
+							INSERT INTO account_records 
+							(order_id, card_secret, username, password, two_factor, status, message, discount_url, completed_at, created_at, updated_at) 
+							VALUES (?, ?, '-', '-', '-', 'success', 'Jio 优惠链接兑换成功', ?, ?, ?, ?)`,
+							orderID, req.CardSecret, existingDiscountURL, now, now, now)
+					}
+				}
+			}
+		}
+
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "获取成功（已兑换链接）",

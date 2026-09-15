@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -55,6 +56,12 @@ type VendorQueryResponse struct {
 	Message string `json:"message"`
 }
 
+// KeyLinkPair represents the mapping between a generated system key and an offer link
+type KeyLinkPair struct {
+	SystemKey string `json:"system_key"`
+	OfferLink string `json:"offer_link"`
+}
+
 // ConvertKeysRequest represents request parameters for keys conversion
 type ConvertKeysRequest struct {
 	Vendor      string   `json:"vendor"`
@@ -63,14 +70,17 @@ type ConvertKeysRequest struct {
 	Note        string   `json:"note"`
 	CreatorID   *int64   `json:"creator_id,omitempty"`
 	ServiceType string   `json:"service_type,omitempty"`
+	ConvertMode string   `json:"convert_mode,omitempty"` // "key" (默认第三方卡密) 或 "link" (已有链接生成)
+	OfferLinks  []string `json:"offer_links,omitempty"`  // 当按链接生成时传入的 Jio 链接列表
 }
 
 // ConvertKeysResponse represents response parameters for keys conversion
 type ConvertKeysResponse struct {
-	Success      bool     `json:"success"`
-	SystemKeys   []string `json:"system_keys"`
-	OriginalKeys []string `json:"original_keys,omitempty"`
-	Message      string   `json:"message"`
+	Success      bool          `json:"success"`
+	SystemKeys   []string      `json:"system_keys"`
+	OriginalKeys []string      `json:"original_keys,omitempty"`
+	KeyPairs     []KeyLinkPair `json:"key_pairs,omitempty"`
+	Message      string        `json:"message"`
 }
 
 // ResetKeysRequest represents request parameters for resetting system keys
@@ -364,28 +374,54 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Vendor == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
-			"message": "供应商不能为空",
-		})
-		return
-	}
+	isLinkMode := req.ConvertMode == "link" || (strings.ToLower(req.ServiceType) == "jio" && len(req.OfferLinks) > 0)
+	var cleanLinks []string
 
-	if req.Vendor != "ai.deard.fun" && len(req.VendorKeys) == 0 {
-		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
-			"message": "第三方密钥列表不能为空",
-		})
-		return
-	}
+	if isLinkMode {
+		for _, l := range req.OfferLinks {
+			l = strings.TrimSpace(l)
+			if l != "" {
+				cleanLinks = append(cleanLinks, l)
+			}
+		}
+		if len(cleanLinks) == 0 {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "Jio 兑换链接列表不能为空",
+			})
+			return
+		}
+		if req.Vendor == "" {
+			req.Vendor = "direct_link"
+		}
+		req.ServiceType = "jio"
+		if req.Multiplier <= 0 {
+			req.Multiplier = 1
+		}
+	} else {
+		if req.Vendor == "" {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "供应商不能为空",
+			})
+			return
+		}
 
-	if req.Multiplier <= 0 {
-		req.Multiplier = 1
-	}
+		if req.Vendor != "ai.deard.fun" && len(req.VendorKeys) == 0 {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "第三方密钥列表不能为空",
+			})
+			return
+		}
 
-	if req.ServiceType == "" {
-		req.ServiceType = "pixel"
+		if req.Multiplier <= 0 {
+			req.Multiplier = 1
+		}
+
+		if req.ServiceType == "" {
+			req.ServiceType = "pixel"
+		}
 	}
 
 	adminID, ok := getAdminID(r)
@@ -422,8 +458,54 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	var generatedKeys []string
 	var originalKeys []string
+	var keyPairs []KeyLinkPair
 
-	if req.Vendor == "ai.deard.fun" {
+	if isLinkMode {
+		for _, offerLink := range cleanLinks {
+			vKey := offerLink
+			if len(vKey) > 128 {
+				if u, err := url.Parse(offerLink); err == nil && u.Query().Get("token") != "" {
+					vKey = u.Query().Get("token")
+					if len(vKey) > 128 {
+						vKey = vKey[:128]
+					}
+				} else {
+					vKey = offerLink[:128]
+				}
+			}
+
+			for i := 0; i < req.Multiplier; i++ {
+				var sysKey string
+				for {
+					sysKey = generateSystemKey()
+					var count int
+					err := tx.QueryRow("SELECT COUNT(*) FROM system_keys WHERE system_key = ?", sysKey).Scan(&count)
+					if err == nil && count == 0 {
+						break
+					}
+				}
+
+				originalKey := sysKey
+
+				_, errInsert := tx.Exec("INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, created_at, updated_at, note, creator_id, discount_url) VALUES (?, ?, ?, 'active', 'jio', ?, ?, ?, ?, ?, ?)",
+					sysKey, req.Vendor, vKey, originalKey, now, now, req.Note, creatorID, offerLink)
+				if errInsert != nil {
+					log.Printf("Error inserting system key for offer link: %v\n", errInsert)
+					respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+						"success": false,
+						"message": "存储链接卡密映射失败",
+					})
+					return
+				}
+				generatedKeys = append(generatedKeys, sysKey)
+				originalKeys = append(originalKeys, originalKey)
+				keyPairs = append(keyPairs, KeyLinkPair{
+					SystemKey: sysKey,
+					OfferLink: offerLink,
+				})
+			}
+		}
+	} else if req.Vendor == "ai.deard.fun" {
 		for i := 0; i < req.Multiplier; i++ {
 			var sysKey string
 			for {
@@ -495,11 +577,17 @@ func handleConvertKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	successMsg := "转换密钥成功"
+	if isLinkMode {
+		successMsg = fmt.Sprintf("成功根据 %d 条链接生成 %d 个 Jio 系统卡密！", len(cleanLinks), len(generatedKeys))
+	}
+
 	respondJSON(w, http.StatusOK, ConvertKeysResponse{
 		Success:      true,
 		SystemKeys:   generatedKeys,
 		OriginalKeys: originalKeys,
-		Message:      "转换密钥成功",
+		KeyPairs:     keyPairs,
+		Message:      successMsg,
 	})
 }
 

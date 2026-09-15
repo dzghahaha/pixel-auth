@@ -1004,6 +1004,17 @@
                 return d.toLocaleString('zh-CN', { hour12: false });
             }
 
+            // Escape HTML attribute value
+            function escapeAttr(str) {
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+
             // Fetch and render unique orders
             async function loadOrders() {
                 tableBody.innerHTML = getTableLoadingHTML(12, '正在读取数据...');
@@ -1080,6 +1091,16 @@
                                 ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>'
                                 : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
 
+                            let jioSubAction = '';
+                            if (o.service_type === 'jio') {
+                                if (o.discount_url) {
+                                    const safeUrl = escapeAttr(o.discount_url);
+                                    jioSubAction = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn-sub-link" title="${safeUrl}">订阅链接 ↗</a>`;
+                                } else {
+                                    jioSubAction = `<button type="button" class="btn-sub-link btn-no-sub-link" data-id="${o.id}" title="暂未生成订阅链接">订阅链接</button>`;
+                                }
+                            }
+
                             tr.innerHTML = `
                                 <td class="admin-only">${o.id}</td>
                                 <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${o.card_secret}</td>
@@ -1094,6 +1115,7 @@
                                 <td class="time-td">${formatDate(o.created_at)}</td>
                                 <td>
                                     <button type="button" class="btn-detail" data-id="${o.id}">详情</button>
+                                    ${jioSubAction}
                                     ${currentUserRole === 'admin' ? `<button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>` : ''}
                                 </td>
                             `;
@@ -1108,6 +1130,14 @@
                             btn.addEventListener('click', (e) => {
                                 const id = parseInt(e.target.getAttribute('data-id'), 10);
                                 openDetailModal(id);
+                            });
+                        });
+
+                        // Attach event listeners to no-link jio buttons
+                        document.querySelectorAll('.btn-no-sub-link').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                showToast('该 Jio 订单暂未生成订阅链接', 2500);
                             });
                         });
 
@@ -1151,7 +1181,7 @@
                 activeOrderID = orderID;
                 detailCard.textContent = order.card_secret;
                 detailVendorKey.textContent = order.vendor_key || '暂无原始密钥';
-                detailMode.textContent = order.mode === 'single' ? '单账号提交' : '批量提交';
+                detailMode.textContent = order.mode === 'single' ? '单账号提交' : (order.mode === 'jio' ? '链接兑换' : '批量提交');
                 detailVendor.textContent = order.vendor || '自营渠道';
                 detailCreated.textContent = formatDate(order.created_at);
                 detailNote.textContent = order.note || '无备注';

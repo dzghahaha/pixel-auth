@@ -22,6 +22,47 @@
             justify-content: flex-end;
             width: 100%;
         }
+        .mode-segmented {
+            display: flex;
+            background: var(--bg-highlight, #f8fafc);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+            padding: 4px;
+            gap: 6px;
+        }
+        .mode-segment-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary, #64748b);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .mode-segment-btn:hover {
+            color: var(--text-primary, #0f172a);
+        }
+        .mode-segment-btn.active {
+            background: var(--card-bg, #ffffff);
+            color: var(--primary, #3b82f6);
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .badge-tag {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--primary, #3b82f6);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -72,8 +113,8 @@
                     <path d="M2 10h20" />
                 </svg>
                 <div class="card-title-group">
-                    <span class="card-title">密钥转换配置</span>
-                    <span class="card-subtitle">录入第三方密钥生成系统内部一对多卡密</span>
+                    <span class="card-title" id="form-card-title">密钥转换配置</span>
+                    <span class="card-subtitle" id="form-card-subtitle">录入第三方密钥生成系统内部一对多卡密</span>
                 </div>
             </div>
 
@@ -86,10 +127,30 @@
                 </select>
             </div>
 
+            <!-- Jio 专属模式切换（当选择 Jio 订阅时展示） -->
+            <div id="jio-mode-group" class="form-group" style="display: none;">
+                <label style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">
+                    Jio 卡密生成模式
+                </label>
+                <div class="mode-segmented">
+                    <button type="button" class="mode-segment-btn active" id="btn-mode-link" data-mode="link">
+                        <span>🔗 按已有链接生成卡密</span>
+                        <span class="badge-tag">推荐</span>
+                    </button>
+                    <button type="button" class="mode-segment-btn" id="btn-mode-key" data-mode="key">
+                        <span>🔑 按第三方密钥转换</span>
+                    </button>
+                </div>
+                <div id="mode-desc-text" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                    直接录入已有的 Jio 兑换链接，系统为每条链接生成对应的专属卡密。用户在前台兑换时即可立即获取该链接。
+                </div>
+            </div>
+
             <!-- 供应商选择 -->
-            <div class="form-group required">
-                <label for="select-vendor">选择供应商</label>
+            <div class="form-group required" id="group-vendor">
+                <label for="select-vendor">选择供应商 / 来源渠道</label>
                 <select id="select-vendor">
+                    <option value="direct_link" id="opt-direct-link" style="display: none;">自备兑换链接 (direct_link)</option>
                     <option value="pass.aisale.one">pass.aisale.one</option>
                     <option value="ai.deard.fun">ai.deard.fun</option>
                 </select>
@@ -97,8 +158,20 @@
 
             <!-- 一对多转换乘数 -->
             <div class="form-group required">
-                <label id="label-multiplier" for="input-multiplier">生成乘数（每个第三方密钥生成的系统密钥个数）</label>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                    <label id="label-multiplier" for="input-multiplier" style="margin-bottom: 0;">生成乘数（每个原始密钥/链接生成的系统卡密个数）</label>
+                    <span id="multiplier-hint" style="font-size: 12px; color: var(--text-secondary); display: none;">专属链接建议保持为 1</span>
+                </div>
                 <input type="number" id="input-multiplier" min="1" value="1">
+            </div>
+
+            <!-- Jio 专属已有链接输入区 -->
+            <div id="group-offer-links" class="form-group required" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                    <label for="textarea-offer-links" style="margin-bottom: 0;">已有 Jio 兑换链接列表（每行一个）</label>
+                    <span id="badge-link-count" style="font-size: 12px; color: var(--primary); font-weight: 600; background: rgba(59, 130, 246, 0.1); padding: 2px 8px; border-radius: 12px;">已检测到 0 条链接</span>
+                </div>
+                <textarea id="textarea-offer-links" class="textarea-box" style="height: 140px; font-family: monospace; font-size: 13px;" placeholder="请输入 Jio 优惠兑换链接，每行一个，例如：&#10;https://one.google.com/promo/hasoffer?token=4A8B9C...&#10;https://one.google.com/promo/hasoffer?token=5D7E8F..."></textarea>
             </div>
 
             <!-- 第三方运营商密钥输入区 -->
@@ -127,7 +200,7 @@
                 <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; margin-right: 4px; display: inline-block; vertical-align: middle;">
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
-                开始生成转换
+                <span id="btn-convert-text">开始生成转换</span>
             </button>
         </div>
 
@@ -136,19 +209,22 @@
             <div class="card-header">
                 <div class="card-title-group">
                     <span class="card-title">生成的系统内部密钥</span>
-                    <span class="card-subtitle">用户需使用以下生成的系统内部密钥提交订单</span>
+                    <span class="card-subtitle" id="output-card-subtitle">用户需使用以下生成的系统内部密钥提交订单</span>
                 </div>
             </div>
 
             <div class="form-group">
-                <textarea id="textarea-system-keys" class="textarea-box readonly-box" placeholder="点击转换后，生成的系统卡密将在此处显示，每行一个..." readonly></textarea>
+                <textarea id="textarea-system-keys" class="textarea-box readonly-box" placeholder="点击生成后，系统卡密将在此处显示，每行一个..." readonly></textarea>
             </div>
 
-            <div class="summary-actions" style="display: flex; gap: 12px; width: 100%;">
-                <button type="button" id="btn-copy-sys" class="btn-submit" style="flex: 1;">
+            <div class="summary-actions" style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap;">
+                <button type="button" id="btn-copy-sys" class="btn-submit" style="flex: 1; min-width: 140px;">
                     复制系统密钥
                 </button>
-                <button type="button" id="btn-export-sys" class="btn-submit" style="flex: 1;">
+                <button type="button" id="btn-copy-pairs" class="btn-submit" style="flex: 1; min-width: 170px; display: none; background: #059669; border-color: #059669;">
+                    复制卡密与链接
+                </button>
+                <button type="button" id="btn-export-sys" class="btn-submit" style="flex: 1; min-width: 120px;">
                     导出格式
                 </button>
             </div>
@@ -160,23 +236,187 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const selectServiceType = document.getElementById('select-service-type');
+            const jioModeGroup = document.getElementById('jio-mode-group');
+            const btnModeLink = document.getElementById('btn-mode-link');
+            const btnModeKey = document.getElementById('btn-mode-key');
+            const modeDescText = document.getElementById('mode-desc-text');
+            const formCardTitle = document.getElementById('form-card-title');
+            const formCardSubtitle = document.getElementById('form-card-subtitle');
+            const outputCardSubtitle = document.getElementById('output-card-subtitle');
+
             const selectVendor = document.getElementById('select-vendor');
             const inputMultiplier = document.getElementById('input-multiplier');
+            const labelMultiplier = document.getElementById('label-multiplier');
+            const multiplierHint = document.getElementById('multiplier-hint');
+
+            const groupOfferLinks = document.getElementById('group-offer-links');
+            const txtOfferLinks = document.getElementById('textarea-offer-links');
+            const badgeLinkCount = document.getElementById('badge-link-count');
+
+            const groupVendorKeys = document.getElementById('group-vendor-keys');
             const txtVendorKeys = document.getElementById('textarea-vendor-keys');
+
             const txtSystemKeys = document.getElementById('textarea-system-keys');
             const btnConvert = document.getElementById('btn-convert');
+            const btnConvertText = document.getElementById('btn-convert-text');
             const btnCopy = document.getElementById('btn-copy-sys');
+            const btnCopyPairs = document.getElementById('btn-copy-pairs');
+            const btnExport = document.getElementById('btn-export-sys');
             const toast = document.getElementById('toast');
             const btnLogout = document.getElementById('btn-logout');
+            const inputNote = document.getElementById('input-note');
+            const selectCreator = document.getElementById('select-creator');
+
+            // 缓存生成的数据
+            let currentGeneratedKeys = [];
+            let currentKeyPairs = [];
+            let currentJioMode = 'link'; // 'link' 或 'key'
 
             // Toast helper
-            function showToast(message, duration = 2000) {
+            function showToast(message, duration = 2200) {
                 toast.textContent = message;
                 toast.classList.remove('hidden');
                 setTimeout(() => {
                     toast.classList.add('hidden');
                 }, duration);
             }
+
+            // 解析 URL 参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialType = urlParams.get('type') || 'pixel';
+            const initialMode = urlParams.get('mode') || 'link';
+
+            if (initialType === 'jio') {
+                selectServiceType.value = 'jio';
+            }
+            if (initialMode === 'key') {
+                currentJioMode = 'key';
+            }
+
+            // 更新实时链接计数
+            function updateLinkCount() {
+                const text = txtOfferLinks.value;
+                const links = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                badgeLinkCount.textContent = `已检测到 ${links.length} 条有效链接`;
+                if (links.length > 0) {
+                    badgeLinkCount.style.color = '#059669';
+                    badgeLinkCount.style.background = 'rgba(16, 185, 129, 0.12)';
+                } else {
+                    badgeLinkCount.style.color = 'var(--primary)';
+                    badgeLinkCount.style.background = 'rgba(59, 130, 246, 0.1)';
+                }
+            }
+            txtOfferLinks.addEventListener('input', updateLinkCount);
+
+            // 切换 Jio 生成模式
+            function setJioMode(mode) {
+                currentJioMode = mode;
+                if (mode === 'link') {
+                    btnModeLink.classList.add('active');
+                    btnModeKey.classList.remove('active');
+                    modeDescText.textContent = '直接录入已有的 Jio 优惠兑换链接，系统为每条链接生成对应的专属卡密。用户在前台兑换时即可立即获取该链接。';
+                    formCardTitle.textContent = 'Jio 链接转卡密配置';
+                    formCardSubtitle.textContent = '录入已有 Jio 兑换链接，直接生成系统内部专属卡密';
+                    outputCardSubtitle.textContent = '已生成的 Jio 系统卡密，分发给用户可直接在前台兑换预置链接';
+
+                    groupOfferLinks.style.display = 'block';
+                    groupVendorKeys.style.display = 'none';
+
+                    labelMultiplier.textContent = '生成乘数（每条链接生成的卡密数）';
+                    multiplierHint.style.display = 'inline';
+                    btnConvertText.textContent = '开始根据链接生成卡密';
+
+                    // 确保 vendor 中有 direct_link 选项并选中
+                    let directOpt = selectVendor.querySelector('option[value="direct_link"]');
+                    if (!directOpt) {
+                        directOpt = document.createElement('option');
+                        directOpt.value = 'direct_link';
+                        directOpt.textContent = '自备直出链接 (direct_link)';
+                        selectVendor.insertBefore(directOpt, selectVendor.firstChild);
+                    }
+                    directOpt.style.display = '';
+                    selectVendor.value = 'direct_link';
+                } else {
+                    btnModeKey.classList.add('active');
+                    btnModeLink.classList.remove('active');
+                    modeDescText.textContent = '录入第三方平台购买的原始卡密，当用户在前台提交兑换时，系统调用第三方接口动态生成链接。';
+                    formCardTitle.textContent = '密钥转换配置';
+                    formCardSubtitle.textContent = '录入第三方密钥生成系统内部一对多卡密';
+                    outputCardSubtitle.textContent = '用户需使用以下生成的系统内部密钥提交订单';
+
+                    groupOfferLinks.style.display = 'none';
+                    groupVendorKeys.style.display = 'block';
+
+                    labelMultiplier.textContent = '生成乘数（每个第三方密钥生成的系统密钥个数）';
+                    multiplierHint.style.display = 'none';
+                    btnConvertText.textContent = '开始生成转换';
+
+                    // 隐藏 direct_link 选项
+                    const directOpt = selectVendor.querySelector('option[value="direct_link"]');
+                    if (directOpt) {
+                        directOpt.style.display = 'none';
+                        if (selectVendor.value === 'direct_link') {
+                            selectVendor.selectedIndex = 1;
+                        }
+                    }
+                    updateFormVisibility();
+                }
+            }
+
+            btnModeLink.addEventListener('click', () => setJioMode('link'));
+            btnModeKey.addEventListener('click', () => setJioMode('key'));
+
+            // 业务分类切换联动
+            function onServiceTypeChange() {
+                const serviceType = selectServiceType.value;
+                if (serviceType === 'jio') {
+                    jioModeGroup.style.display = 'block';
+                    setJioMode(currentJioMode);
+                } else {
+                    jioModeGroup.style.display = 'none';
+                    groupOfferLinks.style.display = 'none';
+                    multiplierHint.style.display = 'none';
+                    formCardTitle.textContent = '密钥转换配置';
+                    formCardSubtitle.textContent = '录入第三方密钥生成系统内部一对多卡密';
+                    outputCardSubtitle.textContent = '用户需使用以下生成的系统内部密钥提交订单';
+                    btnConvertText.textContent = '开始生成转换';
+
+                    const directOpt = selectVendor.querySelector('option[value="direct_link"]');
+                    if (directOpt) {
+                        directOpt.style.display = 'none';
+                        if (selectVendor.value === 'direct_link') {
+                            selectVendor.selectedIndex = 1;
+                        }
+                    }
+                    updateFormVisibility();
+                }
+            }
+
+            selectServiceType.addEventListener('change', onServiceTypeChange);
+
+            // Toggle form fields based on selected vendor
+            function updateFormVisibility() {
+                const isJioLink = (selectServiceType.value === 'jio' && currentJioMode === 'link');
+                if (isJioLink) {
+                    groupOfferLinks.style.display = 'block';
+                    groupVendorKeys.style.display = 'none';
+                    labelMultiplier.textContent = '生成乘数（每条链接生成的卡密数）';
+                    multiplierHint.style.display = 'inline';
+                    return;
+                }
+
+                const vendor = selectVendor.value;
+                if (vendor === 'ai.deard.fun') {
+                    groupVendorKeys.style.display = 'none';
+                    labelMultiplier.textContent = '生成数量';
+                } else {
+                    groupVendorKeys.style.display = 'block';
+                    labelMultiplier.textContent = '生成乘数（每个第三方密钥生成的系统密钥个数）';
+                }
+            }
+
+            selectVendor.addEventListener('change', updateFormVisibility);
 
             // Check Login Status
             async function checkLogin() {
@@ -187,6 +427,8 @@
                         window.applyNavPermissions(data.role, data.permissions);
 
                         await Promise.all([loadVendorsDropdown(), loadCreatorsDropdown()]);
+                        onServiceTypeChange();
+
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
@@ -207,16 +449,26 @@
                     const resp = await fetch('/api/admin/vendors');
                     const data = await resp.json();
                     if (data.success && data.vendors) {
-                        const select = document.getElementById('select-vendor');
-                        if (select) {
-                            select.innerHTML = '';
-                            data.vendors.forEach(v => {
-                                const opt = document.createElement('option');
-                                opt.value = v.name;
-                                opt.textContent = v.display_name;
-                                select.appendChild(opt);
-                            });
-                            select.dispatchEvent(new Event('change'));
+                        selectVendor.innerHTML = '';
+                        
+                        // 自备直发链接选项
+                        const directOpt = document.createElement('option');
+                        directOpt.value = 'direct_link';
+                        directOpt.textContent = '自备兑换链接 (direct_link)';
+                        selectVendor.appendChild(directOpt);
+
+                        data.vendors.forEach(v => {
+                            const opt = document.createElement('option');
+                            opt.value = v.name;
+                            opt.textContent = v.display_name;
+                            selectVendor.appendChild(opt);
+                        });
+
+                        if (selectServiceType.value === 'jio' && currentJioMode === 'link') {
+                            selectVendor.value = 'direct_link';
+                        } else {
+                            directOpt.style.display = 'none';
+                            selectVendor.selectedIndex = 1;
                         }
                     }
                 } catch (e) {
@@ -229,23 +481,20 @@
                     const resp = await fetch('/api/admin/users/selector');
                     const data = await resp.json();
                     if (data.success && data.users) {
-                        const select = document.getElementById('select-creator');
-                        if (select) {
-                            select.innerHTML = '<option value="">-- 当前登录管理员（默认） --</option>';
-                            data.users.forEach(u => {
-                                const opt = document.createElement('option');
-                                opt.value = u.id;
-                                opt.textContent = u.nickname ? `${u.nickname} (${u.username})` : u.username;
-                                select.appendChild(opt);
-                            });
-                        }
+                        selectCreator.innerHTML = '<option value="">-- 当前登录管理员（默认） --</option>';
+                        data.users.forEach(u => {
+                            const opt = document.createElement('option');
+                            opt.value = u.id;
+                            opt.textContent = u.nickname ? `${u.nickname} (${u.username})` : u.username;
+                            selectCreator.appendChild(opt);
+                        });
                     }
                 } catch (e) {
                     console.error('Failed to load creators dropdown:', e);
                 }
             }
 
-            // Intercept navigation links for smooth transition
+            // 导航拦截平滑过渡
             document.querySelectorAll('a.nav-item').forEach(link => {
                 if (link.getAttribute('href') !== '#' && !link.classList.contains('logout')) {
                     link.addEventListener('click', (e) => {
@@ -280,24 +529,6 @@
                 }
             });
 
-            // Toggle form fields based on selected vendor
-            function updateFormVisibility() {
-                const vendor = selectVendor.value;
-                const groupVendorKeys = document.getElementById('group-vendor-keys');
-                const labelMultiplier = document.getElementById('label-multiplier');
-
-                if (vendor === 'ai.deard.fun') {
-                    groupVendorKeys.style.display = 'none';
-                    labelMultiplier.textContent = '生成数量';
-                } else {
-                    groupVendorKeys.style.display = 'block';
-                    labelMultiplier.textContent = '生成乘数（每个第三方密钥生成的系统密钥个数）';
-                }
-            }
-
-            selectVendor.addEventListener('change', updateFormVisibility);
-            updateFormVisibility();
-
             // Copy helper
             btnCopy.addEventListener('click', () => {
                 const text = txtSystemKeys.value.trim();
@@ -305,26 +536,39 @@
                     showToast('没有可复制的密钥');
                     return;
                 }
-
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(text).then(() => {
-                        showToast('复制成功！');
-                    }).catch(err => {
-                        fallbackCopy(text);
-                    });
-                } else {
-                    fallbackCopy(text);
-                }
+                copyText(text, '卡密已复制到剪贴板！');
             });
 
-            function fallbackCopy(text) {
+            // 复制卡密与链接配对
+            btnCopyPairs.addEventListener('click', () => {
+                if (!currentKeyPairs || currentKeyPairs.length === 0) {
+                    showToast('当前未生成卡密链接映射');
+                    return;
+                }
+                const formatted = currentKeyPairs.map(p => `${p.system_key}----${p.offer_link}`).join('\n');
+                copyText(formatted, `已复制 ${currentKeyPairs.length} 条 [卡密----链接] 映射！`);
+            });
+
+            function copyText(text, successMsg) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast(successMsg);
+                    }).catch(err => {
+                        fallbackCopy(text, successMsg);
+                    });
+                } else {
+                    fallbackCopy(text, successMsg);
+                }
+            }
+
+            function fallbackCopy(text, successMsg) {
                 const textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
                 textArea.select();
                 try {
                     document.execCommand('copy');
-                    showToast('复制成功！');
+                    showToast(successMsg);
                 } catch (err) {
                     showToast('复制失败，请手动选择复制');
                 }
@@ -332,23 +576,32 @@
             }
 
             // Export helper
-            const btnExport = document.getElementById('btn-export-sys');
             btnExport.addEventListener('click', () => {
                 const text = txtSystemKeys.value.trim();
                 if (!text) {
                     showToast('没有可导出的密钥');
                     return;
                 }
-                const lines = text.split('\n').filter(l => l.trim().length > 0);
+
+                let exportContent = text;
+                let exportPrefix = 'keys';
+
+                // 如果有卡密链接对应关系，导出包含映射
+                if (currentKeyPairs && currentKeyPairs.length > 0) {
+                    exportContent = currentKeyPairs.map(p => `${p.system_key}----${p.offer_link}`).join('\n');
+                    exportPrefix = 'jio-keys-and-links';
+                }
+
+                const lines = exportContent.split('\n').filter(l => l.trim().length > 0);
                 const count = lines.length;
                 
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
                 const day = String(now.getDate()).padStart(2, '0');
-                const filename = `${year}-${month}-${day}-${count}.txt`;
+                const filename = `${year}-${month}-${day}-${exportPrefix}-${count}.txt`;
 
-                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -360,46 +613,65 @@
                 showToast('导出成功！');
             });
 
-            const inputNote = document.getElementById('input-note');
-
             // Convert handler
             btnConvert.addEventListener('click', async () => {
+                const serviceTypeVal = selectServiceType.value;
+                const isJioLinkMode = (serviceTypeVal === 'jio' && currentJioMode === 'link');
                 const vendor = selectVendor.value;
                 const multiplier = parseInt(inputMultiplier.value, 10);
                 const note = inputNote.value.trim();
-                
-                const selectCreator = document.getElementById('select-creator');
                 const creatorIDVal = selectCreator && selectCreator.value ? parseInt(selectCreator.value, 10) : null;
 
                 if (isNaN(multiplier) || multiplier <= 0) {
-                    showToast(vendor === 'ai.deard.fun' ? '请输入有效的生成数量' : '请输入有效的生成乘数');
+                    showToast('请输入有效的生成乘数/数量（大于 0）');
                     return;
                 }
 
-                let vendorKeys = [];
-                if (vendor !== 'ai.deard.fun') {
-                    const vendorKeysRaw = txtVendorKeys.value.trim();
-                    if (!vendorKeysRaw) {
-                        showToast('请输入第三方原始密钥');
+                let payload = {
+                    service_type: serviceTypeVal,
+                    vendor: vendor,
+                    multiplier: multiplier,
+                    note: note,
+                    creator_id: creatorIDVal
+                };
+
+                if (isJioLinkMode) {
+                    const rawLinks = txtOfferLinks.value.trim();
+                    if (!rawLinks) {
+                        showToast('请输入已有的 Jio 兑换链接');
                         return;
                     }
-                    vendorKeys = vendorKeysRaw
-                        .split('\n')
-                        .map(k => k.trim())
-                        .filter(k => k.length > 0);
-
-                    if (vendorKeys.length === 0) {
-                        showToast('没有有效的原始密钥');
+                    const cleanLinks = rawLinks.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                    if (cleanLinks.length === 0) {
+                        showToast('未检测到有效的链接');
                         return;
+                    }
+                    payload.convert_mode = 'link';
+                    payload.offer_links = cleanLinks;
+                } else {
+                    payload.convert_mode = 'key';
+                    if (vendor !== 'ai.deard.fun') {
+                        const vendorKeysRaw = txtVendorKeys.value.trim();
+                        if (!vendorKeysRaw) {
+                            showToast('请输入第三方原始密钥');
+                            return;
+                        }
+                        const vendorKeys = vendorKeysRaw
+                            .split('\n')
+                            .map(k => k.trim())
+                            .filter(k => k.length > 0);
+
+                        if (vendorKeys.length === 0) {
+                            showToast('没有有效的原始密钥');
+                            return;
+                        }
+                        payload.vendor_keys = vendorKeys;
                     }
                 }
 
                 btnConvert.disabled = true;
-                const originalText = btnConvert.innerHTML;
+                const originalHtml = btnConvert.innerHTML;
                 btnConvert.innerText = '正在生成并入库中...';
-
-                const selectServiceType = document.getElementById('select-service-type');
-                const serviceTypeVal = selectServiceType ? selectServiceType.value : 'pixel';
 
                 try {
                     const response = await fetch('/api/convert_keys', {
@@ -407,30 +679,33 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            service_type: serviceTypeVal,
-                            vendor: vendor,
-                            vendor_keys: vendorKeys,
-                            multiplier: multiplier,
-                            note: note,
-                            creator_id: creatorIDVal
-                        })
+                        body: JSON.stringify(payload)
                     });
 
                     const result = await response.json();
                     if (response.ok && result.success) {
-                        const sysKeys = result.system_keys || [];
-                        txtSystemKeys.value = sysKeys.join('\n');
-                        showToast(`成功生成并录入 ${sysKeys.length} 个系统卡密！`);
+                        currentGeneratedKeys = result.system_keys || [];
+                        currentKeyPairs = result.key_pairs || [];
+
+                        txtSystemKeys.value = currentGeneratedKeys.join('\n');
+
+                        if (currentKeyPairs.length > 0) {
+                            btnCopyPairs.style.display = 'block';
+                            btnCopyPairs.textContent = `📋 复制卡密与链接 (${currentKeyPairs.length})`;
+                        } else {
+                            btnCopyPairs.style.display = 'none';
+                        }
+
+                        showToast(result.message || `成功生成 ${currentGeneratedKeys.length} 个卡密！`);
                     } else {
-                        showToast(result.message || '转换密钥失败');
+                        showToast(result.message || '生成卡密失败');
                     }
                 } catch (error) {
                     console.error('Fetch error:', error);
                     showToast('网络错误，无法连接至服务器');
                 } finally {
                     btnConvert.disabled = false;
-                    btnConvert.innerHTML = originalText;
+                    btnConvert.innerHTML = originalHtml;
                 }
             });
 
