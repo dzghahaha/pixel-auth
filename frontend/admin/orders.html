@@ -630,7 +630,7 @@
                             <th>业务分类</th>
                             <th>源Key</th>
                             <th>卡密备注</th>
-                            <th>提交方式</th>
+                            <th>订阅链接</th>
                             <th>最新账号</th>
                             <th>最新状态</th>
                             <th class="admin-only">供应商 / Task ID</th>
@@ -936,6 +936,32 @@
                 }, duration);
             }
 
+            function copyTextToClipboard(text, successMsg = '复制成功！') {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast(successMsg);
+                    }).catch(() => {
+                        fallbackCopyText(text, successMsg);
+                    });
+                } else {
+                    fallbackCopyText(text, successMsg);
+                }
+            }
+
+            function fallbackCopyText(text, successMsg) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(successMsg);
+                } catch (err) {
+                    showToast('复制失败，请手动选择复制');
+                }
+                document.body.removeChild(textArea);
+            }
+
             function applyRoleUI() {
                 if (currentUserRole !== 'admin') {
                     document.querySelectorAll('.admin-only').forEach(el => {
@@ -1091,14 +1117,22 @@
                                 ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>'
                                 : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
 
-                            let jioSubAction = '';
-                            if (o.service_type === 'jio') {
-                                if (o.discount_url) {
-                                    const safeUrl = escapeAttr(o.discount_url);
-                                    jioSubAction = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn-sub-link" title="${safeUrl}">订阅链接 ↗</a>`;
-                                } else {
-                                    jioSubAction = `<button type="button" class="btn-sub-link btn-no-sub-link" data-id="${o.id}" title="暂未生成订阅链接">订阅链接</button>`;
-                                }
+                            let subLinkCellHtml = '<span style="color: var(--slate-400); font-size: 12px;">-</span>';
+                            if (o.discount_url) {
+                                const safeUrl = escapeAttr(o.discount_url);
+                                subLinkCellHtml = `
+                                    <div class="sub-link-cell">
+                                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-sub-url" title="${safeUrl}">
+                                            <span>打开链接</span>
+                                            <svg style="width:11px; height:11px; flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                        </a>
+                                        <button type="button" class="btn-copy-sub-url" data-url="${safeUrl}" title="复制订阅链接">
+                                            <svg style="width:11px; height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                        </button>
+                                    </div>
+                                `;
+                            } else if (o.service_type === 'jio') {
+                                subLinkCellHtml = '<span style="color: var(--slate-400); font-size: 12px;">未生成</span>';
                             }
 
                             tr.innerHTML = `
@@ -1107,7 +1141,7 @@
                                 <td>${serviceBadge}</td>
                                 <td style="font-family: monospace; font-size: 12px; color: var(--slate-600);">${o.original_key || '-'}</td>
                                 <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
-                                <td style="font-size:13px; color: var(--slate-600);">${o.mode === 'single' ? '单账号' : (o.mode === 'jio' ? '链接兑换' : '批量')}</td>
+                                <td>${subLinkCellHtml}</td>
                                 <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
                                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                                 <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
@@ -1115,7 +1149,6 @@
                                 <td class="time-td">${formatDate(o.created_at)}</td>
                                 <td>
                                     <button type="button" class="btn-detail" data-id="${o.id}">详情</button>
-                                    ${jioSubAction}
                                     ${currentUserRole === 'admin' ? `<button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>` : ''}
                                 </td>
                             `;
@@ -1133,11 +1166,14 @@
                             });
                         });
 
-                        // Attach event listeners to no-link jio buttons
-                        document.querySelectorAll('.btn-no-sub-link').forEach(btn => {
+                        // Attach event listeners to copy sub url buttons
+                        document.querySelectorAll('.btn-copy-sub-url').forEach(btn => {
                             btn.addEventListener('click', (e) => {
-                                e.preventDefault();
-                                showToast('该 Jio 订单暂未生成订阅链接', 2500);
+                                e.stopPropagation();
+                                const url = btn.getAttribute('data-url');
+                                if (url) {
+                                    copyTextToClipboard(url, '订阅链接已复制！');
+                                }
                             });
                         });
 
