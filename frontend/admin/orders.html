@@ -1117,22 +1117,33 @@
                                 ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>'
                                 : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
 
-                            let subLinkCellHtml = '<span style="color: var(--slate-400); font-size: 12px;">-</span>';
+                            let subLinkCellHtml = '<span class="sub-link-empty-badge na">-</span>';
                             if (o.discount_url) {
                                 const safeUrl = escapeAttr(o.discount_url);
                                 subLinkCellHtml = `
-                                    <div class="sub-link-cell">
-                                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-sub-url" title="${safeUrl}">
-                                            <span>打开链接</span>
-                                            <svg style="width:11px; height:11px; flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                    <div class="sub-link-capsule">
+                                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="sub-link-open" title="${safeUrl}">
+                                            <svg class="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                            </svg>
+                                            <span>直达兑换</span>
+                                            <svg class="icon-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <line x1="7" y1="17" x2="17" y2="7"></line>
+                                                <polyline points="7 7 17 7 17 17"></polyline>
+                                            </svg>
                                         </a>
-                                        <button type="button" class="btn-copy-sub-url" data-url="${safeUrl}" title="复制订阅链接">
-                                            <svg style="width:11px; height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                        <button type="button" class="sub-link-copy btn-copy-sub-url" data-url="${safeUrl}" title="复制完整订阅链接">
+                                            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                            <span class="copy-text">复制</span>
                                         </button>
                                     </div>
                                 `;
                             } else if (o.service_type === 'jio') {
-                                subLinkCellHtml = '<span style="color: var(--slate-400); font-size: 12px;">未生成</span>';
+                                subLinkCellHtml = '<span class="sub-link-empty-badge pending" title="等待生成订阅链接"><span class="empty-dot"></span>待生成</span>';
                             }
 
                             tr.innerHTML = `
@@ -1173,6 +1184,20 @@
                                 const url = btn.getAttribute('data-url');
                                 if (url) {
                                     copyTextToClipboard(url, '订阅链接已复制！');
+                                    
+                                    // In-place button feedback
+                                    const originalHtml = btn.innerHTML;
+                                    btn.classList.add('copied');
+                                    btn.innerHTML = `
+                                        <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:11px; height:11px;">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        <span class="copy-text">已复制</span>
+                                    `;
+                                    setTimeout(() => {
+                                        btn.classList.remove('copied');
+                                        btn.innerHTML = originalHtml;
+                                    }, 1500);
                                 }
                             });
                         });
