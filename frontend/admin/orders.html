@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>后台订单管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="./admin.css?v=1.1.0">
-    <script src="./admin.js?v=1.0.8"></script>
+    <link rel="stylesheet" href="./admin.css?v=1.1.2">
+    <script src="./admin.js?v=1.1.0"></script>
     <style>
         /* Force hide native selects inside custom wrappers */
         .custom-select select {
@@ -63,23 +63,270 @@
             100% { transform: scale(0.9); opacity: 0.6; }
         }
 
-        /* Search Panel */
-        .search-combo {
+        /* Search & Filter Card Structured Layout */
+        .search-filter-card {
             display: flex;
+            flex-direction: column;
             gap: 12px;
+            padding: 16px 20px;
+        }
+
+        .search-row {
+            display: flex;
             align-items: center;
-            padding: 16px;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 220px;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input-wrapper .search-icon {
+            position: absolute;
+            left: 12px;
+            width: 15px;
+            height: 15px;
+            color: var(--slate-400);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .search-input-wrapper input.search-input {
+            width: 100% !important;
+            padding-left: 36px !important;
+            font-size: 13px;
+            box-sizing: border-box;
+            height: 38px;
+        }
+
+        .search-row input.search-sub-input {
+            width: 160px !important;
+            min-width: 160px !important;
+            max-width: 160px !important;
+            flex: 0 0 160px !important;
+            font-size: 13px;
+            box-sizing: border-box;
+            height: 38px;
+        }
+
+        .search-row .btn-search {
+            flex-shrink: 0;
+            white-space: nowrap;
+            height: 38px;
+        }
+
+        .filter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding-top: 2px;
+        }
+
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
-        .search-input {
-            flex: 1;
-            min-width: 200px;
+        .filter-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
         }
 
         .status-select {
-            min-width: 150px;
+            min-width: 130px;
             cursor: pointer;
+        }
+
+        .btn-resume-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+            color: #92400e;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            white-space: nowrap;
+            height: 38px;
+        }
+
+        .btn-resume-action:hover {
+            background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+            border-color: #f59e0b;
+        }
+
+        /* Result Table Refinements */
+        .result-table th,
+        .result-table td {
+            padding: 9px 10px;
+            vertical-align: middle;
+        }
+
+        /* Sticky Action Column */
+        .result-table th.col-actions,
+        .result-table td.col-actions {
+            position: sticky;
+            right: 0;
+            background-color: var(--bg-card);
+            z-index: 2;
+            text-align: right;
+            box-shadow: -6px 0 10px -4px rgba(15, 23, 42, 0.08);
+            white-space: nowrap;
+        }
+
+        .result-table tr:hover td.col-actions {
+            background-color: var(--bg-main);
+        }
+
+        /* Subscription Link Segmented Capsule */
+        .sub-link-capsule {
+            display: inline-flex;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            height: 26px;
+            overflow: hidden;
+            vertical-align: middle;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sub-link-capsule:hover {
+            border-color: #94a3b8;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
+        }
+
+        .sub-link-open {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 8px;
+            height: 100%;
+            font-size: 11px;
+            font-weight: 600;
+            color: #4338ca;
+            background: #f8fafc;
+            text-decoration: none;
+            line-height: 1;
+            border-right: 1px solid #e2e8f0;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .sub-link-open .icon-link {
+            width: 12px;
+            height: 12px;
+            color: #6366f1;
+            flex-shrink: 0;
+        }
+
+        .sub-link-open .icon-arrow {
+            width: 9px;
+            height: 9px;
+            color: #818cf8;
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
+        }
+
+        .sub-link-open:hover {
+            background: #eef2ff;
+            color: #312e81;
+        }
+
+        .sub-link-open:hover .icon-arrow {
+            transform: translate(1px, -1px);
+            color: #4338ca;
+        }
+
+        .sub-link-copy {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 7px;
+            height: 100%;
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            background: #ffffff;
+            border: none;
+            cursor: pointer;
+            line-height: 1;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .sub-link-copy .icon-copy {
+            width: 11px;
+            height: 11px;
+            color: #64748b;
+            flex-shrink: 0;
+            transition: color 0.15s ease;
+        }
+
+        .sub-link-copy:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .sub-link-copy:hover .icon-copy {
+            color: #0f172a;
+        }
+
+        .sub-link-copy.copied {
+            background: #ecfdf5 !important;
+            color: #059669 !important;
+        }
+
+        .sub-link-copy.copied .icon-copy {
+            color: #059669 !important;
+        }
+
+        .sub-link-empty-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            line-height: 1.3;
+        }
+
+        .sub-link-empty-badge.pending {
+            gap: 5px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            color: #64748b;
+        }
+
+        .sub-link-empty-badge.pending .empty-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: #f59e0b;
+            animation: pulse 1.6s infinite;
+        }
+
+        .sub-link-empty-badge.na {
+            color: #94a3b8;
+            background: transparent;
+            font-size: 13px;
         }
 
         /* Premium Floating Datepicker Styling */
@@ -526,96 +773,123 @@
         </header>
 
         <!-- 搜索过滤卡片 -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div class="search-combo">
-                <input type="text" id="search-query" class="search-input" placeholder="全局搜索 (系统卡密/账号/任务ID)...">
-                <input type="text" id="search-original-key" class="search-input admin-only" placeholder="按源Key筛选..." style="max-width: 180px;">
-                <input type="text" id="search-note" class="search-input" placeholder="按备注模糊查询..." style="max-width: 180px;">
-                <select id="filter-status" class="status-select">
-                    <option value="">所有状态</option>
-                    <option value="pending">排队中 (Pending)</option>
-                    <option value="running">进行中 (Running)</option>
-                    <option value="success">成功 (Success)</option>
-                    <option value="failed">失败 (Failed)</option>
-                    <option value="cancelled">已取消 (Cancelled)</option>
-                    <option value="paused">维护挂起 (Paused)</option>
-                </select>
-                <select id="filter-service-type" class="status-select">
-                    <option value="">全部业务</option>
-                    <option value="pixel">Pixel 订单</option>
-                    <option value="jio">Jio 订单</option>
-                </select>
-                <select id="filter-creator" class="status-select admin-only">
-                    <option value="">所有创建人</option>
-                </select>
-                <!-- Premium Custom Datepicker Component -->
-                <div class="datepicker-wrapper" id="datepicker-wrapper">
-                    <!-- The Trigger (displays current selection) -->
-                    <div class="datepicker-trigger" id="datepicker-trigger">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                            <span id="datepicker-display-value">时间范围：全部时间</span>
-                        </div>
-                        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </div>
-                    
-                    <!-- The Datepicker Popover Card -->
-                    <div class="datepicker-popup" id="datepicker-popup">
-                        <!-- Top Row: Shortcuts inside the popup -->
-                        <div class="popover-shortcuts" id="popover-shortcuts">
-                            <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
-                            <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
-                            <button type="button" class="btn-popover-shortcut" data-range="this_month">本月</button>
-                            <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
-                            <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
-                            <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
-                        </div>
-                        
-                        <!-- Divider -->
-                        <div class="popover-divider"></div>
-                        
-                        <!-- Middle Row: Date Inputs -->
-                        <div class="popover-inputs">
-                            <div class="popover-input-field">
-                                <span class="field-label">开始日期</span>
-                                <input type="text" id="filter-start-time" readonly placeholder="开始日期">
-                            </div>
-                            <span class="popover-separator">至</span>
-                            <div class="popover-input-field">
-                                <span class="field-label">结束日期</span>
-                                <input type="text" id="filter-end-time" readonly placeholder="结束日期">
-                            </div>
-                        </div>
+        <div class="card search-filter-card" style="margin-bottom: 20px;">
+            <!-- 第一行：搜索关键字与核心检索提交 -->
+            <div class="search-row">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-query" class="search-input" placeholder="全局搜索 (系统卡密 / 账号 / 任务ID / 备注 / 源Key)...">
+                </div>
+                <input type="text" id="search-original-key" class="search-sub-input admin-only" placeholder="按源Key筛选...">
+                <input type="text" id="search-note" class="search-sub-input" placeholder="按备注模糊查询...">
+                <button type="button" id="btn-search" class="btn-search" style="padding: 9px 18px; gap: 6px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    搜索筛选
+                </button>
+            </div>
 
-                        <!-- Custom Calendar month view -->
-                        <div class="calendar-container">
-                            <div class="calendar-header">
-                                <button type="button" class="btn-calendar-nav" id="btn-prev-month">&lt;</button>
-                                <span class="calendar-month-year" id="calendar-month-year">2026年7月</span>
-                                <button type="button" class="btn-calendar-nav" id="btn-next-month">&gt;</button>
+            <!-- 第二行：维度过滤与快捷批量操作 -->
+            <div class="filter-row">
+                <div class="filter-controls">
+                    <select id="filter-service-type" class="status-select">
+                        <option value="">全部业务</option>
+                        <option value="pixel">Pixel 订单</option>
+                        <option value="jio">Jio 订单</option>
+                    </select>
+                    <select id="filter-status" class="status-select">
+                        <option value="">所有状态</option>
+                        <option value="pending">排队中 (Pending)</option>
+                        <option value="running">进行中 (Running)</option>
+                        <option value="success">成功 (Success)</option>
+                        <option value="failed">失败 (Failed)</option>
+                        <option value="cancelled">已取消 (Cancelled)</option>
+                        <option value="paused">维护挂起 (Paused)</option>
+                    </select>
+                    <select id="filter-creator" class="status-select admin-only">
+                        <option value="">所有创建人</option>
+                    </select>
+                    <!-- Premium Custom Datepicker Component -->
+                    <div class="datepicker-wrapper" id="datepicker-wrapper">
+                        <!-- The Trigger (displays current selection) -->
+                        <div class="datepicker-trigger" id="datepicker-trigger">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span id="datepicker-display-value">时间范围：全部时间</span>
                             </div>
-                            <div class="calendar-weekdays">
-                                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
-                            </div>
-                            <div class="calendar-days-grid" id="calendar-days-grid"></div>
+                            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
                         </div>
                         
-                        <!-- Footer Row: Actions -->
-                        <div class="popover-footer">
-                            <button type="button" class="btn-popover-reset" id="btn-popover-reset">清除时间</button>
-                            <button type="button" class="btn-popover-apply" id="btn-popover-apply">应用筛选</button>
+                        <!-- The Datepicker Popover Card -->
+                        <div class="datepicker-popup" id="datepicker-popup">
+                            <!-- Top Row: Shortcuts inside the popup -->
+                            <div class="popover-shortcuts" id="popover-shortcuts">
+                                <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
+                                <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
+                                <button type="button" class="btn-popover-shortcut" data-range="this_month">本月</button>
+                                <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
+                                <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
+                                <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
+                            </div>
+                            
+                            <!-- Divider -->
+                            <div class="popover-divider"></div>
+                            
+                            <!-- Middle Row: Date Inputs -->
+                            <div class="popover-inputs">
+                                <div class="popover-input-field">
+                                    <span class="field-label">开始日期</span>
+                                    <input type="text" id="filter-start-time" readonly placeholder="开始日期">
+                                </div>
+                                <span class="popover-separator">至</span>
+                                <div class="popover-input-field">
+                                    <span class="field-label">结束日期</span>
+                                    <input type="text" id="filter-end-time" readonly placeholder="结束日期">
+                                </div>
+                            </div>
+
+                            <!-- Custom Calendar month view -->
+                            <div class="calendar-container">
+                                <div class="calendar-header">
+                                    <button type="button" class="btn-calendar-nav" id="btn-prev-month">&lt;</button>
+                                    <span class="calendar-month-year" id="calendar-month-year">2026年7月</span>
+                                    <button type="button" class="btn-calendar-nav" id="btn-next-month">&gt;</button>
+                                </div>
+                                <div class="calendar-weekdays">
+                                    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                                </div>
+                                <div class="calendar-days-grid" id="calendar-days-grid"></div>
+                            </div>
+                            
+                            <!-- Footer Row: Actions -->
+                            <div class="popover-footer">
+                                <button type="button" class="btn-popover-reset" id="btn-popover-reset">清除时间</button>
+                                <button type="button" class="btn-popover-apply" id="btn-popover-apply">应用筛选</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <button type="button" id="btn-search" class="btn-search">搜索筛选</button>
-                <button type="button" id="btn-resume-paused" class="btn-replace-key admin-only" style="padding: 10px 16px; font-size: 13px;">一键恢复排队</button>
+                <div class="filter-actions">
+                    <button type="button" id="btn-resume-paused" class="btn-resume-action admin-only" title="将所有维护挂起的订单重新加入排队处理">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; margin-right:5px;">
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                        一键恢复排队
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -625,18 +899,18 @@
                 <table class="result-table">
                     <thead>
                         <tr>
-                            <th class="admin-only">ID</th>
-                            <th>系统卡密</th>
-                            <th>业务分类</th>
-                            <th>源Key</th>
-                            <th>卡密备注</th>
-                            <th>订阅链接</th>
-                            <th>最新账号</th>
-                            <th>最新状态</th>
-                            <th class="admin-only">供应商 / Task ID</th>
-                            <th class="admin-only">创建人</th>
-                            <th>首次提交时间</th>
-                            <th>操作</th>
+                            <th class="admin-only" style="width: 45px; text-align: center;">ID</th>
+                            <th style="min-width: 135px;">系统卡密</th>
+                            <th style="width: 70px; text-align: center;">业务分类</th>
+                            <th style="min-width: 110px;">源Key</th>
+                            <th style="max-width: 120px;">卡密备注</th>
+                            <th style="min-width: 130px; text-align: center;">订阅链接</th>
+                            <th style="min-width: 140px;">最新账号</th>
+                            <th style="width: 80px; text-align: center;">最新状态</th>
+                            <th class="admin-only" style="min-width: 105px;">供应商 / Task ID</th>
+                            <th class="admin-only" style="min-width: 65px;">创建人</th>
+                            <th style="min-width: 120px;">首次提交时间</th>
+                            <th class="col-actions" style="min-width: 125px; text-align: right;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
@@ -989,6 +1263,7 @@
                         const loader = document.getElementById('page-loader');
                         if (loader) {
                             loader.classList.add('fade-out');
+                            setTimeout(() => { loader.style.display = 'none'; }, 220);
                         }
                     } else {
                         window.clearAuthCache();
@@ -1147,18 +1422,18 @@
                             }
 
                             tr.innerHTML = `
-                                <td class="admin-only">${o.id}</td>
-                                <td style="font-family: monospace; font-weight: 600; color: var(--slate-900);">${o.card_secret}</td>
-                                <td>${serviceBadge}</td>
-                                <td style="font-family: monospace; font-size: 12px; color: var(--slate-600);">${o.original_key || '-'}</td>
-                                <td style="font-size:13px; color: var(--slate-700); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
-                                <td>${subLinkCellHtml}</td>
-                                <td class="account-td" style="font-size: 13px;">${o.username || '-'}</td>
-                                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                                <td class="admin-only" style="font-size:13px;">${vendorTask}</td>
-                                <td class="admin-only" style="font-size:13px; color: var(--slate-600);">${o.creator_name || '-'}</td>
-                                <td class="time-td">${formatDate(o.created_at)}</td>
-                                <td>
+                                <td class="admin-only" style="font-size: 12px; color: var(--slate-500); text-align: center;">${o.id}</td>
+                                <td style="font-family: monospace; font-weight: 600; color: var(--slate-900); font-size: 12px;">${o.card_secret}</td>
+                                <td style="text-align: center;">${serviceBadge}</td>
+                                <td style="font-family: monospace; font-size: 12px; color: var(--slate-600); max-width: 130px; overflow: hidden; text-overflow: ellipsis;" title="${o.original_key || ''}">${o.original_key || '-'}</td>
+                                <td style="font-size: 12px; color: var(--slate-700); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
+                                <td style="text-align: center;">${subLinkCellHtml}</td>
+                                <td class="account-td" style="font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis;" title="${o.username || ''}">${o.username || '-'}</td>
+                                <td style="text-align: center;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                <td class="admin-only" style="font-size: 12px; line-height: 1.3;">${vendorTask}</td>
+                                <td class="admin-only" style="font-size: 12px; color: var(--slate-600);">${o.creator_name || '-'}</td>
+                                <td class="time-td" style="font-size: 11px;">${formatDate(o.created_at)}</td>
+                                <td class="col-actions">
                                     <button type="button" class="btn-detail" data-id="${o.id}">详情</button>
                                     ${currentUserRole === 'admin' ? `<button type="button" class="btn-replace-key" data-id="${o.id}" style="margin-left: 6px;">换卡重提</button>` : ''}
                                 </td>

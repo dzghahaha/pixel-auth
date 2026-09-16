@@ -636,23 +636,40 @@ select {
     font-weight: 600;
     background-color: #f8fafc;
     border-bottom: 1px solid var(--border-color);
-    padding: 12px 16px;
+    padding: 10px 12px;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .result-table td {
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: var(--text-primary);
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .result-table tr:hover td {
+    background-color: var(--bg-main);
+}
+
+.result-table th.col-actions,
+.result-table td.col-actions {
+    position: sticky;
+    right: 0;
+    background-color: var(--bg-card);
+    z-index: 2;
+    text-align: right;
+    box-shadow: -6px 0 10px -4px rgba(15, 23, 42, 0.08);
+    white-space: nowrap;
+}
+
+.result-table tr:hover td.col-actions {
     background-color: var(--bg-main);
 }
 
