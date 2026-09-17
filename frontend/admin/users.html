@@ -182,8 +182,9 @@
                 </div>
 
                 <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="recharge-amount" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">充值金额 (元)</label>
-                    <input type="number" step="0.01" min="0.01" id="recharge-amount" placeholder="例如：100.00" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 16px; font-weight: 700; box-sizing: border-box; font-family: monospace;">
+                    <label for="recharge-amount" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">充值 / 扣款金额 (元)</label>
+                    <input type="number" step="0.01" id="recharge-amount" placeholder="正数充值，负数扣款 (如 -50.00)" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 16px; font-weight: 700; box-sizing: border-box; font-family: monospace;">
+                    <span style="font-size: 11px; color: var(--slate-400); margin-top: 4px; display: block;">* 输入正数（如 100）增加余额，输入负数（如 -50）扣减余额</span>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 14px;">
@@ -434,8 +435,8 @@
             // Confirm recharge for user
             btnConfirmRechargeUser.addEventListener('click', async () => {
                 const amount = parseFloat(rechargeAmount.value) || 0;
-                if (amount <= 0) {
-                    showToast('充值金额必须大于 0');
+                if (amount === 0) {
+                    showToast('充值/扣款金额不能为 0');
                     return;
                 }
                 btnConfirmRechargeUser.disabled = true;

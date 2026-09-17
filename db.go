@@ -223,6 +223,22 @@ func createTables() {
 		KEY idx_jwt_created_at (created_at)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
+	jioWalletOrdersDDL := `
+	CREATE TABLE IF NOT EXISTS jio_wallet_orders (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		out_trade_no VARCHAR(64) NOT NULL UNIQUE,
+		admin_id BIGINT UNSIGNED NOT NULL,
+		amount DECIMAL(10,2) NOT NULL,
+		pay_type VARCHAR(32) NOT NULL DEFAULT 'wxpay',
+		pay_method VARCHAR(32) NOT NULL DEFAULT 'epay',
+		status VARCHAR(32) NOT NULL DEFAULT 'pending',
+		remark VARCHAR(255) NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		KEY idx_jwo_admin (admin_id),
+		KEY idx_jwo_trade (out_trade_no)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	log.Println("Ensuring database tables 'orders', 'account_records', 'system_keys', 'admins', 'admin_sessions', and 'admin_permissions' exist...")
 	if _, err := db.Exec(ordersDDL); err != nil {
 		log.Fatalf("Error creating orders table: %v", err)
@@ -246,6 +262,10 @@ func createTables() {
 
 	if _, err := db.Exec(jioWalletTransactionsDDL); err != nil {
 		log.Fatalf("Error creating jio_wallet_transactions table: %v", err)
+	}
+
+	if _, err := db.Exec(jioWalletOrdersDDL); err != nil {
+		log.Fatalf("Error creating jio_wallet_orders table: %v", err)
 	}
 
 	systemSettingsDDL := `

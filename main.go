@@ -87,6 +87,8 @@ func main() {
 	// Jio Wallet APIs
 	http.HandleFunc("/api/admin/jio/wallet/summary", limit(requireAdmin(handleAdminJioWalletSummary)))
 	http.HandleFunc("/api/admin/jio/wallet/transactions", limit(requireAdmin(handleAdminJioWalletTransactions)))
+	http.HandleFunc("/api/admin/jio/wallet/create_pay_order", limit(requireAdmin(handleAdminJioWalletCreatePayOrder)))
+	http.HandleFunc("/api/admin/jio/wallet/order_status", limit(requireAdmin(handleAdminJioWalletOrderStatus)))
 	http.HandleFunc("/api/admin/jio/wallet/recharge", limit(requireAdmin(handleAdminJioWalletSelfRecharge)))
 	http.HandleFunc("/api/admin/jio/wallet/admin_recharge", limit(requireSuperAdmin(handleAdminJioWalletAdminRecharge)))
 	http.HandleFunc("/api/admin/logs", limit(requirePermission("logs", handleAdminLogs)))

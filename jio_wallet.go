@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,20 +19,20 @@ var ErrInsufficientBalance = errors.New("账户储值余额不足")
 
 // JioWalletTransaction 表示储值钱包流水记录结构
 type JioWalletTransaction struct {
-	ID            int64      `json:"id"`
-	AdminID       int64      `json:"admin_id"`
-	AdminUsername string     `json:"admin_username,omitempty"`
-	AdminNickname string     `json:"admin_nickname,omitempty"`
-	Type          string     `json:"type"` // "recharge", "admin_recharge", "consume", "refund"
-	Amount        float64    `json:"amount"`
-	BalanceBefore float64    `json:"balance_before"`
-	BalanceAfter  float64    `json:"balance_after"`
-	OrderID       *int64     `json:"order_id,omitempty"`
-	CardSecret    string     `json:"card_secret,omitempty"`
-	Remark        string     `json:"remark"`
-	OperatorID    *int64     `json:"operator_id,omitempty"`
-	OperatorName  string     `json:"operator_name,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID            int64     `json:"id"`
+	AdminID       int64     `json:"admin_id"`
+	AdminUsername string    `json:"admin_username,omitempty"`
+	AdminNickname string    `json:"admin_nickname,omitempty"`
+	Type          string    `json:"type"` // "recharge", "admin_recharge", "admin_deduct", "consume", "refund"
+	Amount        float64   `json:"amount"`
+	BalanceBefore float64   `json:"balance_before"`
+	BalanceAfter  float64   `json:"balance_after"`
+	OrderID       *int64    `json:"order_id,omitempty"`
+	CardSecret    string    `json:"card_secret,omitempty"`
+	Remark        string    `json:"remark"`
+	OperatorID    *int64    `json:"operator_id,omitempty"`
+	OperatorName  string    `json:"operator_name,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // GetAdminJioBalance 获取指定管理员的 Jio 储值钱包余额
@@ -44,10 +45,10 @@ func GetAdminJioBalance(adminID int64) (float64, error) {
 	return balance, nil
 }
 
-// AddJioWalletBalance 为指定管理员增加或充值钱包余额（支持充值、代充、退款等）
+// AddJioWalletBalance 为指定管理员增加或扣减钱包余额（支持正数充值、负数扣款、代充、退款等）
 func AddJioWalletBalance(adminID int64, amount float64, txType string, remark string, operatorID int64, orderID *int64, cardSecret string) (float64, int64, error) {
-	if amount <= 0 {
-		return 0, 0, errors.New("变动金额必须大于0")
+	if amount == 0 {
+		return 0, 0, errors.New("变动金额不能为 0")
 	}
 
 	tx, err := db.Begin()
@@ -63,10 +64,21 @@ func AddJioWalletBalance(adminID int64, amount float64, txType string, remark st
 	}
 
 	balanceAfter := math.Round((balanceBefore+amount)*100) / 100
+	if balanceAfter < 0 {
+		return 0, 0, fmt.Errorf("扣减金额超限：当前可用余额为 ￥%.2f，扣减后不能小于 0", balanceBefore)
+	}
 
 	_, errUpdate := tx.Exec("UPDATE admins SET jio_balance = ?, updated_at = NOW() WHERE id = ?", balanceAfter, adminID)
 	if errUpdate != nil {
 		return 0, 0, fmt.Errorf("更新钱包余额失败: %w", errUpdate)
+	}
+
+	if txType == "" {
+		if amount > 0 {
+			txType = "admin_recharge"
+		} else {
+			txType = "admin_deduct"
+		}
 	}
 
 	resLog, errLog := tx.Exec(`
@@ -393,8 +405,8 @@ func handleAdminJioWalletTransactions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAdminJioWalletSelfRecharge 管理员/用户自助充值
-func handleAdminJioWalletSelfRecharge(w http.ResponseWriter, r *http.Request) {
+// handleAdminJioWalletCreatePayOrder 用户调用支付接口发起充值订单 (通过 Epay 或 虎皮椒)
+func handleAdminJioWalletCreatePayOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
 			"success": false,
@@ -414,12 +426,12 @@ func handleAdminJioWalletSelfRecharge(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Amount float64 `json:"amount"`
-		Remark string  `json:"remark"`
+		Type   string  `json:"type"` // "wxpay" or "alipay"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
-			"message": "请求数据格式错误",
+			"message": "请求格式无效",
 		})
 		return
 	}
@@ -432,29 +444,247 @@ func handleAdminJioWalletSelfRecharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remark := strings.TrimSpace(req.Remark)
-	if remark == "" {
-		remark = "用户自助充值入账"
+	if req.Type == "" {
+		req.Type = "wxpay"
 	}
 
-	newBalance, txID, err := AddJioWalletBalance(adminID, req.Amount, "recharge", remark, adminID, nil, "")
-	if err != nil {
+	outTradeNo := fmt.Sprintf("JW%d%04d", time.Now().Unix(), time.Now().Nanosecond()%10000)
+	totalAmountStr := fmt.Sprintf("%.2f", req.Amount)
+	now := time.Now()
+
+	payMethod := getSetting("pay_method", "epay")
+
+	_, errInsert := db.Exec(`
+		INSERT INTO jio_wallet_orders (out_trade_no, admin_id, amount, pay_type, pay_method, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+		outTradeNo, adminID, req.Amount, req.Type, payMethod, now, now)
+	if errInsert != nil {
+		log.Printf("Failed to insert jio_wallet_order: %v\n", errInsert)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
-			"message": fmt.Sprintf("充值失败: %v", err),
+			"message": "生成充值订单失败",
+		})
+		return
+	}
+
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	notifyURL := fmt.Sprintf("%s://%s/api/pay/notify", scheme, r.Host)
+	returnURL := fmt.Sprintf("%s://%s/admin/jio_wallet.html?out_trade_no=%s", scheme, r.Host, outTradeNo)
+
+	var payURL string
+	if payMethod == "xunhupay" {
+		gateway := getSetting("xunhupay_url", "https://api.xunhupay.com")
+		var appID, secret string
+		if req.Type == "wxpay" {
+			appID = getSetting("xunhupay_wx_appid", "")
+			secret = getSetting("xunhupay_wx_secret", "")
+		} else if req.Type == "alipay" {
+			appID = getSetting("xunhupay_alipay_appid", "")
+			secret = getSetting("xunhupay_alipay_secret", "")
+		}
+
+		if appID == "" || secret == "" {
+			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"success": false,
+				"message": "支付通道未配置，请联系管理员",
+			})
+			return
+		}
+
+		xunhu := NewXunhuPay(appID, secret, gateway)
+		data, err := xunhu.CreatePayment(outTradeNo, req.Amount, fmt.Sprintf("Jio储值钱包充值 ￥%.2f", req.Amount), notifyURL, returnURL, "")
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": fmt.Sprintf("发起支付失败: %v", err),
+			})
+			return
+		}
+
+		var ok bool
+		payURL, ok = data["url"].(string)
+		if !ok || payURL == "" {
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+				"success": false,
+				"message": "未获取到有效的支付链接",
+			})
+			return
+		}
+	} else {
+		pid := getSetting("epay_pid", "1668")
+		key := getSetting("epay_key", "")
+		apiURL := getSetting("epay_url", "https://pay.vansdesign.cn/")
+		wxChannel := getSetting("epay_wx_channel", "201906181353")
+		alipayChannel := getSetting("epay_alipay_channel", "")
+
+		params := map[string]string{
+			"pid":          pid,
+			"type":         req.Type,
+			"out_trade_no": outTradeNo,
+			"notify_url":   notifyURL,
+			"return_url":   returnURL,
+			"name":         fmt.Sprintf("Jio储值钱包充值 ￥%.2f", req.Amount),
+			"money":        totalAmountStr,
+		}
+
+		if req.Type == "wxpay" && wxChannel != "" {
+			params["channel"] = wxChannel
+		} else if req.Type == "alipay" && alipayChannel != "" {
+			params["channel"] = alipayChannel
+		}
+
+		sign := calculateEpaySign(params, key)
+		params["sign"] = sign
+		params["sign_type"] = "MD5"
+
+		submitBase := apiURL
+		if !strings.HasSuffix(submitBase, "/") {
+			submitBase += "/"
+		}
+		submitURL := submitBase + "submit.php"
+
+		var queryParts []string
+		for k, v := range params {
+			queryParts = append(queryParts, fmt.Sprintf("%s=%s", k, url.QueryEscape(v)))
+		}
+		payURL = submitURL + "?" + strings.Join(queryParts, "&")
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"out_trade_no": outTradeNo,
+		"amount":       req.Amount,
+		"pay_url":      payURL,
+	})
+}
+
+// handleAdminJioWalletOrderStatus 轮询检查钱包充值订单支付状态
+func handleAdminJioWalletOrderStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 请求",
+		})
+		return
+	}
+
+	outTradeNo := strings.TrimSpace(r.URL.Query().Get("out_trade_no"))
+	if outTradeNo == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "out_trade_no 不能为空",
+		})
+		return
+	}
+
+	var status string
+	var amount float64
+	err := db.QueryRow("SELECT status, amount FROM jio_wallet_orders WHERE out_trade_no = ?", outTradeNo).Scan(&status, &amount)
+	if err == sql.ErrNoRows {
+		respondJSON(w, http.StatusNotFound, map[string]interface{}{
+			"success": false,
+			"message": "未找到该充值订单",
+		})
+		return
+	} else if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": "查询数据库失败",
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"out_trade_no": outTradeNo,
+		"status":       status,
+		"amount":       amount,
+	})
+}
+
+// handleAdminJioWalletSelfRecharge 管理员自助直接充值/扣款 (仅超级管理员可用，普通用户必须走在线支付)
+func handleAdminJioWalletSelfRecharge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	adminID, ok := getAdminID(r)
+	if !ok {
+		respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
+			"success": false,
+			"message": "未登录或登录已过期",
+		})
+		return
+	}
+
+	var role string
+	_ = db.QueryRow("SELECT role FROM admins WHERE id = ?", adminID).Scan(&role)
+	if role != "admin" {
+		respondJSON(w, http.StatusForbidden, map[string]interface{}{
+			"success": false,
+			"message": "普通用户请使用在线支付通道进行钱包充值",
+		})
+		return
+	}
+
+	var req struct {
+		Amount float64 `json:"amount"`
+		Remark string  `json:"remark"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请求数据格式错误",
+		})
+		return
+	}
+
+	if req.Amount == 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "变动金额不能为 0",
+		})
+		return
+	}
+
+	remark := strings.TrimSpace(req.Remark)
+	txType := "admin_recharge"
+	actionName := "充值"
+	if req.Amount < 0 {
+		txType = "admin_deduct"
+		actionName = "扣款"
+		if remark == "" {
+			remark = "超级管理员自助扣款"
+		}
+	} else if remark == "" {
+		remark = "超级管理员自助充值"
+	}
+
+	newBalance, txID, err := AddJioWalletBalance(adminID, req.Amount, txType, remark, adminID, nil, "")
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("%s失败: %v", actionName, err),
 		})
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":     true,
-		"message":     fmt.Sprintf("成功充值 ￥%.2f，当前余额 ￥%.2f", req.Amount, newBalance),
+		"message":     fmt.Sprintf("成功%s ￥%.2f，当前余额 ￥%.2f", actionName, math.Abs(req.Amount), newBalance),
 		"new_balance": newBalance,
 		"tx_id":       txID,
 	})
 }
 
-// handleAdminJioWalletAdminRecharge 超级管理员为其他用户代充值
+// handleAdminJioWalletAdminRecharge 超级管理员为其他用户充值或设置负数扣款 (仅超级管理员可用)
 func handleAdminJioWalletAdminRecharge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
@@ -478,7 +708,7 @@ func handleAdminJioWalletAdminRecharge(w http.ResponseWriter, r *http.Request) {
 	if opRole != "admin" {
 		respondJSON(w, http.StatusForbidden, map[string]interface{}{
 			"success": false,
-			"message": "仅超级管理员有权执行用户代充操作",
+			"message": "仅超级管理员有权执行人工充值或扣款操作",
 		})
 		return
 	}
@@ -499,15 +729,15 @@ func handleAdminJioWalletAdminRecharge(w http.ResponseWriter, r *http.Request) {
 	if req.TargetAdminID <= 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
-			"message": "请选择有效的充值目标用户",
+			"message": "请选择有效的操作目标用户",
 		})
 		return
 	}
 
-	if req.Amount <= 0 {
+	if req.Amount == 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
-			"message": "充值金额必须大于 0",
+			"message": "变动金额不能为 0",
 		})
 		return
 	}
@@ -523,22 +753,30 @@ func handleAdminJioWalletAdminRecharge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	remark := strings.TrimSpace(req.Remark)
-	if remark == "" {
+	txType := "admin_recharge"
+	actionName := "充值"
+	if req.Amount < 0 {
+		txType = "admin_deduct"
+		actionName = "扣款"
+		if remark == "" {
+			remark = "管理员人工扣款"
+		}
+	} else if remark == "" {
 		remark = "管理员人工代充入账"
 	}
 
-	newBalance, txID, err := AddJioWalletBalance(req.TargetAdminID, req.Amount, "admin_recharge", remark, operatorID, nil, "")
+	newBalance, txID, err := AddJioWalletBalance(req.TargetAdminID, req.Amount, txType, remark, operatorID, nil, "")
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
-			"message": fmt.Sprintf("代充失败: %v", err),
+			"message": fmt.Sprintf("%s失败: %v", actionName, err),
 		})
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":         true,
-		"message":         fmt.Sprintf("成功为用户 [%s] 充值 ￥%.2f，该账户当前余额 ￥%.2f", targetUsername, req.Amount, newBalance),
+		"message":         fmt.Sprintf("成功为用户 [%s] %s ￥%.2f，该账户当前余额 ￥%.2f", targetUsername, actionName, math.Abs(req.Amount), newBalance),
 		"target_admin_id": req.TargetAdminID,
 		"target_username": targetUsername,
 		"new_balance":     newBalance,

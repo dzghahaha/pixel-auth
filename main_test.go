@@ -5076,6 +5076,97 @@ func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
 	if sumResp.Data.TodayConsume != 5.00 {
 		t.Errorf("expected today consume 5.00, got %.2f", sumResp.Data.TodayConsume)
 	}
+
+	// 10. 测试普通用户尝试不调用支付接口直接充值：必须被拦截 (403 Forbidden)
+	directPayload := map[string]interface{}{
+		"amount": 50.00,
+		"remark": "尝试免支付直接充值",
+	}
+	directBytes, _ := json.Marshal(directPayload)
+	reqDirect := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/recharge", bytes.NewBuffer(directBytes))
+	reqDirect.AddCookie(operatorCookie)
+	rrDirect := httptest.NewRecorder()
+	requireAdmin(handleAdminJioWalletSelfRecharge)(rrDirect, reqDirect)
+
+	if rrDirect.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when non-admin tries direct recharge without payment, got %d: %s", rrDirect.Code, rrDirect.Body.String())
+	}
+
+	// 11. 测试普通用户调用支付接口发起充值订单 (create_pay_order)
+	payOrderPayload := map[string]interface{}{
+		"amount": 50.00,
+		"type":   "wxpay",
+	}
+	payOrderBytes, _ := json.Marshal(payOrderPayload)
+	reqPayOrder := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/create_pay_order", bytes.NewBuffer(payOrderBytes))
+	reqPayOrder.AddCookie(operatorCookie)
+	rrPayOrder := httptest.NewRecorder()
+	requireAdmin(handleAdminJioWalletCreatePayOrder)(rrPayOrder, reqPayOrder)
+
+	if rrPayOrder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from create_pay_order, got %d: %s", rrPayOrder.Code, rrPayOrder.Body.String())
+	}
+
+	var payOrderResp struct {
+		Success    bool    `json:"success"`
+		OutTradeNo string  `json:"out_trade_no"`
+		PayURL     string  `json:"pay_url"`
+		Amount     float64 `json:"amount"`
+	}
+	_ = json.Unmarshal(rrPayOrder.Body.Bytes(), &payOrderResp)
+	if !payOrderResp.Success || !strings.HasPrefix(payOrderResp.OutTradeNo, "JW") {
+		t.Errorf("expected JW out_trade_no, got: %s", payOrderResp.OutTradeNo)
+	}
+
+	// 12. 模拟支付成功回调 (processJioWalletPaymentOrder)
+	errPayProcess := processJioWalletPaymentOrder(payOrderResp.OutTradeNo)
+	if errPayProcess != nil {
+		t.Fatalf("failed to process wallet payment order: %v", errPayProcess)
+	}
+
+	// 验证充值后操作员余额变为 95.00 + 50.00 = 145.00
+	balAfterPay, _ := GetAdminJioBalance(operatorID)
+	if balAfterPay != 145.00 {
+		t.Errorf("expected balance 145.00 after online pay, got %.2f", balAfterPay)
+	}
+
+	// 13. 测试管理员设置负数扣款 (-45.00)
+	deductPayload := map[string]interface{}{
+		"target_admin_id": operatorID,
+		"amount":          -45.00,
+		"remark":          "人工核减测试",
+	}
+	deductBytes, _ := json.Marshal(deductPayload)
+	reqDeduct := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/admin_recharge", bytes.NewBuffer(deductBytes))
+	reqDeduct.AddCookie(superAdminCookie)
+	rrDeduct := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletAdminRecharge)(rrDeduct, reqDeduct)
+
+	if rrDeduct.Code != http.StatusOK {
+		t.Fatalf("expected 200 from negative admin_recharge (deduct), got %d: %s", rrDeduct.Code, rrDeduct.Body.String())
+	}
+
+	// 验证扣款后余额变为 145.00 - 45.00 = 100.00
+	balAfterDeduct, _ := GetAdminJioBalance(operatorID)
+	if balAfterDeduct != 100.00 {
+		t.Errorf("expected balance 100.00 after negative deduct, got %.2f", balAfterDeduct)
+	}
+
+	// 14. 测试管理员扣款金额超过当前余额 (如 -200.00): 必须报错拦截，禁止透支
+	overDeductPayload := map[string]interface{}{
+		"target_admin_id": operatorID,
+		"amount":          -200.00,
+		"remark":          "超额扣减",
+	}
+	overDeductBytes, _ := json.Marshal(overDeductPayload)
+	reqOverDeduct := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/admin_recharge", bytes.NewBuffer(overDeductBytes))
+	reqOverDeduct.AddCookie(superAdminCookie)
+	rrOverDeduct := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletAdminRecharge)(rrOverDeduct, reqOverDeduct)
+
+	if rrOverDeduct.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when deducting more than available balance, got %d: %s", rrOverDeduct.Code, rrOverDeduct.Body.String())
+	}
 }
 
 

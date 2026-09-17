@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -324,6 +325,13 @@ func handlePayNotify(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("fail"))
 					return
 				}
+			} else if strings.HasPrefix(tradeOrderID, "JW") {
+				err := processJioWalletPaymentOrder(tradeOrderID)
+				if err != nil {
+					log.Printf("Failed to process jio wallet order %s via XunhuPay: %v\n", tradeOrderID, err)
+					w.Write([]byte("fail"))
+					return
+				}
 			}
 		}
 
@@ -386,10 +394,76 @@ func handlePayNotify(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("fail"))
 				return
 			}
+		} else if strings.HasPrefix(outTradeNo, "JW") {
+			err := processJioWalletPaymentOrder(outTradeNo)
+			if err != nil {
+				log.Printf("Failed to process jio wallet order %s via Epay: %v\n", outTradeNo, err)
+				w.Write([]byte("fail"))
+				return
+			}
 		}
 	}
 
 	w.Write([]byte("success"))
+}
+
+// processJioWalletPaymentOrder 处理 Jio 储值钱包充值订单支付成功回调
+func processJioWalletPaymentOrder(outTradeNo string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var orderID int64
+	var adminID int64
+	var amount float64
+	var status string
+	err = tx.QueryRow("SELECT id, admin_id, amount, status FROM jio_wallet_orders WHERE out_trade_no = ? FOR UPDATE", outTradeNo).
+		Scan(&orderID, &adminID, &amount, &status)
+	if err != nil {
+		return err
+	}
+
+	if status == "paid" {
+		return nil // 已经处理完毕，防重复
+	}
+	if status == "cancelled" {
+		return fmt.Errorf("wallet order %s was already cancelled", outTradeNo)
+	}
+
+	now := time.Now()
+	_, err = tx.Exec("UPDATE jio_wallet_orders SET status = 'paid', updated_at = ? WHERE id = ?", now, orderID)
+	if err != nil {
+		return err
+	}
+
+	var balanceBefore float64
+	err = tx.QueryRow("SELECT COALESCE(jio_balance, 0.00) FROM admins WHERE id = ? FOR UPDATE", adminID).Scan(&balanceBefore)
+	if err != nil {
+		return err
+	}
+
+	balanceAfter := math.Round((balanceBefore+amount)*100) / 100
+	_, err = tx.Exec("UPDATE admins SET jio_balance = ?, updated_at = ? WHERE id = ?", balanceAfter, now, adminID)
+	if err != nil {
+		return err
+	}
+
+	remark := fmt.Sprintf("在线支付充值成功 (订单号: %s)", outTradeNo)
+	_, err = tx.Exec(`
+		INSERT INTO jio_wallet_transactions 
+		(admin_id, type, amount, balance_before, balance_after, card_secret, remark, operator_id, created_at)
+		VALUES (?, 'recharge', ?, ?, ?, ?, ?, ?, ?)`,
+		adminID, amount, balanceBefore, balanceAfter, outTradeNo, remark, adminID, now)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[JioWallet] 在线充值成功: 用户ID %d, 金额 ￥%.2f, 变动后余额 ￥%.2f (单号: %s)\n",
+		adminID, amount, balanceAfter, outTradeNo)
+
+	return tx.Commit()
 }
 
 func releaseKeysForOrder(outTradeNo string) error {
