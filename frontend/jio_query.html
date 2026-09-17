@@ -238,6 +238,22 @@
             const btnText = document.getElementById('btn-query-text');
             const resultWrapper = document.getElementById('query-result-wrapper');
 
+            // 时间格式化工具
+            function formatTime(val) {
+                if (!val) return '-';
+                if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
+                    return val;
+                }
+                try {
+                    const d = new Date(val);
+                    if (!isNaN(d.getTime())) {
+                        const pad = n => String(n).padStart(2, '0');
+                        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                    }
+                } catch (e) {}
+                return String(val);
+            }
+
             // 复制工具
             async function copyText(text) {
                 try {
@@ -292,6 +308,8 @@
                         statusBadgeHtml = '<span class="status-badge failed">● 处理失败</span>';
                     }
 
+                    const displayCreatedAt = formatTime(data.created_at || (rec && rec.created_at ? rec.created_at : ''));
+
                     resultWrapper.innerHTML = `
                         <div class="jio-order-result-card">
                             <div class="jio-order-header">
@@ -303,7 +321,7 @@
                             </div>
 
                             <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
-                                <span>首次提交时间：${escapeHtml(data.created_at || '-')}</span>
+                                <span>首次兑换时间：${escapeHtml(displayCreatedAt)}</span>
                                 <span>业务分类：<strong style="color: #059669;">Jio 专属订阅</strong></span>
                             </div>
 

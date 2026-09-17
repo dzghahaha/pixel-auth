@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -351,8 +352,9 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	if errQuery == sql.ErrNoRows {
-		result, errInsert := tx.Exec("INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) VALUES (?, ?, ?, ?, 'pixel', ?, ?)",
-			req.CardSecret, req.Mode, vendor, creatorID, now, now)
+		pixelPrice, _ := strconv.ParseFloat(getSetting("key_price", "9.99"), 64)
+		result, errInsert := tx.Exec("INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, sale_price, created_at, updated_at) VALUES (?, ?, ?, ?, 'pixel', ?, ?, ?)",
+			req.CardSecret, req.Mode, vendor, creatorID, pixelPrice, now, now)
 		if errInsert != nil {
 			log.Printf("Error inserting order: %v\n", errInsert)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -746,8 +748,9 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var orderServiceType string
+	var orderCreatedAt sql.NullTime
 	if orderID > 0 {
-		_ = db.QueryRow("SELECT COALESCE(service_type, 'pixel') FROM orders WHERE id = ?", orderID).Scan(&orderServiceType)
+		_ = db.QueryRow("SELECT COALESCE(service_type, 'pixel'), created_at FROM orders WHERE id = ?", orderID).Scan(&orderServiceType, &orderCreatedAt)
 	}
 	if orderServiceType == "" {
 		_ = db.QueryRow("SELECT COALESCE(service_type, 'pixel') FROM system_keys WHERE system_key = ?", cardSecret).Scan(&orderServiceType)
@@ -756,13 +759,20 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		orderServiceType = "pixel"
 	}
 
-	// Respond with results (empty list is sent if no records found, frontend will format cleanly)
-	respondJSON(w, http.StatusOK, map[string]interface{}{
+	respMap := map[string]interface{}{
 		"success":      true,
 		"card_secret":  cardSecret,
 		"service_type": orderServiceType,
 		"records":      respRecords,
-	})
+	}
+	if orderCreatedAt.Valid {
+		respMap["created_at"] = orderCreatedAt.Time.Format("2006-01-02 15:04:05")
+	} else if len(respRecords) > 0 {
+		respMap["created_at"] = respRecords[0].CreatedAt.Format("2006-01-02 15:04:05")
+	}
+
+	// Respond with results (empty list is sent if no records found, frontend will format cleanly)
+	respondJSON(w, http.StatusOK, respMap)
 }
 
 func handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -1373,10 +1383,11 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 			if errLock == nil {
 				if rowsAff, _ := resLock.RowsAffected(); rowsAff > 0 {
 					var orderID int64
+					jioSalePrice := GetCurrentJioSalePrice()
 					resOrder, errInsertOrder := db.Exec(`
-						INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
-						VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
-						req.CardSecret, vendor, creatorID, now, now)
+						INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, sale_price, created_at, updated_at) 
+						VALUES (?, 'jio', ?, ?, 'jio', ?, ?, ?)`,
+						req.CardSecret, vendor, creatorID, jioSalePrice, now, now)
 					if errInsertOrder == nil {
 						orderID, _ = resOrder.LastInsertId()
 					}
@@ -1479,12 +1490,13 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 		// Create order
 		var orderID int64
+		jioSalePrice := GetCurrentJioSalePrice()
 		errQueryOrder := tx.QueryRow("SELECT id FROM orders WHERE card_secret = ?", req.CardSecret).Scan(&orderID)
 		if errQueryOrder == sql.ErrNoRows {
 			resOrder, errInsertOrder := tx.Exec(`
-				INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
-				VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
-				req.CardSecret, vendor, creatorID, now, now)
+				INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, sale_price, created_at, updated_at) 
+				VALUES (?, 'jio', ?, ?, 'jio', ?, ?, ?)`,
+				req.CardSecret, vendor, creatorID, jioSalePrice, now, now)
 			if errInsertOrder != nil {
 				log.Printf("Failed to insert jio paused order: %v\n", errInsertOrder)
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1588,12 +1600,13 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 	// 7. 创建或复用订单记录
 	var orderID int64
+	jioSalePrice := GetCurrentJioSalePrice()
 	errQueryOrder := db.QueryRow("SELECT id FROM orders WHERE card_secret = ?", req.CardSecret).Scan(&orderID)
 	if errQueryOrder == sql.ErrNoRows {
 		resOrder, errInsertOrder := db.Exec(`
-			INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, created_at, updated_at) 
-			VALUES (?, 'jio', ?, ?, 'jio', ?, ?)`,
-			req.CardSecret, vendor, creatorID, now, now)
+			INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, sale_price, created_at, updated_at) 
+			VALUES (?, 'jio', ?, ?, 'jio', ?, ?, ?)`,
+			req.CardSecret, vendor, creatorID, jioSalePrice, now, now)
 		if errInsertOrder == nil {
 			orderID, _ = resOrder.LastInsertId()
 		} else {

@@ -3884,6 +3884,7 @@ func TestJioRedeemSuccess(t *testing.T) {
 	var respQuery struct {
 		Success     bool   `json:"success"`
 		ServiceType string `json:"service_type"`
+		CreatedAt   string `json:"created_at"`
 		Records     []struct {
 			DiscountURL string `json:"discount_url"`
 		} `json:"records"`
@@ -3891,6 +3892,9 @@ func TestJioRedeemSuccess(t *testing.T) {
 	_ = json.Unmarshal(rrQuery.Body.Bytes(), &respQuery)
 	if respQuery.ServiceType != "jio" {
 		t.Errorf("expected service_type 'jio' in query response, got '%s'", respQuery.ServiceType)
+	}
+	if respQuery.CreatedAt == "" {
+		t.Errorf("expected created_at in query response, got empty")
 	}
 	if len(respQuery.Records) == 0 || respQuery.Records[0].DiscountURL != resp.Data.OfferURL {
 		t.Errorf("query records mismatch, got: %+v", respQuery.Records)
@@ -4739,6 +4743,209 @@ func TestConvertKeysFromOfferLinksAndRedeem(t *testing.T) {
 	}
 
 	_ = key2
+}
+
+func TestJioPricingCalculation(t *testing.T) {
+	// 1. 测试固定价格计算
+	fixedCfg := JioPricingConfig{
+		PricingMode: "fixed",
+		FixedPrice:  6.88,
+	}
+	priceFixed := CalculateJioSalePrice(0.40, fixedCfg)
+	if priceFixed != 6.88 {
+		t.Errorf("expected fixed price 6.88, got %.2f", priceFixed)
+	}
+
+	// 2. 测试比例计算: 成本 0.40, 汇率 7.20, 加价 1.35 -> 原值 = 0.40 * 7.20 * 1.35 = 3.888
+	baseCfg := JioPricingConfig{
+		PricingMode:  "ratio",
+		ExchangeRate: 7.20,
+		Ratio:        1.35,
+	}
+
+	// 2.1 向上取整 (Ceil)
+	ceilCfg2 := baseCfg
+	ceilCfg2.RoundMode = "ceil"
+	ceilCfg2.RoundPrecision = 2 // 3.888 -> 3.89
+	if p := CalculateJioSalePrice(0.40, ceilCfg2); p != 3.89 {
+		t.Errorf("expected ceil p2: 3.89, got %.2f", p)
+	}
+
+	ceilCfg1 := baseCfg
+	ceilCfg1.RoundMode = "ceil"
+	ceilCfg1.RoundPrecision = 1 // 3.888 -> 3.90
+	if p := CalculateJioSalePrice(0.40, ceilCfg1); p != 3.90 {
+		t.Errorf("expected ceil p1: 3.90, got %.2f", p)
+	}
+
+	ceilCfg0 := baseCfg
+	ceilCfg0.RoundMode = "ceil"
+	ceilCfg0.RoundPrecision = 0 // 3.888 -> 4.00
+	if p := CalculateJioSalePrice(0.40, ceilCfg0); p != 4.00 {
+		t.Errorf("expected ceil p0: 4.00, got %.2f", p)
+	}
+
+	// 2.2 向下舍去 (Floor)
+	floorCfg2 := baseCfg
+	floorCfg2.RoundMode = "floor"
+	floorCfg2.RoundPrecision = 2 // 3.888 -> 3.88
+	if p := CalculateJioSalePrice(0.40, floorCfg2); p != 3.88 {
+		t.Errorf("expected floor p2: 3.88, got %.2f", p)
+	}
+
+	floorCfg1 := baseCfg
+	floorCfg1.RoundMode = "floor"
+	floorCfg1.RoundPrecision = 1 // 3.888 -> 3.80
+	if p := CalculateJioSalePrice(0.40, floorCfg1); p != 3.80 {
+		t.Errorf("expected floor p1: 3.80, got %.2f", p)
+	}
+
+	floorCfg0 := baseCfg
+	floorCfg0.RoundMode = "floor"
+	floorCfg0.RoundPrecision = 0 // 3.888 -> 3.00
+	if p := CalculateJioSalePrice(0.40, floorCfg0); p != 3.00 {
+		t.Errorf("expected floor p0: 3.00, got %.2f", p)
+	}
+
+	// 2.3 四舍五入 (Round)
+	roundCfg2 := baseCfg
+	roundCfg2.RoundMode = "round"
+	roundCfg2.RoundPrecision = 2 // 3.888 -> 3.89
+	if p := CalculateJioSalePrice(0.40, roundCfg2); p != 3.89 {
+		t.Errorf("expected round p2: 3.89, got %.2f", p)
+	}
+
+	roundCfg0 := baseCfg
+	roundCfg0.RoundMode = "round"
+	roundCfg0.RoundPrecision = 0 // 3.888 -> 4.00
+	if p := CalculateJioSalePrice(0.40, roundCfg0); p != 4.00 {
+		t.Errorf("expected round p0: 4.00, got %.2f", p)
+	}
+}
+
+func TestJioPricingAPIAndOrderExport(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		t.Skip("MySQL not available")
+	}
+
+	// 1. 设置管理员会话
+	adminCookie := createTestAdminSession(t, "admin_pricing", "admin", []string{"orders", "jio_pricing", "settings"})
+
+	// 2. 测试 POST /api/admin/jio/pricing
+	updatePayload := map[string]interface{}{
+		"pricing_mode":    "ratio",
+		"fixed_price":     6.50,
+		"exchange_rate":   7.25,
+		"ratio":           1.50,
+		"round_mode":      "ceil",
+		"round_precision": 2,
+	}
+	bodyBytes, _ := json.Marshal(updatePayload)
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/jio/pricing", bytes.NewBuffer(bodyBytes))
+	reqUpdate.AddCookie(adminCookie)
+	rrUpdate := httptest.NewRecorder()
+	handleAdminJioPricing(rrUpdate, reqUpdate)
+
+	if rrUpdate.Code != http.StatusOK {
+		t.Fatalf("expected 200 from POST /api/admin/jio/pricing, got %d: %s", rrUpdate.Code, rrUpdate.Body.String())
+	}
+
+	// 3. 测试 GET /api/admin/jio/pricing
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/admin/jio/pricing", nil)
+	reqGet.AddCookie(adminCookie)
+	rrGet := httptest.NewRecorder()
+	handleAdminJioPricing(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 from GET /api/admin/jio/pricing, got %d", rrGet.Code)
+	}
+	var getResp struct {
+		Success          bool             `json:"success"`
+		CurrentSalePrice float64          `json:"current_sale_price"`
+		Config           JioPricingConfig `json:"config"`
+	}
+	_ = json.Unmarshal(rrGet.Body.Bytes(), &getResp)
+	if !getResp.Success {
+		t.Errorf("expected success true in pricing config response")
+	}
+	if getResp.Config.PricingMode != "ratio" {
+		t.Errorf("expected pricing_mode 'ratio', got '%s'", getResp.Config.PricingMode)
+	}
+	if getResp.CurrentSalePrice <= 0 {
+		t.Errorf("expected positive sale price, got %.2f", getResp.CurrentSalePrice)
+	}
+
+	// 4. 测试在 orders 表插入带有 sale_price 的订单
+	testSecret := "TEST_EXPORT_KEY_888"
+	resOrder, errInsert := db.Exec(`
+		INSERT INTO orders (card_secret, mode, vendor, creator_id, service_type, sale_price, created_at, updated_at) 
+		VALUES (?, 'jio', 'acczone', 1, 'jio', 4.35, NOW(), NOW())`,
+		testSecret)
+	if errInsert != nil {
+		t.Fatalf("failed to insert order with sale_price: %v", errInsert)
+	}
+	orderID, _ := resOrder.LastInsertId()
+
+	_, _ = db.Exec(`
+		INSERT INTO account_records (order_id, card_secret, username, password, two_factor, status, message, discount_url, created_at, updated_at, completed_at)
+		VALUES (?, ?, 'user_test@gmail.com', '-', '-', 'success', '兑换链接获取成功', 'https://one.google.com/promo/hasoffer?token=TEST_TOKEN', NOW(), NOW(), NOW())`,
+		orderID, testSecret)
+
+	// 5. 验证订单列表 handleAdminOrders 返回 sale_price
+	reqOrders := httptest.NewRequest(http.MethodGet, "/api/admin/orders?query="+testSecret, nil)
+	reqOrders.AddCookie(adminCookie)
+	rrOrders := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrders)(rrOrders, reqOrders)
+	if rrOrders.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleAdminOrders, got %d: %s", rrOrders.Code, rrOrders.Body.String())
+	}
+	var ordersResp struct {
+		Success bool `json:"success"`
+		Records []struct {
+			CardSecret string  `json:"card_secret"`
+			SalePrice  float64 `json:"sale_price"`
+		} `json:"records"`
+	}
+	_ = json.Unmarshal(rrOrders.Body.Bytes(), &ordersResp)
+	if len(ordersResp.Records) == 0 {
+		t.Fatalf("expected at least 1 order record in search")
+	}
+	if ordersResp.Records[0].SalePrice != 4.35 {
+		t.Errorf("expected order sale_price 4.35, got %.2f", ordersResp.Records[0].SalePrice)
+	}
+
+	// 6. 测试订单报表导出 handleAdminOrdersExport
+	reqExport := httptest.NewRequest(http.MethodGet, "/api/admin/orders/export?query="+testSecret, nil)
+	reqExport.AddCookie(adminCookie)
+	rrExport := httptest.NewRecorder()
+	requirePermission("orders", handleAdminOrdersExport)(rrExport, reqExport)
+
+	if rrExport.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleAdminOrdersExport, got %d: %s", rrExport.Code, rrExport.Body.String())
+	}
+
+	contentType := rrExport.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/csv") {
+		t.Errorf("expected text/csv content type, got '%s'", contentType)
+	}
+
+	exportBody := rrExport.Body.String()
+	// 验证包含 UTF-8 BOM
+	if !strings.HasPrefix(exportBody, "\xef\xbb\xbf") {
+		t.Errorf("expected CSV export to start with UTF-8 BOM")
+	}
+
+	// 验证表头与导出数据行
+	if !strings.Contains(exportBody, "销售价格(元)") {
+		t.Errorf("expected CSV header to contain '销售价格(元)'")
+	}
+	if !strings.Contains(exportBody, testSecret) {
+		t.Errorf("expected CSV to contain order card_secret '%s'", testSecret)
+	}
+	if !strings.Contains(exportBody, "4.35") {
+		t.Errorf("expected CSV to contain sale price '4.35'")
+	}
 }
 
 

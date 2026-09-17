@@ -243,6 +243,7 @@ window.applyNavPermissions = function(role, permissions) {
         '/admin/convert.html': 'convert',
         '/admin/reset.html': 'reset',
         '/admin/settings.html': 'settings',
+        '/admin/jio_pricing.html': 'jio_pricing',
         '/admin/users.html': 'users',
         '/admin/faqs.html': 'faqs'
     };

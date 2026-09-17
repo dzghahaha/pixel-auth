@@ -803,6 +803,36 @@ select {
     100% { transform: scale(0.9); opacity: 0.6; }
 }
 
+/* Service Category Badges (Jio / Pixel) - Centered without dot pseudo-element */
+.service-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 6px;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+
+.service-badge::before {
+    display: none !important;
+}
+
+.service-badge.jio {
+    background-color: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.service-badge.pixel {
+    background-color: #e0e7ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+}
+
 /* Pagination panel */
 .pagination-container {
     display: flex;

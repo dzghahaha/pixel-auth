@@ -161,7 +161,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT o.id, o.card_secret, o.mode, COALESCE(o.service_type, 'pixel'), COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
+		SELECT o.id, o.card_secret, o.mode, COALESCE(o.service_type, 'pixel'), COALESCE(o.sale_price, 0.00), COALESCE(r.username, ''), COALESCE(r.password, ''), COALESCE(r.two_factor, ''), COALESCE(r.extra_email, ''), 
 		       COALESCE(r.status, ''), COALESCE(r.message, ''), COALESCE(NULLIF(r.discount_url, ''), sk.discount_url, ''), o.vendor, COALESCE(r.task_id, ''), 
 		       o.created_at, o.updated_at, r.completed_at, COALESCE(sk.vendor_key, '') AS vendor_key, COALESCE(sk.note, '') AS note, COALESCE(sk.original_key, '') AS original_key,
 		       COALESCE(NULLIF(a.nickname, ''), a.username, '') AS creator_name
@@ -198,6 +198,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 		CardSecret  string     `json:"card_secret"`
 		Mode        string     `json:"mode"`
 		ServiceType string     `json:"service_type"`
+		SalePrice   float64    `json:"sale_price"`
 		Username    string     `json:"username"`
 		Password    string     `json:"password"`
 		TwoFactor   string     `json:"two_factor"`
@@ -225,6 +226,7 @@ func handleAdminOrders(w http.ResponseWriter, r *http.Request) {
 			&row.CardSecret,
 			&row.Mode,
 			&row.ServiceType,
+			&row.SalePrice,
 			&row.Username,
 			&row.Password,
 			&row.TwoFactor,
@@ -1665,6 +1667,9 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 		thirtyDaysTotal += count
 	}
 
+	jioCfg := GetJioPricingConfig()
+	jioSalePrice := CalculateJioSalePrice(jioCfg.CachedCost, jioCfg)
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"today": map[string]interface{}{
@@ -1673,6 +1678,13 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 			"failed":       todayFailed,
 			"other":        todayOther,
 			"success_rate": todaySuccessRate,
+		},
+		"jio_pricing": map[string]interface{}{
+			"sale_price":   jioSalePrice,
+			"pricing_mode": jioCfg.PricingMode,
+			"fixed_price":  jioCfg.FixedPrice,
+			"ratio":        jioCfg.Ratio,
+			"cached_cost":  jioCfg.CachedCost,
 		},
 		"summary_30d": map[string]interface{}{
 			"total":   thirtyDaysTotal,

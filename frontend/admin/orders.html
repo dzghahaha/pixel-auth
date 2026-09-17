@@ -171,6 +171,30 @@
             border-color: #f59e0b;
         }
 
+        .btn-export-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            color: var(--slate-700);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            white-space: nowrap;
+            height: 38px;
+        }
+
+        .btn-export-action:hover {
+            background: var(--slate-50);
+            border-color: var(--slate-400);
+            color: var(--slate-900);
+        }
+
         /* Result Table Refinements */
         .result-table th,
         .result-table td {
@@ -750,6 +774,7 @@
             <a href="/admin/devices.html" class="nav-item">设备列表</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
+            <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -889,6 +914,14 @@
                         </svg>
                         一键恢复排队
                     </button>
+                    <button type="button" id="btn-export-orders" class="btn-export-action" title="导出符合当前筛选条件的全部订单报表 (Excel CSV)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px; margin-right:5px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        导出订单报表
+                    </button>
                 </div>
             </div>
         </div>
@@ -902,6 +935,7 @@
                             <th class="admin-only" style="width: 45px; text-align: center;">ID</th>
                             <th style="min-width: 135px;">系统卡密</th>
                             <th style="width: 70px; text-align: center;">业务分类</th>
+                            <th style="width: 85px; text-align: right;">销售价格</th>
                             <th style="min-width: 110px;">源Key</th>
                             <th style="max-width: 120px;">卡密备注</th>
                             <th style="min-width: 130px; text-align: center;">订阅链接</th>
@@ -915,7 +949,7 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="12" style="padding: 48px 0; text-align: center;">
+                            <td colspan="13" style="padding: 48px 0; text-align: center;">
                                 <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 12px; justify-content: center; width: 100%;">
                                     <div class="loader-spinner"></div>
                                     <span style="font-size: 13px; color: var(--slate-400); font-weight: 500;">正在加载订单列表数据...</span>
@@ -950,6 +984,10 @@
                     <div class="detail-cell">
                         <span class="detail-label">系统卡密</span>
                         <span id="detail-card" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-cell">
+                        <span class="detail-label">销售价格</span>
+                        <span id="detail-sale-price" class="detail-value" style="font-weight: 700; color: #4f46e5;">-</span>
                     </div>
                     <div class="detail-cell admin-only">
                         <span class="detail-label">供应商原始卡密</span>
@@ -1165,6 +1203,7 @@
             const btnCloseModal = document.getElementById('btn-close-modal');
 
             const detailCard = document.getElementById('detail-card');
+            const detailSalePrice = document.getElementById('detail-sale-price');
             const detailVendorKey = document.getElementById('detail-vendor-key');
             const detailMode = document.getElementById('detail-mode');
             const detailVendor = document.getElementById('detail-vendor');
@@ -1389,8 +1428,8 @@
                             const vendorTask = o.vendor ? `${o.vendor}<br><span style="font-size:11px;color:var(--slate-400);">${o.task_id || '-'}</span>` : '-';
 
                             const serviceBadge = o.service_type === 'jio'
-                                ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>'
-                                : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
+                                ? '<span class="service-badge jio">Jio</span>'
+                                : '<span class="service-badge pixel">Pixel</span>';
 
                             let subLinkCellHtml = '<span class="sub-link-empty-badge na">-</span>';
                             if (o.discount_url) {
@@ -1425,6 +1464,7 @@
                                 <td class="admin-only" style="font-size: 12px; color: var(--slate-500); text-align: center;">${o.id}</td>
                                 <td style="font-family: monospace; font-weight: 600; color: var(--slate-900); font-size: 12px;">${o.card_secret}</td>
                                 <td style="text-align: center;">${serviceBadge}</td>
+                                <td style="text-align: right; font-family: monospace; font-weight: 600; font-size: 12px; color: #4f46e5;">￥${parseFloat(o.sale_price || 0).toFixed(2)}</td>
                                 <td style="font-family: monospace; font-size: 12px; color: var(--slate-600); max-width: 130px; overflow: hidden; text-overflow: ellipsis;" title="${o.original_key || ''}">${o.original_key || '-'}</td>
                                 <td style="font-size: 12px; color: var(--slate-700); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${o.note || ''}">${o.note || '-'}</td>
                                 <td style="text-align: center;">${subLinkCellHtml}</td>
@@ -1516,6 +1556,9 @@
 
                 activeOrderID = orderID;
                 detailCard.textContent = order.card_secret;
+                if (detailSalePrice) {
+                    detailSalePrice.textContent = '￥' + parseFloat(order.sale_price || 0).toFixed(2);
+                }
                 detailVendorKey.textContent = order.vendor_key || '暂无原始密钥';
                 detailMode.textContent = order.mode === 'single' ? '单账号提交' : (order.mode === 'jio' ? '链接兑换' : '批量提交');
                 detailVendor.textContent = order.vendor || '自营渠道';
@@ -2487,6 +2530,47 @@
                         console.error(e);
                         showToast('网络错误，无法恢复排队');
                     }
+                });
+            }
+
+            const btnExportOrders = document.getElementById('btn-export-orders');
+            if (btnExportOrders) {
+                btnExportOrders.addEventListener('click', () => {
+                    const queryVal = searchInput.value.trim();
+                    const originalKeyVal = searchOriginalKey.value.trim();
+                    const noteVal = searchNote.value.trim();
+                    const statusVal = statusSelect.value;
+                    const serviceTypeVal = serviceTypeSelect ? serviceTypeSelect.value : '';
+                    const creatorVal = creatorSelect ? creatorSelect.value : '';
+
+                    let startTimeVal = '';
+                    let endTimeVal = '';
+
+                    if (filterStartTime.value) {
+                        const startD = new Date(filterStartTime.value + 'T00:00:00');
+                        if (!isNaN(startD.getTime())) {
+                            startTimeVal = Math.floor(startD.getTime() / 1000).toString();
+                        }
+                    }
+                    if (filterEndTime.value) {
+                        const endD = new Date(filterEndTime.value + 'T23:59:59');
+                        if (!isNaN(endD.getTime())) {
+                            endTimeVal = Math.floor(endD.getTime() / 1000).toString();
+                        }
+                    }
+
+                    const params = new URLSearchParams();
+                    if (queryVal) params.set('query', queryVal);
+                    if (statusVal) params.set('status', statusVal);
+                    if (serviceTypeVal) params.set('service_type', serviceTypeVal);
+                    if (originalKeyVal) params.set('original_key', originalKeyVal);
+                    if (noteVal) params.set('note', noteVal);
+                    if (startTimeVal) params.set('start_time', startTimeVal);
+                    if (endTimeVal) params.set('end_time', endTimeVal);
+                    if (creatorVal) params.set('creator_id', creatorVal);
+
+                    showToast('正在导出订单报表...');
+                    window.location.href = `/api/admin/orders/export?` + params.toString();
                 });
             }
             searchInput.addEventListener('keypress', (e) => {

@@ -387,6 +387,7 @@
             <a href="/admin/devices.html" class="nav-item">设备列表</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
+            <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -998,8 +999,8 @@
                             }
 
                             const serviceBadge = k.service_type === 'jio' 
-                                ? '<span class="status-badge" style="background:#dcfce7;color:#15803d;font-weight:700;">Jio</span>' 
-                                : '<span class="status-badge" style="background:#e0e7ff;color:#4338ca;font-weight:700;">Pixel</span>';
+                                ? '<span class="service-badge jio">Jio</span>' 
+                                : '<span class="service-badge pixel">Pixel</span>';
 
                             tr.innerHTML = `
                                 <td class="admin-only">${k.id}</td>

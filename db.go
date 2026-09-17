@@ -121,6 +121,7 @@ func createTables() {
 		vendor VARCHAR(64) NOT NULL DEFAULT '',
 		creator_id BIGINT UNSIGNED DEFAULT NULL,
 		service_type VARCHAR(32) NOT NULL DEFAULT 'pixel',
+		sale_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		UNIQUE KEY idx_card_secret (card_secret),
@@ -366,6 +367,7 @@ func createTables() {
 	// Migration: Add service_type to orders, system_keys, card_stock if they don't exist
 	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
 	_, _ = db.Exec("ALTER TABLE orders ADD KEY idx_orders_service_type (service_type)")
+	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN sale_price DECIMAL(10,2) NOT NULL DEFAULT 0.00")
 
 	_, _ = db.Exec("ALTER TABLE system_keys ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
 	_, _ = db.Exec("ALTER TABLE system_keys ADD KEY idx_sk_service_type (service_type)")
@@ -396,31 +398,39 @@ func createTables() {
 
 	// Insert default settings if not present
 	defaultSettings := map[string]string{
-		"two_factor_tutorial_url": "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1",
-		"jio_active_provider":     "mock",
-		"jio_provider_config":     "{}",
-		"jio_proxy":               "",
-		"jio_proxy_enabled":       "off",
-		"jio_proxy_protocol":      "http",
-		"jio_proxy_host":          "",
-		"jio_proxy_port":          "",
-		"jio_proxy_username":      "",
-		"jio_proxy_password":      "",
-		"proxy_enabled":           "off",
-		"proxy_url":               "",
-		"maintenance_mode":        "off",
-		"maintenance_mode_pixel":  "off",
-		"maintenance_mode_jio":    "off",
-		"epay_pid":                "1668",
-		"epay_key":                "",
-		"epay_url":                "https://pay.vansdesign.cn/",
-		"epay_wx_channel":         "201906181353",
-		"epay_alipay_channel":     "",
-		"key_price":               "9.99",
-		"key_tier_prices":         "[]",
-		"deard_convert_open":      "off",
-		"log_cleanup_open":        "off",
-		"log_cleanup_days":        "30",
+		"two_factor_tutorial_url":     "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1",
+		"jio_active_provider":         "mock",
+		"jio_provider_config":         "{}",
+		"jio_proxy":                   "",
+		"jio_proxy_enabled":           "off",
+		"jio_proxy_protocol":          "http",
+		"jio_proxy_host":              "",
+		"jio_proxy_port":              "",
+		"jio_proxy_username":          "",
+		"jio_proxy_password":          "",
+		"jio_pricing_mode":            "ratio",
+		"jio_pricing_fixed_price":      "5.00",
+		"jio_pricing_exchange_rate":    "7.20",
+		"jio_pricing_ratio":            "1.50",
+		"jio_pricing_round_mode":       "round",
+		"jio_pricing_round_precision":  "2",
+		"jio_pricing_cached_cost":      "0.40",
+		"jio_pricing_cached_at":        "",
+		"proxy_enabled":               "off",
+		"proxy_url":                   "",
+		"maintenance_mode":            "off",
+		"maintenance_mode_pixel":      "off",
+		"maintenance_mode_jio":        "off",
+		"epay_pid":                    "1668",
+		"epay_key":                    "",
+		"epay_url":                    "https://pay.vansdesign.cn/",
+		"epay_wx_channel":             "201906181353",
+		"epay_alipay_channel":         "",
+		"key_price":                   "9.99",
+		"key_tier_prices":             "[]",
+		"deard_convert_open":          "off",
+		"log_cleanup_open":            "off",
+		"log_cleanup_days":            "30",
 	}
 	for k, v := range defaultSettings {
 		var countSettings int

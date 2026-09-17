@@ -220,6 +220,7 @@ func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"/admin/vendors.html":     "vendors",
 				"/admin/logs.html":        "logs",
 				"/admin/settings.html":    "settings",
+				"/admin/jio_pricing.html": "jio_pricing",
 			}
 
 			if path == "/admin/users.html" {
@@ -389,7 +390,7 @@ func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
 
 	permissions := []string{}
 	if role == "admin" {
-		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs"}
+		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs", "devices", "faqs", "jio_pricing"}
 	} else {
 		rows, err := db.Query("SELECT permission FROM admin_permissions WHERE admin_id = ?", adminID)
 		if err == nil {

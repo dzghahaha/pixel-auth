@@ -10,8 +10,8 @@
         /* Stats Grid System */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 20px;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
             margin-bottom: 24px;
         }
 
@@ -168,7 +168,7 @@
         }
 
         /* Mobile Responsive & Auto-Scaling System */
-        @media (max-width: 1024px) {
+        @media (max-width: 1200px) {
             .stats-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
@@ -221,6 +221,7 @@
             <a href="/admin/devices.html" class="nav-item">设备列表</a>
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
+            <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -307,6 +308,22 @@
                 <span class="stat-title">今日成功率</span>
                 <span class="stat-value" id="stat-rate" style="color: var(--text-primary);">-</span>
                 <span class="stat-footer">成功订单 / 总订单</span>
+            </div>
+
+            <!-- Jio 销售价格 -->
+            <div class="stat-card" style="border-top: 3px solid #6366f1;">
+                <div class="card-icon-wrapper" style="background-color: #eef2ff;">
+                    <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span class="stat-title">Jio 销售价格</span>
+                    <span class="service-badge jio" style="font-size: 10px; padding: 1px 6px;">Jio</span>
+                </div>
+                <span class="stat-value" id="stat-jio-price" style="color: #4f46e5;">￥-</span>
+                <span class="stat-footer">当前执行销售单价</span>
             </div>
         </div>
 
@@ -396,6 +413,14 @@
                         document.getElementById('stat-failed').textContent = data.today.failed;
                         document.getElementById('stat-other').textContent = data.today.other;
                         document.getElementById('stat-rate').textContent = data.today.success_rate + '%';
+
+                        if (data.jio_pricing) {
+                            const jioPrice = parseFloat(data.jio_pricing.sale_price || 0);
+                            const jioPriceEl = document.getElementById('stat-jio-price');
+                            if (jioPriceEl) {
+                                jioPriceEl.textContent = `￥${jioPrice.toFixed(2)}`;
+                            }
+                        }
                         
                         document.getElementById('summary-30d-total').textContent = data.summary_30d.total;
                         document.getElementById('summary-30d-success').textContent = data.summary_30d.success;
