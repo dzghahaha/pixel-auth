@@ -244,6 +244,7 @@ window.applyNavPermissions = function(role, permissions) {
         '/admin/reset.html': 'reset',
         '/admin/settings.html': 'settings',
         '/admin/jio_pricing.html': 'jio_pricing',
+        '/admin/jio_wallet.html': 'jio_wallet',
         '/admin/users.html': 'users',
         '/admin/faqs.html': 'faqs'
     };

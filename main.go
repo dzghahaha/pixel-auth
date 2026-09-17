@@ -83,6 +83,12 @@ func main() {
 	http.HandleFunc("/api/admin/jio/pricing", limit(requirePermission("jio_pricing", handleAdminJioPricing)))
 	http.HandleFunc("/api/admin/jio/costs", limit(requirePermission("jio_pricing", handleAdminJioCosts)))
 	http.HandleFunc("/api/admin/jio/test_proxy", limit(requirePermission("settings", handleAdminJioTestProxy)))
+
+	// Jio Wallet APIs
+	http.HandleFunc("/api/admin/jio/wallet/summary", limit(requireAdmin(handleAdminJioWalletSummary)))
+	http.HandleFunc("/api/admin/jio/wallet/transactions", limit(requireAdmin(handleAdminJioWalletTransactions)))
+	http.HandleFunc("/api/admin/jio/wallet/recharge", limit(requireAdmin(handleAdminJioWalletSelfRecharge)))
+	http.HandleFunc("/api/admin/jio/wallet/admin_recharge", limit(requireSuperAdmin(handleAdminJioWalletAdminRecharge)))
 	http.HandleFunc("/api/admin/logs", limit(requirePermission("logs", handleAdminLogs)))
 	http.HandleFunc("/api/admin/devices/selector", limit(requirePermission("logs", handleAdminDevicesSelector)))
 	http.HandleFunc("/api/admin/devices", limit(requirePermission("devices", handleAdminDevices)))

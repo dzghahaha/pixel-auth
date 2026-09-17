@@ -4948,6 +4948,136 @@ func TestJioPricingAPIAndOrderExport(t *testing.T) {
 	}
 }
 
+func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		t.Skip("MySQL not available")
+	}
+
+	// 1. 创建操作员用户 operator1 (初始余额 0)
+	operatorCookie := createTestAdminSession(t, "operator_wallet_test", "user", []string{"jio_wallet"})
+	var operatorID int64
+	_ = db.QueryRow("SELECT id FROM admins WHERE username = 'operator_wallet_test'").Scan(&operatorID)
+	_, _ = db.Exec("UPDATE admins SET jio_balance = 0.00 WHERE id = ?", operatorID)
+
+	superAdminCookie := createTestAdminSession(t, "admin_wallet_super", "admin", []string{"orders", "settings", "jio_pricing", "jio_wallet", "users"})
+
+	// 2. 创建归属于该操作员的 Jio 卡密
+	testCardSecret := "JIO-WALLET-TEST-KEY-999"
+	_, errKey := db.Exec(`
+		INSERT INTO system_keys (system_key, vendor, vendor_key, status, service_type, original_key, note, creator_id, created_at, updated_at)
+		VALUES (?, 'mock', '', 'active', 'jio', '', '钱包扣费测试卡', ?, NOW(), NOW())`,
+		testCardSecret, operatorID)
+	if errKey != nil {
+		t.Fatalf("failed to insert system key: %v", errKey)
+	}
+
+	// 确保定价为固定 5.00 元
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_pricing_mode', 'fixed', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'fixed'")
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_pricing_fixed_price', '5.00', NOW()) ON DUPLICATE KEY UPDATE setting_value = '5.00'")
+
+	// 3. C端提交兑换：此时操作员余额为 0.00 < 5.00，必须被拦截报错
+	redeemPayload := map[string]string{
+		"card_secret": testCardSecret,
+	}
+	redeemBytes, _ := json.Marshal(redeemPayload)
+	reqRedeem1 := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", bytes.NewBuffer(redeemBytes))
+	rrRedeem1 := httptest.NewRecorder()
+	handleJioRedeem(rrRedeem1, reqRedeem1)
+
+	if rrRedeem1.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when wallet balance is insufficient, got %d: %s", rrRedeem1.Code, rrRedeem1.Body.String())
+	}
+	if !strings.Contains(rrRedeem1.Body.String(), "储值余额不足") {
+		t.Errorf("expected insufficient balance error message, got: %s", rrRedeem1.Body.String())
+	}
+
+	// 4. 超级管理员为该用户代充 100.00 元
+	adminRechargePayload := map[string]interface{}{
+		"target_admin_id": operatorID,
+		"amount":          100.00,
+		"remark":          "管理员测试代充",
+	}
+	adminRechargeBytes, _ := json.Marshal(adminRechargePayload)
+	reqAdminRecharge := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/admin_recharge", bytes.NewBuffer(adminRechargeBytes))
+	reqAdminRecharge.AddCookie(superAdminCookie)
+	rrAdminRecharge := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletAdminRecharge)(rrAdminRecharge, reqAdminRecharge)
+
+	if rrAdminRecharge.Code != http.StatusOK {
+		t.Fatalf("expected 200 from admin_recharge, got %d: %s", rrAdminRecharge.Code, rrAdminRecharge.Body.String())
+	}
+
+	// 5. 验证操作员钱包余额变为 100.00
+	bal, errBal := GetAdminJioBalance(operatorID)
+	if errBal != nil || bal != 100.00 {
+		t.Fatalf("expected balance 100.00, got %.2f (err: %v)", bal, errBal)
+	}
+
+	// 6. C端再次提交兑换：余额充足，扣除 5.00 元并成功生成链接
+	reqRedeem2 := httptest.NewRequest(http.MethodPost, "/api/jio/redeem", bytes.NewBuffer(redeemBytes))
+	rrRedeem2 := httptest.NewRecorder()
+	handleJioRedeem(rrRedeem2, reqRedeem2)
+
+	if rrRedeem2.Code != http.StatusOK {
+		t.Fatalf("expected 200 after balance recharge, got %d: %s", rrRedeem2.Code, rrRedeem2.Body.String())
+	}
+
+	// 7. 验证扣费后操作员余额变为 95.00
+	balAfter, _ := GetAdminJioBalance(operatorID)
+	if balAfter != 95.00 {
+		t.Errorf("expected balance 95.00 after redeem, got %.2f", balAfter)
+	}
+
+	// 8. 验证流水列表包含代充和消费两笔记录
+	reqTx := httptest.NewRequest(http.MethodGet, "/api/admin/jio/wallet/transactions", nil)
+	reqTx.AddCookie(operatorCookie)
+	rrTx := httptest.NewRecorder()
+	requireAdmin(handleAdminJioWalletTransactions)(rrTx, reqTx)
+
+	if rrTx.Code != http.StatusOK {
+		t.Fatalf("expected 200 from wallet transactions, got %d", rrTx.Code)
+	}
+
+	var txResp struct {
+		Success bool                   `json:"success"`
+		Total   int64                  `json:"total"`
+		Records []JioWalletTransaction `json:"records"`
+	}
+	_ = json.Unmarshal(rrTx.Body.Bytes(), &txResp)
+	if txResp.Total < 2 {
+		t.Errorf("expected at least 2 wallet transactions, got %d", txResp.Total)
+	}
+
+	// 9. 验证操作员钱包 summary 统计
+	reqSum := httptest.NewRequest(http.MethodGet, "/api/admin/jio/wallet/summary", nil)
+	reqSum.AddCookie(operatorCookie)
+	rrSum := httptest.NewRecorder()
+	requireAdmin(handleAdminJioWalletSummary)(rrSum, reqSum)
+
+	if rrSum.Code != http.StatusOK {
+		t.Fatalf("expected 200 from wallet summary, got %d", rrSum.Code)
+	}
+	var sumResp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Balance       float64 `json:"balance"`
+			TodayConsume  float64 `json:"today_consume"`
+			TotalRecharge float64 `json:"total_recharge"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(rrSum.Body.Bytes(), &sumResp)
+	if sumResp.Data.Balance != 95.00 {
+		t.Errorf("expected summary balance 95.00, got %.2f", sumResp.Data.Balance)
+	}
+	if sumResp.Data.TotalRecharge != 100.00 {
+		t.Errorf("expected total recharge 100.00, got %.2f", sumResp.Data.TotalRecharge)
+	}
+	if sumResp.Data.TodayConsume != 5.00 {
+		t.Errorf("expected today consume 5.00, got %.2f", sumResp.Data.TodayConsume)
+	}
+}
+
 
 
 

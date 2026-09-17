@@ -179,6 +179,7 @@ func createTables() {
 		password_hash VARCHAR(255) NOT NULL,
 		role VARCHAR(32) NOT NULL DEFAULT 'user',
 		permissions TEXT DEFAULT NULL,
+		jio_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
@@ -204,6 +205,24 @@ func createTables() {
 		UNIQUE KEY idx_admin_permission (admin_id, permission)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
 
+	jioWalletTransactionsDDL := `
+	CREATE TABLE IF NOT EXISTS jio_wallet_transactions (
+		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+		admin_id BIGINT UNSIGNED NOT NULL,
+		type VARCHAR(32) NOT NULL,
+		amount DECIMAL(10,2) NOT NULL,
+		balance_before DECIMAL(10,2) NOT NULL,
+		balance_after DECIMAL(10,2) NOT NULL,
+		order_id BIGINT UNSIGNED DEFAULT NULL,
+		card_secret VARCHAR(128) NOT NULL DEFAULT '',
+		remark VARCHAR(255) NOT NULL DEFAULT '',
+		operator_id BIGINT UNSIGNED DEFAULT NULL,
+		created_at DATETIME NOT NULL,
+		KEY idx_jwt_admin_id (admin_id),
+		KEY idx_jwt_type (type),
+		KEY idx_jwt_created_at (created_at)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+
 	log.Println("Ensuring database tables 'orders', 'account_records', 'system_keys', 'admins', 'admin_sessions', and 'admin_permissions' exist...")
 	if _, err := db.Exec(ordersDDL); err != nil {
 		log.Fatalf("Error creating orders table: %v", err)
@@ -223,6 +242,10 @@ func createTables() {
 
 	if _, err := db.Exec(adminPermissionsDDL); err != nil {
 		log.Fatalf("Error creating admin_permissions table: %v", err)
+	}
+
+	if _, err := db.Exec(jioWalletTransactionsDDL); err != nil {
+		log.Fatalf("Error creating jio_wallet_transactions table: %v", err)
 	}
 
 	systemSettingsDDL := `
@@ -368,6 +391,7 @@ func createTables() {
 	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
 	_, _ = db.Exec("ALTER TABLE orders ADD KEY idx_orders_service_type (service_type)")
 	_, _ = db.Exec("ALTER TABLE orders ADD COLUMN sale_price DECIMAL(10,2) NOT NULL DEFAULT 0.00")
+	_, _ = db.Exec("ALTER TABLE admins ADD COLUMN jio_balance DECIMAL(10,2) NOT NULL DEFAULT 0.00")
 
 	_, _ = db.Exec("ALTER TABLE system_keys ADD COLUMN service_type VARCHAR(32) NOT NULL DEFAULT 'pixel'")
 	_, _ = db.Exec("ALTER TABLE system_keys ADD KEY idx_sk_service_type (service_type)")

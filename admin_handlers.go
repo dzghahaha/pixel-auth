@@ -2067,7 +2067,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	rows, err := db.Query("SELECT id, username, nickname, role, created_at, updated_at FROM admins ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, username, nickname, role, COALESCE(jio_balance, 0.00), created_at, updated_at FROM admins ORDER BY id ASC")
 	if err != nil {
 		log.Printf("Error querying admins: %v\n", err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -2083,6 +2083,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 		Username    string    `json:"username"`
 		Nickname    string    `json:"nickname"`
 		Role        string    `json:"role"`
+		JioBalance  float64   `json:"jio_balance"`
 		Permissions []string  `json:"permissions"`
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
@@ -2091,7 +2092,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 	var users []AdminUser
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Role, &u.JioBalance, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			log.Printf("Error scanning admin row: %v\n", err)
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,

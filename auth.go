@@ -221,6 +221,7 @@ func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"/admin/logs.html":        "logs",
 				"/admin/settings.html":    "settings",
 				"/admin/jio_pricing.html": "jio_pricing",
+				"/admin/jio_wallet.html":  "jio_wallet",
 			}
 
 			if path == "/admin/users.html" {
@@ -390,7 +391,7 @@ func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
 
 	permissions := []string{}
 	if role == "admin" {
-		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs", "devices", "faqs", "jio_pricing"}
+		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs", "devices", "faqs", "jio_pricing", "jio_wallet"}
 	} else {
 		rows, err := db.Query("SELECT permission FROM admin_permissions WHERE admin_id = ?", adminID)
 		if err == nil {
@@ -402,6 +403,8 @@ func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		// Jio Wallet is available to all logged-in admin users
+		permissions = append(permissions, "jio_wallet")
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{

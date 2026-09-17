@@ -52,6 +52,7 @@
             <a href="/admin/logs.html" class="nav-item">系统日志</a>
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
+            <a href="/admin/jio_wallet.html" class="nav-item">Jio 储值钱包</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item active">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -80,11 +81,12 @@
                         <th style="width: 80px;">用户ID</th>
                         <th>用户名</th>
                         <th>昵称</th>
-                        <th style="width: 120px;">角色</th>
+                        <th style="width: 100px;">角色</th>
+                        <th style="width: 120px; text-align: right;">Jio 储值余额</th>
                         <th>拥有菜单权限</th>
-                        <th style="width: 180px;">创建时间</th>
-                        <th style="width: 180px;">更新时间</th>
-                        <th style="width: 140px; text-align: center;">操作</th>
+                        <th style="width: 160px;">创建时间</th>
+                        <th style="width: 160px;">更新时间</th>
+                        <th style="width: 170px; text-align: center;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="users-table-body">
@@ -147,6 +149,7 @@
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="vendors"> 合作厂商</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="devices"> 设备列表</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="jio_pricing"> Jio 价格管理</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="jio_wallet"> Jio 储值钱包</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="settings"> 系统设置</label>
                         </div>
                     </div>
@@ -155,6 +158,42 @@
             <div class="modal-footer">
                 <button type="button" id="btn-cancel-user" class="btn-cancel">取消</button>
                 <button type="button" id="btn-save-user" class="btn-submit" style="margin: 0; width: 100px;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户专属代充值 Modal 弹窗 -->
+    <div id="recharge-user-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header">
+                <span class="modal-title">为用户充值 Jio 储值钱包</span>
+                <span id="close-recharge-modal" class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+                        <span style="color: var(--slate-600);">充值目标账户：</span>
+                        <strong id="recharge-target-name" style="color: var(--slate-900); font-family: monospace;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                        <span style="color: var(--slate-600);">当前储值余额：</span>
+                        <strong id="recharge-target-balance" style="color: #4f46e5; font-family: monospace;">￥0.00</strong>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="recharge-amount" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">充值金额 (元)</label>
+                    <input type="number" step="0.01" min="0.01" id="recharge-amount" placeholder="例如：100.00" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 16px; font-weight: 700; box-sizing: border-box; font-family: monospace;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="recharge-remark" style="font-weight: 600; margin-bottom: 6px; display: block; font-size: 13px; color: var(--text-secondary);">充值原因 / 对账备注</label>
+                    <input type="text" id="recharge-remark" placeholder="例如：对公打款充值 / 运营代充" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-cancel-recharge" class="btn-cancel">取消</button>
+                <button type="button" id="btn-confirm-recharge-user" class="btn-submit" style="margin: 0; width: 120px;">确认充值</button>
             </div>
         </div>
     </div>
@@ -185,6 +224,17 @@
             const modalTitle = document.getElementById('modal-title');
             const permissionsGroup = document.getElementById('permissions-group');
 
+            // User Recharge Modal Elements
+            const rechargeUserModal = document.getElementById('recharge-user-modal');
+            const closeRechargeModal = document.getElementById('close-recharge-modal');
+            const btnCancelRecharge = document.getElementById('btn-cancel-recharge');
+            const btnConfirmRechargeUser = document.getElementById('btn-confirm-recharge-user');
+            const rechargeTargetName = document.getElementById('recharge-target-name');
+            const rechargeTargetBalance = document.getElementById('recharge-target-balance');
+            const rechargeAmount = document.getElementById('recharge-amount');
+            const rechargeRemark = document.getElementById('recharge-remark');
+            let activeRechargeUserID = 0;
+
             const menuNamesMap = {
                 'dashboard': '仪表盘',
                 'orders': '订单管理',
@@ -196,6 +246,7 @@
                 'vendors': '合作厂商',
                 'devices': '设备列表',
                 'jio_pricing': 'Jio 价格管理',
+                'jio_wallet': 'Jio 储值钱包',
                 'settings': '系统设置'
             };
 
@@ -312,11 +363,13 @@
                     const createTime = new Date(u.created_at).toLocaleString();
                     const updateTime = new Date(u.updated_at).toLocaleString();
 
-                    let actionsHtml = '';
+                    let actionsHtml = `
+                        <button type="button" class="btn-detail btn-recharge-user" data-id="${u.id}" data-username="${u.username}" data-balance="${u.jio_balance || 0}" style="margin-right: 4px; padding: 4px 8px; font-size: 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe;">充值</button>
+                    `;
                     if (u.username === 'admin') {
-                        actionsHtml = `<button type="button" class="btn-detail btn-edit" data-id="${u.id}" data-username="${u.username}" data-role="${u.role}">编辑密码</button>`;
+                        actionsHtml += `<button type="button" class="btn-detail btn-edit" data-id="${u.id}" data-username="${u.username}" data-role="${u.role}">编辑密码</button>`;
                     } else {
-                        actionsHtml = `
+                        actionsHtml += `
                             <button type="button" class="btn-detail btn-edit" data-id="${u.id}" data-username="${u.username}" data-role="${u.role}">编辑</button>
                             <button type="button" class="btn-reset-key btn-delete" data-id="${u.id}" data-username="${u.username}">删除</button>
                         `;
@@ -324,15 +377,31 @@
 
                     tr.innerHTML = `
                         <td>${u.id}</td>
-                        <td style="font-weight:600;">${u.username}</td>
+                        <td style="font-weight:600; font-family: monospace;">${u.username}</td>
                         <td>${u.nickname || '-'}</td>
                         <td>${roleDisplay}</td>
+                        <td style="text-align: right; font-family: monospace; font-weight: 700; color: #4f46e5;">￥${parseFloat(u.jio_balance || 0).toFixed(2)}</td>
                         <td>${permHtml}</td>
-                        <td>${createTime}</td>
-                        <td>${updateTime}</td>
-                        <td style="text-align: center; display: flex; justify-content: center; gap: 8px;">${actionsHtml}</td>
+                        <td style="font-size: 12px; color: var(--slate-500);">${createTime}</td>
+                        <td style="font-size: 12px; color: var(--slate-500);">${updateTime}</td>
+                        <td style="text-align: center; display: flex; justify-content: center; gap: 6px;">${actionsHtml}</td>
                     `;
                     userTableBody.appendChild(tr);
+                });
+
+                // Attach Recharge Listeners
+                document.querySelectorAll('.btn-recharge-user').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        activeRechargeUserID = parseInt(btn.getAttribute('data-id'), 10);
+                        const uname = btn.getAttribute('data-username');
+                        const bal = parseFloat(btn.getAttribute('data-balance') || 0);
+                        rechargeTargetName.textContent = uname;
+                        rechargeTargetBalance.textContent = `￥${bal.toFixed(2)}`;
+                        rechargeAmount.value = '';
+                        rechargeRemark.value = '';
+                        rechargeUserModal.classList.remove('hidden');
+                        rechargeAmount.focus();
+                    });
                 });
 
                 // Attach Action Listeners
@@ -354,6 +423,49 @@
                     });
                 });
             }
+
+            // Close recharge modal
+            function closeRechargeModalHandler() {
+                rechargeUserModal.classList.add('hidden');
+            }
+            closeRechargeModal.addEventListener('click', closeRechargeModalHandler);
+            btnCancelRecharge.addEventListener('click', closeRechargeModalHandler);
+
+            // Confirm recharge for user
+            btnConfirmRechargeUser.addEventListener('click', async () => {
+                const amount = parseFloat(rechargeAmount.value) || 0;
+                if (amount <= 0) {
+                    showToast('充值金额必须大于 0');
+                    return;
+                }
+                btnConfirmRechargeUser.disabled = true;
+                btnConfirmRechargeUser.innerText = '充值中...';
+                try {
+                    const res = await fetch('/api/admin/jio/wallet/admin_recharge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            target_admin_id: activeRechargeUserID,
+                            amount: amount,
+                            remark: rechargeRemark.value.trim()
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showToast(data.message || '充值成功！');
+                        closeRechargeModalHandler();
+                        loadUsers();
+                    } else {
+                        showToast(data.message || '充值失败');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast('网络错误，代充失败');
+                } finally {
+                    btnConfirmRechargeUser.disabled = false;
+                    btnConfirmRechargeUser.innerText = '确认充值';
+                }
+            });
 
             // One-click generate password
             btnGenPwd.addEventListener('click', () => {
