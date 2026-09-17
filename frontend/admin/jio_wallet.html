@@ -750,7 +750,7 @@
             // Load Users for Admin Select
             async function loadUsersForSelect() {
                 try {
-                    const res = await fetch('/api/admin/users/list');
+                    const res = await fetch('/api/admin/users');
                     const data = await res.json();
                     if (res.ok && data.success) {
                         allUsersList = data.users || [];
@@ -762,7 +762,7 @@
                             
                             const opt = document.createElement('option');
                             opt.value = u.id;
-                            opt.textContent = `${name} - 当前余额: ￥${parseFloat(u.jio_balance || 0).toFixed(2)}`;
+                            opt.textContent = `${name} (当前余额: ￥${parseFloat(u.jio_balance || 0).toFixed(2)})`;
                             opt.setAttribute('data-balance', u.jio_balance || 0);
                             selectTargetUser.appendChild(opt);
 
@@ -771,9 +771,11 @@
                             filterOpt.textContent = name;
                             filterAdminUser.appendChild(filterOpt);
                         });
+                    } else {
+                        console.error('Failed to load users:', data.message);
                     }
                 } catch (e) {
-                    console.error(e);
+                    console.error('Error fetching /api/admin/users:', e);
                 }
             }
 

@@ -105,6 +105,7 @@ func main() {
 
 	// User Management APIs (Super Admin protected)
 	http.HandleFunc("/api/admin/users", limit(requireSuperAdmin(handleAdminUsersList)))
+	http.HandleFunc("/api/admin/users/list", limit(requireSuperAdmin(handleAdminUsersList)))
 	http.HandleFunc("/api/admin/users/create", limit(requireSuperAdmin(handleAdminUsersCreate)))
 	http.HandleFunc("/api/admin/users/update", limit(requireSuperAdmin(handleAdminUsersUpdate)))
 	http.HandleFunc("/api/admin/users/delete", limit(requireSuperAdmin(handleAdminUsersDelete)))
