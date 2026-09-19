@@ -50,6 +50,19 @@ func getAdminID(r *http.Request) (int64, bool) {
 	return adminID, ok
 }
 
+func getAdminUsername(r *http.Request) string {
+	adminID, ok := getAdminID(r)
+	if !ok {
+		return "system"
+	}
+	var username string
+	_ = db.QueryRow("SELECT username FROM admins WHERE id = ?", adminID).Scan(&username)
+	if username == "" {
+		return "admin"
+	}
+	return username
+}
+
 func hasPermission(adminID int64, permission string) bool {
 	var role string
 	err := db.QueryRow("SELECT role FROM admins WHERE id = ?", adminID).Scan(&role)

@@ -544,6 +544,7 @@
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/jio_pricing.html" class="nav-item active">Jio 价格管理</a>
             <a href="/admin/jio_wallet.html" class="nav-item">Jio 储值钱包</a>
+            <a href="/admin/jio_suppliers.html" class="nav-item">Jio 供应商</a>
             <a href="/admin/settings.html" class="nav-item">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -563,6 +564,10 @@
                 </div>
             </div>
             <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+                <a href="/admin/jio_suppliers.html" class="btn btn-secondary" style="font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                    Jio 供应商管理 &rarr;
+                </a>
                 <button type="button" id="btn-refresh-cost" class="btn-refresh-cost" title="重新请求全部第三方接口刷新成本">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;">
                         <polyline points="23 4 23 10 17 10"></polyline>
@@ -659,10 +664,11 @@
             <div class="card" style="padding: 24px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-900); margin: 0 0 16px 0;">Jio 销售价格配置策略</h3>
                 
-                <!-- 两种算法切换 Segmented -->
-                <div class="mode-segmented">
+                <!-- 三种算法切换 Segmented -->
+                <div class="mode-segmented" style="display: grid; grid-template-columns: repeat(3, 1fr);">
                     <button type="button" class="mode-segment-btn" id="btn-mode-fixed" data-mode="fixed">固定价格模式 (Fixed)</button>
-                    <button type="button" class="mode-segment-btn active" id="btn-mode-ratio" data-mode="ratio">比例加价计算模式 (Markup)</button>
+                    <button type="button" class="mode-segment-btn" id="btn-mode-fixed-markup" data-mode="fixed_markup">固定金额加价 (Markup)</button>
+                    <button type="button" class="mode-segment-btn active" id="btn-mode-ratio" data-mode="ratio">比例倍数加价 (Ratio)</button>
                 </div>
 
                 <!-- 固定价格模式输入组 -->
@@ -679,7 +685,7 @@
                     </div>
                 </div>
 
-                <!-- 比例加价计算输入组 -->
+                <!-- 动态加价计算输入组 (比例加价 或 固定金额加价) -->
                 <div id="section-ratio-mode">
                     <!-- 基准成本渠道选择 -->
                     <div class="config-form-group">
@@ -690,6 +696,7 @@
                         <select id="select-benchmark-source" class="no-custom select-clean">
                             <option value="active">跟随系统当前启用供应商 (与系统设置联动)</option>
                             <option value="lowest">全渠道自动优选最低成本 (Auto-Lowest Cost)</option>
+                            <option value="vente">锁定 Vente 采购平台 (VenteBot Reseller API)</option>
                             <option value="acczone">锁定 Acczone 采购平台 (api.acczone.xyz)</option>
                             <option value="manual">手动自定义基准成本输入</option>
                         </select>
@@ -707,7 +714,19 @@
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <!-- 固定金额加价输入组 (仅在 fixed_markup 模式显示) -->
+                    <div class="config-form-group" id="group-fixed-markup" style="display: none;">
+                        <label class="config-form-label">
+                            <span>每单固定加价金额 (元/张)</span>
+                            <span class="config-form-hint">售价 = 采购成本 (折合人民币) + 固定加价，确保每单固定净利润</span>
+                        </label>
+                        <div class="config-input-wrapper">
+                            <span class="config-input-prefix">￥</span>
+                            <input type="number" step="0.1" min="0" id="input-fixed-markup" class="config-input has-prefix" placeholder="2.00" value="2.00">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;" id="row-ratio-exchange">
                         <div class="config-form-group">
                             <label class="config-form-label">
                                 <span>美元基准汇率 (USD/CNY)</span>
@@ -718,7 +737,7 @@
                             </div>
                         </div>
 
-                        <div class="config-form-group">
+                        <div class="config-form-group" id="group-ratio">
                             <label class="config-form-label">
                                 <span>加价倍数 (比例系数)</span>
                                 <span class="config-form-hint">如 1.50 表示加价 50%</span>
@@ -870,9 +889,13 @@
 
             // Form
             const btnModeFixed = document.getElementById('btn-mode-fixed');
+            const btnModeFixedMarkup = document.getElementById('btn-mode-fixed-markup');
             const btnModeRatio = document.getElementById('btn-mode-ratio');
             const sectionFixedMode = document.getElementById('section-fixed-mode');
             const sectionRatioMode = document.getElementById('section-ratio-mode');
+            const groupFixedMarkup = document.getElementById('group-fixed-markup');
+            const inputFixedMarkup = document.getElementById('input-fixed-markup');
+            const groupRatio = document.getElementById('group-ratio');
             const selectBenchmarkSource = document.getElementById('select-benchmark-source');
             const groupManualCost = document.getElementById('group-manual-cost');
             const inputManualCost = document.getElementById('input-manual-cost');
@@ -915,12 +938,14 @@
                 }, duration);
             }
 
-            // Mode switcher
+            // Mode switcher (支持 fixed, fixed_markup, ratio)
             function setPricingMode(mode) {
                 currentMode = mode;
+                btnModeFixed.classList.toggle('active', mode === 'fixed');
+                btnModeFixedMarkup.classList.toggle('active', mode === 'fixed_markup');
+                btnModeRatio.classList.toggle('active', mode === 'ratio');
+
                 if (mode === 'fixed') {
-                    btnModeFixed.classList.add('active');
-                    btnModeRatio.classList.remove('active');
                     sectionFixedMode.classList.remove('hidden');
                     sectionRatioMode.classList.add('hidden');
 
@@ -928,10 +953,16 @@
                     simRowRaw.style.display = 'none';
                     simRowRule.style.display = 'none';
                 } else {
-                    btnModeFixed.classList.remove('active');
-                    btnModeRatio.classList.add('active');
                     sectionFixedMode.classList.add('hidden');
                     sectionRatioMode.classList.remove('hidden');
+
+                    if (mode === 'fixed_markup') {
+                        groupFixedMarkup.style.display = 'block';
+                        groupRatio.style.display = 'none';
+                    } else {
+                        groupFixedMarkup.style.display = 'none';
+                        groupRatio.style.display = 'block';
+                    }
 
                     simRowCny.style.display = 'flex';
                     simRowRaw.style.display = 'flex';
@@ -941,6 +972,7 @@
             }
 
             btnModeFixed.addEventListener('click', () => setPricingMode('fixed'));
+            btnModeFixedMarkup.addEventListener('click', () => setPricingMode('fixed_markup'));
             btnModeRatio.addEventListener('click', () => setPricingMode('ratio'));
 
             // Benchmark Source change
@@ -979,6 +1011,11 @@
                         simSourceTag.textContent = '基准: 全网最低';
                         metricBenchmarkBadge.textContent = '全网最低';
                     }
+                } else if (source === 'vente') {
+                    const v = liveCostsList.find(c => c.provider_key === 'vente');
+                    benchmarkCostUsd = (v && v.cost_price > 0) ? v.cost_price : 0.40;
+                    simSourceTag.textContent = '基准: Vente 采购平台';
+                    metricBenchmarkBadge.textContent = 'Vente';
                 } else if (source === 'acczone') {
                     const acc = liveCostsList.find(c => c.provider_key === 'acczone');
                     benchmarkCostUsd = (acc && acc.cost_price > 0) ? acc.cost_price : 0.40;
@@ -1022,18 +1059,29 @@
                     return;
                 }
 
-                // Ratio mode
                 const rate = parseFloat(inputExchangeRate.value) || 7.20;
                 currentExchangeRate = rate;
-                const ratio = parseFloat(inputRatio.value) || 1.0;
                 const roundMode = selectRoundMode.value;
                 const precision = parseInt(selectRoundPrecision.value, 10) || 0;
-
                 const costCny = costUsd * rate;
                 simCostCny.textContent = `￥${costCny.toFixed(2)}`;
 
-                const rawVal = costCny * ratio;
-                simRawVal.textContent = `￥${rawVal.toFixed(4)}`;
+                let rawVal = 0;
+                let calculationTitle = '';
+
+                if (currentMode === 'fixed_markup') {
+                    // 固定金额加价模式
+                    const markup = parseFloat(inputFixedMarkup.value) || 0;
+                    rawVal = costCny + markup;
+                    simRawVal.textContent = `￥${rawVal.toFixed(4)} (+￥${markup.toFixed(2)})`;
+                    calculationTitle = `固定加价 ￥${markup.toFixed(2)}`;
+                } else {
+                    // 比例加价模式
+                    const ratio = parseFloat(inputRatio.value) || 1.0;
+                    rawVal = costCny * ratio;
+                    simRawVal.textContent = `￥${rawVal.toFixed(4)} (×${ratio.toFixed(2)})`;
+                    calculationTitle = `比例加成 ×${ratio.toFixed(2)}`;
+                }
 
                 let modeText = '四舍五入';
                 if (roundMode === 'ceil') modeText = '向上取整';
@@ -1055,11 +1103,12 @@
 
                 const profit = finalVal - costCny;
                 const margin = finalVal > 0 ? ((profit / finalVal) * 100).toFixed(1) : '0';
-                simProfitDesc.textContent = `预计单张毛利 ￥${profit.toFixed(2)} (毛利率 ${margin}%)`;
+                simProfitDesc.textContent = `${calculationTitle} | 单张毛利 ￥${profit.toFixed(2)} (${margin}%)`;
             }
 
             // Bind change events
-            [inputFixedPrice, inputManualCost, inputExchangeRate, inputRatio, selectRoundMode, selectRoundPrecision].forEach(el => {
+            [inputFixedPrice, inputFixedMarkup, inputManualCost, inputExchangeRate, inputRatio, selectRoundMode, selectRoundPrecision].forEach(el => {
+                if (!el) return;
                 el.addEventListener('input', () => {
                     updateBenchmarkCostFromSelection();
                     recalculateSimulation();
@@ -1086,6 +1135,7 @@
                         // Populate form inputs
                         setPricingMode(cfg.pricing_mode || 'ratio');
                         inputFixedPrice.value = (cfg.fixed_price || 5.00).toFixed(2);
+                        inputFixedMarkup.value = (cfg.fixed_markup !== undefined ? cfg.fixed_markup : 2.00).toFixed(2);
                         inputExchangeRate.value = (cfg.exchange_rate || 7.20).toFixed(4);
                         inputRatio.value = (cfg.ratio || 1.50).toFixed(2);
                         selectRoundMode.value = cfg.round_mode || 'round';
@@ -1117,6 +1167,9 @@
                         if (cfg.pricing_mode === 'fixed') {
                             metricModeName.textContent = '固定销售价格';
                             metricRoundRule.textContent = `固定 ￥${(cfg.fixed_price || 0).toFixed(2)} 元/张`;
+                        } else if (cfg.pricing_mode === 'fixed_markup') {
+                            metricModeName.textContent = '固定金额加价';
+                            metricRoundRule.textContent = `成本 + ￥${(cfg.fixed_markup || 2).toFixed(2)} 元/张`;
                         } else {
                             metricModeName.textContent = `成本比例加成 (×${(cfg.ratio || 1.5).toFixed(2)})`;
                             let modeText = '四舍五入';
@@ -1312,6 +1365,7 @@
                 const payload = {
                     pricing_mode: currentMode,
                     fixed_price: parseFloat(inputFixedPrice.value) || 5.00,
+                    fixed_markup: parseFloat(inputFixedMarkup.value) || 2.00,
                     benchmark_source: selectBenchmarkSource.value,
                     exchange_rate: parseFloat(inputExchangeRate.value) || 7.20,
                     ratio: parseFloat(inputRatio.value) || 1.50,

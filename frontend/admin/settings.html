@@ -249,6 +249,7 @@
             <a href="/admin/faqs.html" class="nav-item">常见问题</a>
             <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
             <a href="/admin/jio_wallet.html" class="nav-item">Jio 储值钱包</a>
+            <a href="/admin/jio_suppliers.html" class="nav-item">Jio 供应商</a>
             <a href="/admin/settings.html" class="nav-item active">系统设置</a>
             <a href="/admin/users.html" class="nav-item">用户管理</a>
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
@@ -611,135 +612,32 @@
         </div>
 
         <!-- 8. Jio 订阅第三方服务商配置 -->
-        <div class="card settings-container card-collapsible" id="card-jio" style="margin-top: 20px;">
-            <div class="card-header card-collapsible-header">
+        <!-- 6. Jio 订阅第三方服务商与网络代理配置已迁移至独立管理中心 -->
+        <div class="card settings-container" id="card-jio" style="margin-top: 20px;">
+            <div class="card-header" style="border-bottom: 1px solid var(--border-color);">
                 <div class="card-title-group">
-                    <span class="card-title">Jio 订阅第三方服务商配置</span>
-                    <span class="card-subtitle">配置用于获取 Jio 兑换链接的第三方供应商 API 与参数</span>
-                </div>
-                <div class="card-collapse-toggle">
-                    <svg class="card-collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
+                    <span class="card-title">Jio 供应商与网络代理设置</span>
+                    <span class="card-subtitle">已集中整合至「Jio 供应商管理」控制台统一维护</span>
                 </div>
             </div>
-            <div class="card-collapsible-body">
-                <div class="card-collapsible-content">
-                    <div class="form-group" style="display: flex; flex-direction: column; gap: 16px;">
-                        <div>
-                            <label for="setting-jio-active-provider" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">当前启用第三方供应商</label>
-                            <select id="setting-jio-active-provider" class="status-select" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box;">
-                                <option value="mock">测试环境模拟供应商 (Mock Provider)</option>
-                                <option value="acczone">Acczone 采购平台 (api.acczone.xyz)</option>
-                                <option value="external_api">第三方通用 API 接口 (待接入)</option>
-                            </select>
-                        </div>
-                        <!-- 专属网络代理配置卡片/区域 -->
-                        <div class="jio-proxy-box">
-                            <div class="jio-proxy-header">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-weight: 600; font-size: 14px;">Jio 专属网络代理配置</span>
-                                    <span id="jio-proxy-status-badge" class="jio-proxy-badge inactive">
-                                        <span class="jio-proxy-badge-dot"></span>
-                                        <span id="jio-proxy-status-badge-text">直连模式 (已关闭代理)</span>
-                                    </span>
-                                </div>
-                                <span style="font-size: 12px; font-weight: normal; color: var(--text-secondary);">仅对 Jio 第三方接口调用生效</span>
-                            </div>
-
-                            <!-- 代理总开关行 -->
-                            <div style="margin-top: 12px;">
-                                <label for="setting-jio-proxy-enabled" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理启用状态</label>
-                                <select id="setting-jio-proxy-enabled" class="status-select" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;">
-                                    <option value="off">关闭 (直连上游接口，不使用代理)</option>
-                                    <option value="on">开启 (通过配置的代理访问 Jio 上游)</option>
-                                </select>
-                            </div>
-
-                            <!-- 折叠直连提示横条（关闭状态展示） -->
-                            <div id="jio-proxy-collapsed-hint" class="jio-proxy-collapsed-hint show">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                </svg>
-                                <span>当前已选择直连，未启用代理。Jio 第三方采购请求将直接由本服务器发起直连；如需翻墙访问上游，请将上方状态切换为【开启】。</span>
-                            </div>
-
-                            <!-- 代理详细配置容器（关闭时平滑收缩隐藏，开启时平滑展开） -->
-                            <div id="jio-proxy-details-wrap" class="jio-proxy-details-wrap is-collapsed">
-                                <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 12px; margin-bottom: 12px;">
-                                    <div>
-                                        <label for="setting-jio-proxy-protocol" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理协议类型</label>
-                                        <select id="setting-jio-proxy-protocol" class="status-select" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;">
-                                            <option value="http">HTTP 代理</option>
-                                            <option value="https">HTTPS 代理</option>
-                                            <option value="socks5">SOCKS5 代理</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label for="setting-jio-proxy-host" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">代理服务器主机 (Host / IP)</label>
-                                        <input type="text" id="setting-jio-proxy-host" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="例如: 127.0.0.1 或 hk.proxy.com">
-                                    </div>
-                                    <div>
-                                        <label for="setting-jio-proxy-port" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">端口 (Port)</label>
-                                        <input type="text" id="setting-jio-proxy-port" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="例如: 7890 或 1080">
-                                    </div>
-                                </div>
-
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                    <div>
-                                        <label for="setting-jio-proxy-username" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">认证账号 (Username，可选)</label>
-                                        <input type="text" id="setting-jio-proxy-username" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="无认证请留空">
-                                    </div>
-                                    <div>
-                                        <label for="setting-jio-proxy-password" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; display: block;">认证密码 (Password，可选)</label>
-                                        <div class="password-input-wrapper">
-                                            <input type="password" id="setting-jio-proxy-password" style="padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; width: 100%; box-sizing: border-box;" placeholder="无认证请留空">
-                                            <button type="button" id="btn-toggle-jio-proxy-password" class="password-toggle-btn" aria-label="切换密码可见性" title="显示/隐藏密码">
-                                                <!-- 睁眼图标 (密码隐藏时显示此图标，点击显示明文) -->
-                                                <svg id="icon-eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                                    <circle cx="12" cy="12" r="3"></circle>
-                                                </svg>
-                                                <!-- 闭眼图标 (密码显示时显示此图标，点击隐藏密文) -->
-                                                <svg id="icon-eye-closed" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                                                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <input type="hidden" id="setting-jio-proxy">
-
-                                <!-- 代理测试与状态反馈栏 -->
-                                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <button type="button" id="btn-test-jio-proxy" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-                                            <span id="btn-test-jio-proxy-text">测试代理连通性</span>
-                                        </button>
-                                        <span id="jio-proxy-test-result" style="font-size: 13px; display: none; align-items: center; gap: 6px; font-weight: 500;"></span>
-                                    </div>
-                                    <span style="font-size: 12px; color: var(--text-secondary);">支持在保存前即时测试当前填写的配置</span>
-                                </div>
-
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 12px; line-height: 1.6; border-top: 1px dashed var(--border-color); padding-top: 10px;">
-                                    • <strong>业务严格隔离</strong>：本代理配置<strong>仅且仅对 Jio 订阅第三方服务商接口调用生效</strong>，Pixel 设备心跳/调度、支付网关一律直连不受影响。<br>
-                                    • <strong>随时启停</strong>：即使配置了代理主机与账号，若开关选为【关闭】，系统也会保持直连。
-                                </div>
-                            </div>
+            <div style="padding: 20px;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+                    <div style="display: flex; align-items: flex-start; gap: 14px; max-width: 680px;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                         </div>
                         <div>
-                            <label for="setting-jio-provider-config" style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; display: block;">供应商业务参数 (JSON)</label>
-                            <textarea id="setting-jio-provider-config" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace; font-size: 13px; width: 100%; height: 80px; box-sizing: border-box; resize: vertical;" placeholder='{"apikey": "YOUR_API_KEY", "service_key": "gemini"}'></textarea>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                                • 选择 <strong>Acczone 采购平台</strong> 时，请配置 <code>{"apikey": "您的API秘钥", "service_key": "gemini"}</code>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--slate-900); margin-bottom: 4px;">多供应商综合管理中心</div>
+                            <div style="font-size: 13px; color: var(--slate-600); line-height: 1.6;">
+                                系统已将 Jio 供应商参数设置（Vente / Acczone 的 API Key 与 URL）、主力渠道切换、账户余额实时查询、USDT 充值、在线试买测试以及 <strong>Jio 专网代理设置</strong> 全面收敛并平移至专属控制台。
                             </div>
                         </div>
-                        <button type="button" id="btn-save-jio" class="btn-submit" style="white-space: nowrap; width: 120px; align-self: flex-end;">保存 Jio 配置</button>
+                    </div>
+                    <div>
+                        <a href="/admin/jio_suppliers.html" class="btn btn-primary" style="padding: 10px 20px; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; border-radius: 6px; background: #4f46e5; color: #ffffff;">
+                            <span>前往「Jio 供应商管理」</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        </a>
                     </div>
                 </div>
             </div>

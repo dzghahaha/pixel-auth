@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -2059,6 +2060,703 @@ func handleAdminJioTestProxy(w http.ResponseWriter, r *http.Request) {
 		"status_code": resp.StatusCode,
 		"target_url":  targetURL,
 		"message":     fmt.Sprintf("代理连通成功！耗时 %dms (HTTP 状态: %d)", latency, resp.StatusCode),
+	})
+}
+
+// =========================================================================
+// Jio 多供应商综合管理 Handler (Suppliers API)
+// =========================================================================
+
+// maskSecret 对敏感秘钥进行掩码显示
+func maskSecret(secret string) string {
+	s := strings.TrimSpace(secret)
+	if s == "" {
+		return ""
+	}
+	if len(s) <= 8 {
+		return "******"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
+}
+
+// handleAdminJioSuppliersList 列出系统已注册的所有供应商及其配置状态
+func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 请求",
+		})
+		return
+	}
+
+	activeProvider := strings.ToLower(strings.TrimSpace(getSetting("jio_active_provider", "vente")))
+	allProviders := GetAllJioProviders()
+	allConfigs := GetAllSuppliersConfig()
+
+	type SupplierDTO struct {
+		Name           string                 `json:"name"`
+		DisplayName    string                 `json:"display_name"`
+		IsActive       bool                   `json:"is_active"`
+		Config         map[string]interface{} `json:"config"`
+		MaskedKey      string                 `json:"masked_key"`
+		HasKey         bool                   `json:"has_key"`
+		SupportBalance bool                   `json:"support_balance"`
+		SupportDeposit bool                   `json:"support_deposit"`
+	}
+
+	var list []SupplierDTO
+	for _, p := range allProviders {
+		pName := strings.ToLower(p.Name())
+		cfg := allConfigs[pName]
+		if cfg == nil {
+			cfg = make(map[string]interface{})
+		}
+
+		keyVal := ""
+		if k, ok := cfg["api_key"].(string); ok {
+			keyVal = k
+		} else if k, ok := cfg["apikey"].(string); ok {
+			keyVal = k
+		}
+
+		suppBalance := pName == "vente" || pName == "acczone"
+		suppDeposit := pName == "vente"
+
+		list = append(list, SupplierDTO{
+			Name:           pName,
+			DisplayName:    p.DisplayName(),
+			IsActive:       pName == activeProvider,
+			Config:         cfg,
+			MaskedKey:      maskSecret(keyVal),
+			HasKey:         keyVal != "",
+			SupportBalance: suppBalance,
+			SupportDeposit: suppDeposit,
+		})
+	}
+
+	proxyCfg := map[string]string{
+		"enabled":  getSetting("jio_proxy_enabled", "off"),
+		"protocol": getSetting("jio_proxy_protocol", "http"),
+		"host":     getSetting("jio_proxy_host", ""),
+		"port":     getSetting("jio_proxy_port", ""),
+		"username": getSetting("jio_proxy_username", ""),
+		"password": getSetting("jio_proxy_password", ""),
+	}
+
+	strategy := GetJioDispatchStrategy()
+	candidates, _ := EvaluateEligibleSuppliers(r.Context(), false)
+	effectiveProvider := activeProvider
+	if strategy == StrategyAutoLowestCost && len(candidates) > 0 {
+		for _, c := range candidates {
+			if c.Available {
+				effectiveProvider = c.Name
+				break
+			}
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":                    true,
+		"active_provider":            activeProvider,
+		"dispatch_strategy":          strategy,
+		"current_effective_provider": effectiveProvider,
+		"candidates":                 candidates,
+		"suppliers":                  list,
+		"proxy":                      proxyCfg,
+	})
+}
+
+// handleAdminJioSuppliersStrategy 设置 Jio 供应商调度选择策略
+func handleAdminJioSuppliersStrategy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Strategy string `json:"strategy"` // specific 或 auto_lowest_cost
+		Provider string `json:"provider"` // 当 strategy 为 specific 时指定的供应商
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "参数格式错误",
+		})
+		return
+	}
+
+	strategy := strings.ToLower(strings.TrimSpace(req.Strategy))
+	if strategy != StrategyAutoLowestCost {
+		strategy = StrategySpecific
+	}
+
+	_, errDB := db.Exec(`
+		INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+		VALUES ('jio_dispatch_strategy', ?, NOW()) 
+		ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+		strategy, strategy)
+	if errDB != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("保存调度策略失败: %v", errDB),
+		})
+		return
+	}
+
+	targetProvider := strings.ToLower(strings.TrimSpace(req.Provider))
+	if strategy == StrategySpecific && targetProvider != "" {
+		p, errP := GetJioProvider(targetProvider)
+		if errP == nil && p != nil {
+			_, _ = db.Exec(`
+				INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+				VALUES ('jio_active_provider', ?, NOW()) 
+				ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+				targetProvider, targetProvider)
+		}
+	}
+
+	adminUser := getAdminUsername(r)
+	log.Printf("[AUDIT] set_jio_dispatch_strategy: 管理员 %s 设置 Jio 调度策略为: %s (指定供应商: %s)", adminUser, strategy, targetProvider)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"strategy": strategy,
+		"provider": targetProvider,
+		"message":  "供应商交付调度策略已成功更新",
+	})
+}
+
+// handleAdminJioProxyConfig 查看或保存 Jio 专属网络代理配置
+func handleAdminJioProxyConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"proxy": map[string]string{
+				"enabled":  getSetting("jio_proxy_enabled", "off"),
+				"protocol": getSetting("jio_proxy_protocol", "http"),
+				"host":     getSetting("jio_proxy_host", ""),
+				"port":     getSetting("jio_proxy_port", ""),
+				"username": getSetting("jio_proxy_username", ""),
+				"password": getSetting("jio_proxy_password", ""),
+			},
+		})
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 或 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Enabled  string `json:"enabled"`
+		Protocol string `json:"protocol"`
+		Host     string `json:"host"`
+		Port     string `json:"port"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "参数格式错误",
+		})
+		return
+	}
+
+	enabled := strings.ToLower(strings.TrimSpace(req.Enabled))
+	if enabled != "custom" && enabled != "on" {
+		enabled = "off"
+	}
+
+	proto := strings.ToLower(strings.TrimSpace(req.Protocol))
+	if proto == "" {
+		proto = "http"
+	}
+
+	host := strings.TrimSpace(req.Host)
+	port := strings.TrimSpace(req.Port)
+	username := strings.TrimSpace(req.Username)
+	password := strings.TrimSpace(req.Password)
+
+	proxyAddr := formatJioProxyURL(proto, host, port, username, password)
+
+	settingsToUpdate := map[string]string{
+		"jio_proxy_enabled":  enabled,
+		"jio_proxy_protocol": proto,
+		"jio_proxy_host":     host,
+		"jio_proxy_port":     port,
+		"jio_proxy_username": username,
+		"jio_proxy_password": password,
+		"jio_proxy":          proxyAddr,
+	}
+
+	for k, v := range settingsToUpdate {
+		_, _ = db.Exec(`
+			INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+			VALUES (?, ?, NOW()) 
+			ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+			k, v, v)
+	}
+
+	adminUser := getAdminUsername(r)
+	log.Printf("[AUDIT] save_jio_proxy_config: 管理员 %s 更新了 Jio 网络代理设置 (Enabled: %s, Host: %s:%s)", adminUser, enabled, host, port)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Jio 网络代理配置已成功保存",
+		"proxy":   settingsToUpdate,
+	})
+}
+
+// handleAdminJioSuppliersSwitchActive 切换当前全局主力供应商
+func handleAdminJioSuppliersSwitchActive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Provider string `json:"provider"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "参数格式错误",
+		})
+		return
+	}
+
+	target := strings.ToLower(strings.TrimSpace(req.Provider))
+	p, err := GetJioProvider(target)
+	if err != nil || p == nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("供应商 '%s' 不存在或未注册", target),
+		})
+		return
+	}
+
+	_, errDB := db.Exec(`
+		INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+		VALUES ('jio_active_provider', ?, NOW()) 
+		ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+		target, target)
+	if errDB != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("切换供应商失败: %v", errDB),
+		})
+		return
+	}
+
+	adminUser := getAdminUsername(r)
+	log.Printf("[AUDIT] switch_jio_provider: 管理员 %s 将 Jio 全局激活供应商切换为: %s (%s)", adminUser, target, p.DisplayName())
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":         true,
+		"active_provider": target,
+		"display_name":    p.DisplayName(),
+		"message":         fmt.Sprintf("已成功将当前系统激活供应商切换为: %s", p.DisplayName()),
+	})
+}
+
+// handleAdminJioSuppliersSaveConfig 保存指定供应商的配置
+func handleAdminJioSuppliersSaveConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Provider string                 `json:"provider"`
+		Config   map[string]interface{} `json:"config"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "参数解析失败",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(req.Provider))
+	if providerName == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "必须指定供应商标识",
+		})
+		return
+	}
+
+	if req.Config == nil {
+		req.Config = make(map[string]interface{})
+	}
+
+	if err := SaveSupplierConfig(providerName, req.Config); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("保存配置失败: %v", err),
+		})
+		return
+	}
+
+	adminUser := getAdminUsername(r)
+	log.Printf("[AUDIT] save_jio_supplier_config: 管理员 %s 更新了供应商 %s 的配置", adminUser, providerName)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"message":  fmt.Sprintf("供应商 %s 配置已成功保存", providerName),
+		"provider": providerName,
+		"config":   req.Config,
+	})
+}
+
+// handleAdminJioSuppliersBalance 查询供应商账户实时余额 (充值余额)
+func handleAdminJioSuppliersBalance(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 请求",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+
+	// 若未指定 provider，并发查询所有供应商余额
+	if providerName == "" || providerName == "all" {
+		type BalanceItem struct {
+			ProviderKey string           `json:"provider_key"`
+			DisplayName string           `json:"display_name"`
+			Balance     *SupplierBalance `json:"balance,omitempty"`
+			Error       string           `json:"error,omitempty"`
+		}
+		var list []BalanceItem
+		providers := GetAllJioProviders()
+
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for _, p := range providers {
+			wg.Add(1)
+			go func(prov JioProvider) {
+				defer wg.Done()
+				ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+				defer cancel()
+
+				bal, err := prov.GetBalance(ctx)
+				mu.Lock()
+				defer mu.Unlock()
+				item := BalanceItem{
+					ProviderKey: prov.Name(),
+					DisplayName: prov.DisplayName(),
+					Balance:     bal,
+				}
+				if err != nil {
+					item.Error = err.Error()
+				}
+				list = append(list, item)
+			}(p)
+		}
+		wg.Wait()
+
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"balances": list,
+		})
+		return
+	}
+
+	p, err := GetJioProvider(providerName)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	balance, errBal := p.GetBalance(ctx)
+	if errBal != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":      false,
+			"provider":     providerName,
+			"display_name": p.DisplayName(),
+			"message":      fmt.Sprintf("查询余额失败: %v", errBal),
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"provider":     providerName,
+		"display_name": p.DisplayName(),
+		"balance":      balance,
+	})
+}
+
+// handleAdminJioSuppliersProducts 查询供应商商品目录与 Gemini 链接价格
+func handleAdminJioSuppliersProducts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 请求",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+	if providerName == "" {
+		providerName = strings.ToLower(strings.TrimSpace(getSetting("jio_active_provider", "mock")))
+	}
+
+	p, err := GetJioProvider(providerName)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	products, errProd := p.GetProducts(ctx)
+	if errProd != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":      false,
+			"provider":     providerName,
+			"display_name": p.DisplayName(),
+			"message":      fmt.Sprintf("查询商品列表失败: %v", errProd),
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"provider":     providerName,
+		"display_name": p.DisplayName(),
+		"products":     products,
+	})
+}
+
+// handleAdminJioSuppliersPurchase 管理员手动测试下单/购买兑换链接
+func handleAdminJioSuppliersPurchase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Provider             string `json:"provider"`
+		ProductID            string `json:"product_id"`
+		Quantity             int    `json:"quantity"`
+		ActivationIdentifier string `json:"activation_identifier"`
+		CustomerReference    string `json:"customer_reference"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(req.Provider))
+	if providerName == "" {
+		providerName = strings.ToLower(strings.TrimSpace(getSetting("jio_active_provider", "mock")))
+	}
+
+	p, err := GetJioProvider(providerName)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	if req.Quantity <= 0 {
+		req.Quantity = 1
+	}
+
+	adminUser := getAdminUsername(r)
+	if req.CustomerReference == "" {
+		req.CustomerReference = fmt.Sprintf("admin-manual-%s-%d", adminUser, time.Now().Unix())
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, errPurchase := p.Purchase(ctx, SupplierPurchaseRequest{
+		ProductID:            req.ProductID,
+		Quantity:             req.Quantity,
+		ActivationIdentifier: req.ActivationIdentifier,
+		CustomerReference:    req.CustomerReference,
+	})
+
+	if errPurchase != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":      false,
+			"provider":     providerName,
+			"display_name": p.DisplayName(),
+			"message":      fmt.Sprintf("购买失败: %v", errPurchase),
+		})
+		return
+	}
+
+	log.Printf("[AUDIT] jio_supplier_manual_purchase: 管理员 %s 在供应商 %s 手动测试购买商品: %s, 结果单号: %s", adminUser, providerName, req.ProductID, result.OrderID)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"provider":     providerName,
+		"display_name": p.DisplayName(),
+		"result":       result,
+		"message":      "购买成功，兑换凭据已就绪",
+	})
+}
+
+// handleAdminJioSuppliersDeposit 创建供应商充值单 (如 Vente USDT BEP20)
+func handleAdminJioSuppliersDeposit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 POST 请求",
+		})
+		return
+	}
+
+	var req struct {
+		Provider  string  `json:"provider"`
+		AmountUSD float64 `json:"amount_usd"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "请求格式错误",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(req.Provider))
+	if providerName == "" {
+		providerName = "vente"
+	}
+
+	p, err := GetJioProvider(providerName)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	if req.AmountUSD <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "充值金额必须大于 0",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	depResult, errDep := p.CreateDeposit(ctx, req.AmountUSD)
+	if errDep != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":      false,
+			"provider":     providerName,
+			"display_name": p.DisplayName(),
+			"message":      fmt.Sprintf("创建充值单失败: %v", errDep),
+		})
+		return
+	}
+
+	adminUser := getAdminUsername(r)
+	log.Printf("[AUDIT] jio_supplier_deposit_create: 管理员 %s 为供应商 %s 发起充值单: $%.2f (ID: %s)", adminUser, providerName, req.AmountUSD, depResult.DepositID)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"provider":     providerName,
+		"display_name": p.DisplayName(),
+		"deposit":      depResult,
+		"message":      "充值单创建成功，请按照下方收款地址和金额转账",
+	})
+}
+
+// handleAdminJioSuppliersDepositStatus 查询充值单最新状态
+func handleAdminJioSuppliersDepositStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
+			"success": false,
+			"message": "仅支持 GET 请求",
+		})
+		return
+	}
+
+	providerName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+	depositID := strings.TrimSpace(r.URL.Query().Get("deposit_id"))
+
+	if providerName == "" {
+		providerName = "vente"
+	}
+	if depositID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": "缺少 deposit_id",
+		})
+		return
+	}
+
+	p, err := GetJioProvider(providerName)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	status, errStat := p.GetDepositStatus(ctx, depositID)
+	if errStat != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success":      false,
+			"provider":     providerName,
+			"display_name": p.DisplayName(),
+			"message":      fmt.Sprintf("查询充值状态失败: %v", errStat),
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"provider":     providerName,
+		"display_name": p.DisplayName(),
+		"deposit":      status,
 	})
 }
 

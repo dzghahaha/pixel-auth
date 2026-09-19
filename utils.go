@@ -57,7 +57,18 @@ func InFlightLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// 1. 管理后台只读查询请求（GET /api/admin/...）允许正常的页面级并发，不设全局阻塞
+		if r.Method == http.MethodGet && strings.HasPrefix(path, "/api/admin/") {
+			next(w, r)
+			return
+		}
+
+		// 2. 对于携带了具体 query 参数的非 C端核心查询，区分不同参数，避免多渠道并发请求相互阻塞
 		key := fmt.Sprintf("%s:%s", getClientIP(r), path)
+		if r.URL.RawQuery != "" && path != "/api/query" {
+			key = fmt.Sprintf("%s:%s?%s", getClientIP(r), path, r.URL.RawQuery)
+		}
+
 		if !GlobalLimiter.TryAcquire(key) {
 			respondJSON(w, http.StatusTooManyRequests, map[string]interface{}{
 				"success": false,

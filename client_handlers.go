@@ -1607,11 +1607,10 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. 调用第三方供应商接口获取兑换链接
-	provider := GetActiveJioProvider()
-	offerURL, errProvider := provider.GetOfferLink(r.Context(), req.CardSecret, vendorKey)
+	// 6. 按照调度策略（指定或自动选择最优最低成本）调用第三方获取兑换链接
+	offerURL, chosenProviderName, errProvider := SelectJioProviderForOffer(r.Context(), req.CardSecret, vendorKey)
 	if errProvider != nil {
-		log.Printf("Jio provider (%s) error for key %s: %v\n", provider.Name(), req.CardSecret, errProvider)
+		log.Printf("Jio provider dispatch error for key %s (attempted: %s): %v\n", req.CardSecret, chosenProviderName, errProvider)
 		// 调用第三方失败（如上游余额不足、网络异常），将状态安全回滚为 active，允许排查后重试
 		_, _ = db.Exec(`UPDATE system_keys SET status = 'active', updated_at = ? WHERE system_key = ? AND status = 'processing'`, time.Now(), req.CardSecret)
 		// 自动退回已扣除的钱包金额
@@ -1654,11 +1653,12 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 	// 9. 写入 account_records 兑换明细
 	if orderID > 0 {
+		successMsg := fmt.Sprintf("兑换链接获取成功 (渠道: %s)", chosenProviderName)
 		_, errInsertRecord := db.Exec(`
 			INSERT INTO account_records 
 			(order_id, card_secret, username, password, two_factor, status, message, discount_url, completed_at, created_at, updated_at) 
-			VALUES (?, ?, '-', '-', '-', 'success', '兑换链接获取成功', ?, ?, ?, ?)`,
-			orderID, req.CardSecret, offerURL, now, now, now)
+			VALUES (?, ?, '-', '-', '-', 'success', ?, ?, ?, ?, ?)`,
+			orderID, req.CardSecret, successMsg, offerURL, now, now, now)
 		if errInsertRecord != nil {
 			log.Printf("Warning: failed to insert jio account record: %v\n", errInsertRecord)
 		}

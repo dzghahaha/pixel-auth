@@ -44,15 +44,16 @@ type JioProviderCost struct {
 
 // JioPricingConfig Jio 销售价格配置结构体
 type JioPricingConfig struct {
-	PricingMode     string  `json:"pricing_mode"`     // "fixed" (固定价格) 或 "ratio" (按成本比例计算)
-	FixedPrice      float64 `json:"fixed_price"`      // 固定销售单价 (元)
-	BenchmarkSource string  `json:"benchmark_source"` // 基准成本来源: "active" (当前系统启用渠道), "lowest" (全渠道最低成本), "acczone", "manual"
-	ExchangeRate    float64 `json:"exchange_rate"`    // 美元汇率 (如 7.20)
-	Ratio           float64 `json:"ratio"`            // 加价倍数 (如 1.50)
-	RoundMode       string  `json:"round_mode"`       // 小数取整规则: "ceil" (向上进位), "floor" (向下舍去), "round" (四舍五入)
-	RoundPrecision  int     `json:"round_precision"`  // 小数保留位数: 0 (取整到元), 1 (保留1位小数), 2 (保留2位小数)
-	CachedCost      float64 `json:"cached_cost"`      // 最新缓存的成本 (USD)
-	CachedAt        string  `json:"cached_at"`        // 成本缓存时间
+	PricingMode     string  `json:"pricing_mode"`      // "fixed" (固定售价), "ratio" (比例加价), "fixed_markup" (固定金额加价)
+	FixedPrice      float64 `json:"fixed_price"`       // 固定销售单价 (元)
+	FixedMarkup     float64 `json:"fixed_markup"`      // 每单固定加价金额 (元，如 2.00)
+	BenchmarkSource string  `json:"benchmark_source"`  // 基准成本来源: "active" (当前系统启用渠道), "lowest" (全渠道最低成本), "acczone", "vente", "manual"
+	ExchangeRate    float64 `json:"exchange_rate"`     // 美元汇率 (如 7.20)
+	Ratio           float64 `json:"ratio"`             // 加价倍数 (如 1.50)
+	RoundMode       string  `json:"round_mode"`        // 小数取整规则: "ceil" (向上进位), "floor" (向下舍去), "round" (四舍五入)
+	RoundPrecision  int     `json:"round_precision"`   // 小数保留位数: 0 (取整到元), 1 (保留1位小数), 2 (保留2位小数)
+	CachedCost      float64 `json:"cached_cost"`       // 最新缓存的成本 (USD)
+	CachedAt        string  `json:"cached_at"`         // 成本缓存时间
 }
 
 // FetchAcczoneServicesResult 携带耗时与服务项列表
@@ -227,7 +228,70 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 		}
 	}
 
-	// 2. 加入第三方备用渠道 (External API / 合作商网关，便于扩展多平台)
+	// 2. 获取 Vente 实时成本
+	venteProv, errVenteGet := GetJioProvider("vente")
+	if errVenteGet == nil && venteProv != nil {
+		startVente := time.Now()
+		venteProducts, errVente := venteProv.GetProducts(ctx)
+		latencyVente := time.Since(startVente).Milliseconds()
+
+		if errVente != nil {
+			statusTxt := fmt.Sprintf("未连接或未配置Key (%v)", errVente)
+			if strings.Contains(errVente.Error(), "未配置") {
+				statusTxt = "未配置 API Key"
+			}
+			results = append(results, JioProviderCost{
+				ProviderKey:    "vente",
+				ProviderName:   venteProv.DisplayName(),
+				ServiceKey:     "gemini",
+				ServiceName:    "Gemini Link (Vente)",
+				CostPrice:      0.0,
+				CostCNY:        0.0,
+				IsActive:       0,
+				IsSystemActive: activeProvider == "vente",
+				LatencyMs:      latencyVente,
+				Currency:       "USD",
+				StatusText:     statusTxt,
+				FetchedAt:      nowStr,
+			})
+		} else {
+			var foundGemini *SupplierProduct
+			for i := range venteProducts {
+				if strings.Contains(strings.ToLower(venteProducts[i].Name), "gemini") {
+					foundGemini = &venteProducts[i]
+					break
+				}
+			}
+			if foundGemini == nil && len(venteProducts) > 0 {
+				foundGemini = &venteProducts[0]
+			}
+
+			if foundGemini != nil {
+				costUSD := foundGemini.PriceUSD
+				costCNY := math.Round(costUSD*exchangeRate*100) / 100
+				results = append(results, JioProviderCost{
+					ProviderKey:    "vente",
+					ProviderName:   venteProv.DisplayName(),
+					ServiceKey:     foundGemini.ID,
+					ServiceName:    foundGemini.Name,
+					CostPrice:      costUSD,
+					CostCNY:        costCNY,
+					IsActive:       1,
+					IsSystemActive: activeProvider == "vente",
+					LatencyMs:      latencyVente,
+					Currency:       "USD",
+					StatusText:     "正常在线",
+					FetchedAt:      nowStr,
+				})
+
+				if activeProvider == "vente" && costUSD > 0 {
+					updateJioCachedCost(costUSD, nowStr)
+				}
+			}
+		}
+	}
+
+	// 3. 加入第三方备用渠道 (External API / 合作商网关，便于扩展多平台)
 	extCostUSD := 0.45
 	extCostCNY := math.Round(extCostUSD*exchangeRate*100) / 100
 	results = append(results, JioProviderCost{
@@ -245,22 +309,6 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 		FetchedAt:      nowStr,
 	})
 
-	// 3. 加入 Mock 供应商
-	results = append(results, JioProviderCost{
-		ProviderKey:    "mock",
-		ProviderName:   "测试环境模拟供应商 (Mock Provider)",
-		ServiceKey:     "gemini",
-		ServiceName:    "Mock Gemini Link",
-		CostPrice:      0.00,
-		CostCNY:        0.00,
-		IsActive:       1,
-		IsSystemActive: activeProvider == "mock",
-		LatencyMs:      1,
-		Currency:       "USD",
-		StatusText:     "测试免成本",
-		FetchedAt:      nowStr,
-	})
-
 	return results, nil
 }
 
@@ -274,13 +322,18 @@ func updateJioCachedCost(cost float64, cachedAt string) {
 // GetJioPricingConfig 获取当前系统的 Jio 价格配置
 func GetJioPricingConfig() JioPricingConfig {
 	mode := strings.ToLower(strings.TrimSpace(getSetting("jio_pricing_mode", "ratio")))
-	if mode != "fixed" && mode != "ratio" {
+	if mode != "fixed" && mode != "ratio" && mode != "fixed_markup" {
 		mode = "ratio"
 	}
 
 	fixedPrice, _ := strconv.ParseFloat(getSetting("jio_pricing_fixed_price", "5.00"), 64)
 	if fixedPrice <= 0 {
 		fixedPrice = 5.00
+	}
+
+	fixedMarkup, _ := strconv.ParseFloat(getSetting("jio_pricing_fixed_markup", "2.00"), 64)
+	if fixedMarkup < 0 {
+		fixedMarkup = 2.00
 	}
 
 	exchangeRate, _ := strconv.ParseFloat(getSetting("jio_pricing_exchange_rate", "7.20"), 64)
@@ -306,8 +359,14 @@ func GetJioPricingConfig() JioPricingConfig {
 	}
 
 	benchmarkSource := strings.ToLower(strings.TrimSpace(getSetting("jio_pricing_benchmark_source", "active")))
-	if benchmarkSource != "active" && benchmarkSource != "lowest" && benchmarkSource != "acczone" && benchmarkSource != "manual" {
+	if benchmarkSource != "active" && benchmarkSource != "lowest" && benchmarkSource != "acczone" && benchmarkSource != "vente" && benchmarkSource != "manual" {
 		benchmarkSource = "active"
+	}
+
+	// 若系统调度策略为自动选择(优先价格低-库存足够)，基准成本自动同步为全渠道优选最低成本
+	dispatchStrategy := GetJioDispatchStrategy()
+	if dispatchStrategy == StrategyAutoLowestCost {
+		benchmarkSource = "lowest"
 	}
 
 	cachedCost, _ := strconv.ParseFloat(getSetting("jio_pricing_cached_cost", "0.40"), 64)
@@ -320,6 +379,7 @@ func GetJioPricingConfig() JioPricingConfig {
 	return JioPricingConfig{
 		PricingMode:     mode,
 		FixedPrice:      fixedPrice,
+		FixedMarkup:     fixedMarkup,
 		BenchmarkSource: benchmarkSource,
 		ExchangeRate:    exchangeRate,
 		Ratio:           ratio,
@@ -337,7 +397,6 @@ func CalculateJioSalePrice(costPrice float64, cfg JioPricingConfig) float64 {
 		return math.Round(cfg.FixedPrice*100) / 100
 	}
 
-	// 2. 比例计算算法
 	effectiveCost := costPrice
 	if effectiveCost <= 0 {
 		effectiveCost = cfg.CachedCost
@@ -351,13 +410,25 @@ func CalculateJioSalePrice(costPrice float64, cfg JioPricingConfig) float64 {
 		rate = 7.20
 	}
 
-	multiplier := cfg.Ratio
-	if multiplier <= 0 {
-		multiplier = 1.00
-	}
+	// 采购成本折合人民币
+	costCNY := effectiveCost * rate
 
-	// 原始计算未取整售价: 成本(USD) * 汇率 * 加价比例
-	rawPrice := effectiveCost * rate * multiplier
+	var rawPrice float64
+	if cfg.PricingMode == "fixed_markup" {
+		// 3. 固定金额加价算法: 采购成本 (CNY) + 固定加价金额
+		markup := cfg.FixedMarkup
+		if markup < 0 {
+			markup = 0
+		}
+		rawPrice = costCNY + markup
+	} else {
+		// 2. 比例计算算法: 采购成本 (CNY) * 加价比例
+		multiplier := cfg.Ratio
+		if multiplier <= 0 {
+			multiplier = 1.00
+		}
+		rawPrice = costCNY * multiplier
+	}
 
 	precision := cfg.RoundPrecision
 	if precision < 0 {
@@ -445,6 +516,7 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			PricingMode     string  `json:"pricing_mode"`
 			FixedPrice      float64 `json:"fixed_price"`
+			FixedMarkup     float64 `json:"fixed_markup"`
 			BenchmarkSource string  `json:"benchmark_source"`
 			ExchangeRate    float64 `json:"exchange_rate"`
 			Ratio           float64 `json:"ratio"`
@@ -461,17 +533,20 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mode := strings.ToLower(strings.TrimSpace(req.PricingMode))
-		if mode != "fixed" && mode != "ratio" {
+		if mode != "fixed" && mode != "ratio" && mode != "fixed_markup" {
 			mode = "ratio"
 		}
 
 		benchmarkSource := strings.ToLower(strings.TrimSpace(req.BenchmarkSource))
-		if benchmarkSource != "active" && benchmarkSource != "lowest" && benchmarkSource != "acczone" && benchmarkSource != "manual" {
+		if benchmarkSource != "active" && benchmarkSource != "lowest" && benchmarkSource != "acczone" && benchmarkSource != "vente" && benchmarkSource != "manual" {
 			benchmarkSource = "active"
 		}
 
 		if req.FixedPrice < 0 {
 			req.FixedPrice = 0
+		}
+		if req.FixedMarkup < 0 {
+			req.FixedMarkup = 0
 		}
 		if req.ExchangeRate <= 0 {
 			req.ExchangeRate = 7.20
@@ -496,6 +571,7 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 		settingsMap := map[string]string{
 			"jio_pricing_mode":             mode,
 			"jio_pricing_fixed_price":       fmt.Sprintf("%.2f", req.FixedPrice),
+			"jio_pricing_fixed_markup":      fmt.Sprintf("%.2f", req.FixedMarkup),
 			"jio_pricing_benchmark_source": benchmarkSource,
 			"jio_pricing_exchange_rate":     fmt.Sprintf("%.4f", req.ExchangeRate),
 			"jio_pricing_ratio":             fmt.Sprintf("%.4f", req.Ratio),

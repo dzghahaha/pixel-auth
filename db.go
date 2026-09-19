@@ -443,7 +443,7 @@ func createTables() {
 	// Insert default settings if not present
 	defaultSettings := map[string]string{
 		"two_factor_tutorial_url":     "https://www.yuque.com/taozi-khqsp/rrub4i/fxm5dgln1rh5iwd1",
-		"jio_active_provider":         "mock",
+		"jio_active_provider":         "vente",
 		"jio_provider_config":         "{}",
 		"jio_proxy":                   "",
 		"jio_proxy_enabled":           "off",

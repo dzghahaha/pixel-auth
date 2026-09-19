@@ -84,6 +84,18 @@ func main() {
 	http.HandleFunc("/api/admin/jio/costs", limit(requirePermission("jio_pricing", handleAdminJioCosts)))
 	http.HandleFunc("/api/admin/jio/test_proxy", limit(requirePermission("settings", handleAdminJioTestProxy)))
 
+	// Jio Suppliers APIs (多供应商管理：余额查询、Gemini价格查询、购买下单、USDT充值、专网代理)
+	http.HandleFunc("/api/admin/jio/suppliers", limit(requirePermission("jio_pricing", handleAdminJioSuppliersList)))
+	http.HandleFunc("/api/admin/jio/suppliers/switch_active", limit(requirePermission("jio_pricing", handleAdminJioSuppliersSwitchActive)))
+	http.HandleFunc("/api/admin/jio/suppliers/save_config", limit(requirePermission("jio_pricing", handleAdminJioSuppliersSaveConfig)))
+	http.HandleFunc("/api/admin/jio/suppliers/balance", limit(requirePermission("jio_pricing", handleAdminJioSuppliersBalance)))
+	http.HandleFunc("/api/admin/jio/suppliers/products", limit(requirePermission("jio_pricing", handleAdminJioSuppliersProducts)))
+	http.HandleFunc("/api/admin/jio/suppliers/purchase", limit(requirePermission("jio_pricing", handleAdminJioSuppliersPurchase)))
+	http.HandleFunc("/api/admin/jio/suppliers/deposit", limit(requirePermission("jio_pricing", handleAdminJioSuppliersDeposit)))
+	http.HandleFunc("/api/admin/jio/suppliers/deposit_status", limit(requirePermission("jio_pricing", handleAdminJioSuppliersDepositStatus)))
+	http.HandleFunc("/api/admin/jio/suppliers/strategy", limit(requirePermission("jio_pricing", handleAdminJioSuppliersStrategy)))
+	http.HandleFunc("/api/admin/jio/proxy_config", limit(requirePermission("jio_pricing", handleAdminJioProxyConfig)))
+
 	// Jio Wallet APIs
 	http.HandleFunc("/api/admin/jio/wallet/summary", limit(requireAdmin(handleAdminJioWalletSummary)))
 	http.HandleFunc("/api/admin/jio/wallet/transactions", limit(requireAdmin(handleAdminJioWalletTransactions)))

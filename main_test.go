@@ -4090,6 +4090,44 @@ func TestAcczoneJioProvider(t *testing.T) {
 		serviceKey := r.URL.Query().Get("service_key")
 		quantity := r.URL.Query().Get("quantity")
 
+		if r.URL.Path == "/getBalance" {
+			if apiKey == "valid_key" {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{
+					"user_id": 1234567890,
+					"username": "johndoe",
+					"first_name": "John Doe",
+					"balance": 451.88,
+					"created_at": "2026-09-01 19:49:55",
+					"verified_at": "2026-09-01 19:49:55",
+					"apikey": "valid_key"
+				}`))
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"API key is invalid or expired"}`))
+			return
+		}
+
+		if r.URL.Path == "/getBalance" {
+			if apiKey == "valid_key" {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{
+					"user_id": 1234567890,
+					"username": "johndoe",
+					"first_name": "John Doe",
+					"balance": 451.88,
+					"created_at": "2026-09-01 19:49:55",
+					"verified_at": "2026-09-01 19:49:55",
+					"apikey": "valid_key"
+				}`))
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"API key is invalid or expired"}`))
+			return
+		}
+
 		if apiKey == "invalid_key" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"message":"API key is invalid or expired"}`))
@@ -4159,9 +4197,22 @@ func TestAcczoneJioProvider(t *testing.T) {
 	if errInvalid == nil || !strings.Contains(errInvalid.Error(), "API key is invalid") {
 		t.Errorf("expected invalid apikey error message, got: %v", errInvalid)
 	}
+
+	// 5. Test GetBalance
+	cfgValid := fmt.Sprintf(`{"apikey":"valid_key","service_key":"gemini","api_url":"%s/buyCpn"}`, mockServer.URL)
+	_, _ = db.Exec("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'jio_provider_config'", cfgValid)
+
+	bal, errBal := provider.GetBalance(context.Background())
+	if errBal != nil {
+		t.Fatalf("expected successful GetBalance from acczone, got error: %v", errBal)
+	}
+	if !bal.Supported || bal.Balance != 451.88 || !strings.Contains(bal.Username, "johndoe") {
+		t.Errorf("unexpected balance result: %+v", bal)
+	}
 }
 
 type mockLongURLProvider struct {
+	MockJioProvider
 	targetURL string
 }
 
@@ -4184,6 +4235,9 @@ func TestJioRedeemLongGoogleOfferURLWithEmptyVendorKey(t *testing.T) {
 	defer func() {
 		_, _ = db.Exec("UPDATE system_settings SET setting_value = 'mock' WHERE setting_key = 'jio_active_provider'")
 	}()
+
+	// Insert test admin account with sufficient jio_balance
+	_, _ = db.Exec("INSERT INTO admins (id, username, password_hash, role, jio_balance, created_at, updated_at) VALUES (1, 'testadmin', 'hash', 'admin', 100.0, NOW(), NOW())")
 
 	// Insert active Jio key with EMPTY vendor_key
 	jioKey := "JIO-LONG-URL-TEST-001"
@@ -4235,6 +4289,7 @@ func TestJioRedeemLongGoogleOfferURLWithEmptyVendorKey(t *testing.T) {
 }
 
 type mockCountingProvider struct {
+	MockJioProvider
 	mu        sync.Mutex
 	callCount int
 	targetURL string
@@ -5166,6 +5221,386 @@ func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
 
 	if rrOverDeduct.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 when deducting more than available balance, got %d: %s", rrOverDeduct.Code, rrOverDeduct.Body.String())
+	}
+}
+
+func TestVenteJioProvider(t *testing.T) {
+	// 启动一个模拟 VenteBot Reseller API 的 httptest.Server
+	venteMockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("X-Reseller-Key")
+		if apiKey != "test-vente-key-123" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"code":"AUTH_FAILED","message":"Invalid key"}`))
+			return
+		}
+
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/reseller/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"success": true,
+				"user_telegram_id": 999888,
+				"username": "pixel_partner",
+				"first_name": "Pixel",
+				"wallet_balance": 88.50,
+				"key_name": "Test Key",
+				"key_prefix": "pix123"
+			}`))
+
+		case r.Method == http.MethodGet && r.URL.Path == "/api/reseller/products":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"success": true,
+				"products": [
+					{
+						"id": 12,
+						"name": "Gemini 1 Month Activation Link",
+						"description": "Google One Gemini",
+						"price_usd": 4.50,
+						"standard_price_usd": 5.50,
+						"pricing_type": "reseller_special",
+						"delivery_type": "activation",
+						"stock": 50,
+						"api_test": false
+					}
+				]
+			}`))
+
+		case r.Method == http.MethodPost && r.URL.Path == "/api/reseller/orders":
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			w.Header().Set("Content-Type", "application/json")
+			rem := 84.00
+			unit := 4.50
+			_, _ = w.Write([]byte(fmt.Sprintf(`{
+				"success": true,
+				"status": "ok",
+				"balance_after": %f,
+				"unit_price": %f,
+				"total": %f,
+				"order": {
+					"id": 10086,
+					"status": "COMPLETED",
+					"product_id": 12,
+					"product_name": "Gemini 1 Month Activation Link",
+					"quantity": 1,
+					"amount_usd": 4.50,
+					"items": [
+						{
+							"id": 1,
+							"account_data": "https://one.google.com/promo/hasoffer?token=VENTE-GEMINI-TEST-OK"
+						}
+					]
+				}
+			}`, rem, unit, unit)))
+
+		case r.Method == http.MethodPost && r.URL.Path == "/api/reseller/wallet/deposits":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"success": true,
+				"deposit": {
+					"deposit_id": "dep-vente-999",
+					"status": "WAITING",
+					"pay_amount": 10.05,
+					"pay_currency": "USDTBSC",
+					"network": "BEP20",
+					"address": "0x1234567890abcdef1234567890abcdef12345678",
+					"expires_at": "2026-09-20 12:00:00"
+				}
+			}`))
+
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/reseller/wallet/deposits/"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"success": true,
+				"deposit": {
+					"deposit_id": "dep-vente-999",
+					"status": "CREDITED",
+					"pay_amount": 10.05,
+					"pay_currency": "USDTBSC",
+					"network": "BEP20",
+					"address": "0x1234567890abcdef1234567890abcdef12345678"
+				}
+			}`))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer venteMockServer.Close()
+
+	// 1. 初始化 provider 并注入测试配置
+	venteProvider := &VenteJioProvider{
+		client: venteMockServer.Client(),
+	}
+
+	initTestDB(t)
+	errSave := SaveSupplierConfig("vente", map[string]interface{}{
+		"api_key":    "test-vente-key-123",
+		"base_url":   venteMockServer.URL,
+		"product_id": "12",
+	})
+	if errSave != nil {
+		t.Fatalf("SaveSupplierConfig failed: %v", errSave)
+	}
+
+	ctx := context.Background()
+
+	// 2. 测试 GetBalance 查询余额
+	bal, errBal := venteProvider.GetBalance(ctx)
+	if errBal != nil {
+		t.Fatalf("GetBalance failed: %v", errBal)
+	}
+	if !bal.Supported || bal.Balance != 88.50 || bal.Username != "pixel_partner" {
+		t.Fatalf("unexpected balance: %+v", bal)
+	}
+
+	// 3. 测试 GetProducts 查询产品列表与价格
+	prods, errProd := venteProvider.GetProducts(ctx)
+	if errProd != nil {
+		t.Fatalf("GetProducts failed: %v", errProd)
+	}
+	if len(prods) == 0 || prods[0].ID != "12" || prods[0].PriceUSD != 4.50 {
+		t.Fatalf("unexpected products: %+v", prods)
+	}
+
+	// 4. 测试 Purchase 购买并解析兑换链接
+	purch, errPurch := venteProvider.Purchase(ctx, SupplierPurchaseRequest{
+		ProductID: "12",
+		Quantity:  1,
+	})
+	if errPurch != nil {
+		t.Fatalf("Purchase failed: %v", errPurch)
+	}
+	if purch.Link != "https://one.google.com/promo/hasoffer?token=VENTE-GEMINI-TEST-OK" || purch.OrderID != "10086" {
+		t.Fatalf("unexpected purchase result: %+v", purch)
+	}
+
+	// 5. 测试 GetOfferLink C端入口调度
+	offerLink, errOffer := venteProvider.GetOfferLink(ctx, "CARD123", "")
+	if errOffer != nil {
+		t.Fatalf("GetOfferLink failed: %v", errOffer)
+	}
+	if offerLink != "https://one.google.com/promo/hasoffer?token=VENTE-GEMINI-TEST-OK" {
+		t.Fatalf("unexpected offerLink: %s", offerLink)
+	}
+
+	// 6. 测试 CreateDeposit 创建 USDT BEP20 充值单
+	dep, errDep := venteProvider.CreateDeposit(ctx, 10.0)
+	if errDep != nil {
+		t.Fatalf("CreateDeposit failed: %v", errDep)
+	}
+	if dep.DepositID != "dep-vente-999" || dep.PayAmount != 10.05 || dep.Network != "BEP20" {
+		t.Fatalf("unexpected deposit result: %+v", dep)
+	}
+
+	// 7. 测试 GetDepositStatus 查询充值单
+	depStat, errStat := venteProvider.GetDepositStatus(ctx, "dep-vente-999")
+	if errStat != nil {
+		t.Fatalf("GetDepositStatus failed: %v", errStat)
+	}
+	if depStat.Status != "CREDITED" {
+		t.Fatalf("unexpected deposit status: %+v", depStat)
+	}
+}
+
+func TestJioSuppliersAPI(t *testing.T) {
+	initTestDB(t)
+	RegisterJioProvider(&MockJioProvider{})
+
+	// 1. 测试 GET /api/admin/jio/suppliers (列表查询)
+	reqList := httptest.NewRequest(http.MethodGet, "/api/admin/jio/suppliers", nil)
+	rrList := httptest.NewRecorder()
+	handleAdminJioSuppliersList(rrList, reqList)
+
+	if rrList.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rrList.Code, rrList.Body.String())
+	}
+
+	var respList struct {
+		Success        bool   `json:"success"`
+		ActiveProvider string `json:"active_provider"`
+		Suppliers      []struct {
+			Name     string `json:"name"`
+			IsActive bool   `json:"is_active"`
+		} `json:"suppliers"`
+	}
+	if err := json.Unmarshal(rrList.Body.Bytes(), &respList); err != nil {
+		t.Fatalf("parse suppliers list failed: %v", err)
+	}
+	if !respList.Success || len(respList.Suppliers) < 2 {
+		t.Fatalf("unexpected suppliers count: %+v", respList)
+	}
+
+	// 2. 测试 POST /api/admin/jio/suppliers/switch_active (切换主力渠道)
+	reqSwitch := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/switch_active", strings.NewReader(`{"provider":"vente"}`))
+	rrSwitch := httptest.NewRecorder()
+	handleAdminJioSuppliersSwitchActive(rrSwitch, reqSwitch)
+
+	if rrSwitch.Code != http.StatusOK {
+		t.Fatalf("switch active failed with status %d: %s", rrSwitch.Code, rrSwitch.Body.String())
+	}
+
+	activeSetting := getSetting("jio_active_provider", "")
+	if activeSetting != "vente" {
+		t.Fatalf("expected jio_active_provider 'vente', got '%s'", activeSetting)
+	}
+
+	// 3. 测试 POST /api/admin/jio/suppliers/save_config (保存指定供应商配置)
+	saveBody := `{"provider":"vente","config":{"api_key":"my-vente-reseller-key","base_url":"https://api.ventebot.com","product_id":"12"}}`
+	reqSave := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/save_config", strings.NewReader(saveBody))
+	rrSave := httptest.NewRecorder()
+	handleAdminJioSuppliersSaveConfig(rrSave, reqSave)
+
+	if rrSave.Code != http.StatusOK {
+		t.Fatalf("save config failed with status %d: %s", rrSave.Code, rrSave.Body.String())
+	}
+
+	cfg := GetSupplierConfig("vente")
+	if cfg["api_key"] != "my-vente-reseller-key" || cfg["product_id"] != "12" {
+		t.Fatalf("saved config mismatch: %+v", cfg)
+	}
+
+	// 4. 测试 GET /api/admin/jio/suppliers/balance (查询 Mock 余额)
+	reqBal := httptest.NewRequest(http.MethodGet, "/api/admin/jio/suppliers/balance?provider=mock", nil)
+	rrBal := httptest.NewRecorder()
+	handleAdminJioSuppliersBalance(rrBal, reqBal)
+
+	if rrBal.Code != http.StatusOK {
+		t.Fatalf("balance check failed: %d: %s", rrBal.Code, rrBal.Body.String())
+	}
+
+	// 5. 测试 GET /api/admin/jio/suppliers/products (查询 Mock 产品)
+	reqProds := httptest.NewRequest(http.MethodGet, "/api/admin/jio/suppliers/products?provider=mock", nil)
+	rrProds := httptest.NewRecorder()
+	handleAdminJioSuppliersProducts(rrProds, reqProds)
+
+	if rrProds.Code != http.StatusOK {
+		t.Fatalf("products check failed: %d: %s", rrProds.Code, rrProds.Body.String())
+	}
+
+	// 6. 测试 POST /api/admin/jio/suppliers/purchase (测试下单购买)
+	purchBody := `{"provider":"mock","product_id":"mock_gemini","quantity":1}`
+	reqPurch := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/purchase", strings.NewReader(purchBody))
+	rrPurch := httptest.NewRecorder()
+	handleAdminJioSuppliersPurchase(rrPurch, reqPurch)
+
+	if rrPurch.Code != http.StatusOK {
+		t.Fatalf("manual purchase failed: %d: %s", rrPurch.Code, rrPurch.Body.String())
+	}
+	var purchResp struct {
+		Success bool `json:"success"`
+		Result  struct {
+			Link string `json:"link"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rrPurch.Body.Bytes(), &purchResp); err != nil || !purchResp.Success || purchResp.Result.Link == "" {
+		t.Fatalf("invalid purchase response: %s", rrPurch.Body.String())
+	}
+
+	// 7. 测试 POST /api/admin/jio/suppliers/deposit (测试充值)
+	depBody := `{"provider":"mock","amount_usd":20.0}`
+	reqDep := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/deposit", strings.NewReader(depBody))
+	rrDep := httptest.NewRecorder()
+	handleAdminJioSuppliersDeposit(rrDep, reqDep)
+
+	if rrDep.Code != http.StatusOK {
+		t.Fatalf("create deposit failed: %d: %s", rrDep.Code, rrDep.Body.String())
+	}
+}
+
+func TestJioDispatchStrategy(t *testing.T) {
+	initTestDB(t)
+	RegisterJioProvider(&MockJioProvider{})
+
+	// 1. 测试设置调度策略为 auto_lowest_cost
+	reqAuto := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/strategy", strings.NewReader(`{"strategy":"auto_lowest_cost"}`))
+	rrAuto := httptest.NewRecorder()
+	handleAdminJioSuppliersStrategy(rrAuto, reqAuto)
+
+	if rrAuto.Code != http.StatusOK {
+		t.Fatalf("set strategy failed: %d: %s", rrAuto.Code, rrAuto.Body.String())
+	}
+
+	st := GetJioDispatchStrategy()
+	if st != StrategyAutoLowestCost {
+		t.Fatalf("expected StrategyAutoLowestCost, got: %s", st)
+	}
+
+	// 2. 验证定价配置基准来源自动同步为 lowest
+	cfg := GetJioPricingConfig()
+	if cfg.BenchmarkSource != "lowest" {
+		t.Fatalf("expected BenchmarkSource 'lowest' under auto strategy, got: %s", cfg.BenchmarkSource)
+	}
+
+	// 3. 测试 SelectJioProviderForOffer 调度
+	ctx := context.Background()
+	link, chosen, errSelect := SelectJioProviderForOffer(ctx, "CARD-STRATEGY-001", "")
+	if errSelect != nil || link == "" {
+		t.Fatalf("SelectJioProviderForOffer failed: %v", errSelect)
+	}
+	if chosen == "" {
+		t.Fatalf("expected chosen provider name, got empty")
+	}
+
+	// 4. 测试切换回 specific 模式并指定 mock
+	reqSpecific := httptest.NewRequest(http.MethodPost, "/api/admin/jio/suppliers/strategy", strings.NewReader(`{"strategy":"specific","provider":"mock"}`))
+	rrSpecific := httptest.NewRecorder()
+	handleAdminJioSuppliersStrategy(rrSpecific, reqSpecific)
+
+	if rrSpecific.Code != http.StatusOK {
+		t.Fatalf("set specific strategy failed: %d: %s", rrSpecific.Code, rrSpecific.Body.String())
+	}
+
+	if GetJioDispatchStrategy() != StrategySpecific {
+		t.Fatalf("expected StrategySpecific")
+	}
+	if getSetting("jio_active_provider", "") != "mock" {
+		t.Fatalf("expected jio_active_provider 'mock'")
+	}
+}
+
+func TestJioPricingFixedMarkupMode(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 测试 POST 保存 fixed_markup 模式
+	saveBody := `{
+		"pricing_mode": "fixed_markup",
+		"fixed_markup": 3.50,
+		"exchange_rate": 7.00,
+		"round_mode": "round",
+		"round_precision": 2,
+		"benchmark_source": "active"
+	}`
+	reqSave := httptest.NewRequest(http.MethodPost, "/api/admin/jio/pricing", strings.NewReader(saveBody))
+	rrSave := httptest.NewRecorder()
+	handleAdminJioPricing(rrSave, reqSave)
+
+	if rrSave.Code != http.StatusOK {
+		t.Fatalf("expected 200 saving fixed_markup pricing, got %d: %s", rrSave.Code, rrSave.Body.String())
+	}
+
+	// 2. 读取配置校验
+	cfg := GetJioPricingConfig()
+	if cfg.PricingMode != "fixed_markup" {
+		t.Fatalf("expected PricingMode 'fixed_markup', got '%s'", cfg.PricingMode)
+	}
+	if cfg.FixedMarkup != 3.50 {
+		t.Fatalf("expected FixedMarkup 3.50, got %f", cfg.FixedMarkup)
+	}
+
+	// 3. 算法精度测试:
+	// 成本 $0.50 USD * 7.00 汇率 = 3.50 CNY
+	// 固定加价 3.50 CNY => 售价恰为 7.00 CNY
+	salePrice := CalculateJioSalePrice(0.50, cfg)
+	if salePrice != 7.00 {
+		t.Fatalf("expected sale price 7.00, got %f", salePrice)
+	}
+
+	// 成本 $0.40 USD * 7.00 汇率 = 2.80 CNY + 3.50 = 6.30 CNY
+	salePrice2 := CalculateJioSalePrice(0.40, cfg)
+	if salePrice2 != 6.30 {
+		t.Fatalf("expected sale price 6.30, got %f", salePrice2)
 	}
 }
 
