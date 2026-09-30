@@ -267,6 +267,8 @@
 
                     const result = await response.json();
                     if (response.ok && result.success) {
+                        localStorage.removeItem('pixel_auth_role');
+                        localStorage.removeItem('pixel_auth_permissions');
                         showToast('登录成功！');
                         setTimeout(() => {
                             window.location.href = '/admin/dashboard.html';

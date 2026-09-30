@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>用户管理 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css?v=1.1.0">
-    <script src="./admin.js?v=1.0.8"></script>
+    <script src="./admin.js?v=1.2.0"></script>
     <style>
         .table-container {
             margin-top: 20px;
@@ -151,6 +151,7 @@
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="devices"> 设备列表</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="jio_pricing"> Jio 价格管理</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="jio_wallet"> Jio 储值钱包</label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="jio_suppliers"> Jio 供应商</label>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" name="permissions" value="settings"> 系统设置</label>
                         </div>
                     </div>
@@ -247,8 +248,11 @@
                 'buy': '购买卡密',
                 'vendors': '合作厂商',
                 'devices': '设备列表',
+                'logs': '系统日志',
+                'faqs': '常见问题',
                 'jio_pricing': 'Jio 价格管理',
                 'jio_wallet': 'Jio 储值钱包',
+                'jio_suppliers': 'Jio 供应商',
                 'settings': '系统设置'
             };
 

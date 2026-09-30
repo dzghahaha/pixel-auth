@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<!-- saved from url=(0054)https://reseller.aivaulthub.store/api/v1/docs#overview -->
+<html lang="en" data-theme="dark" data-immersive-translate-page-theme="dark" class=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIVault Hub — Next-Gen Reseller API &amp; Interactive Console</title>
+    <meta name="description" content="Official developer documentation, interactive sandbox, and REST API reference for AIVault Hub resellers.">
+    <style>
+        :root {
+            --bg-canvas: #07090e;
+            --bg-card: #0e111a;
+            --bg-card-hover: #141824;
+            --bg-elevated: #181d2c;
+            --bg-input: #0a0d14;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(139, 92, 246, 0.3);
+            --border-strong: rgba(255, 255, 255, 0.16);
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --accent-hover: #7c3aed;
+            --accent-glow: rgba(139, 92, 246, 0.25);
+            --accent-tint: rgba(139, 92, 246, 0.1);
+            --success-color: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.12);
+            --info-color: #3b82f6;
+            --info-bg: rgba(59, 130, 246, 0.12);
+            --warning-color: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.12);
+            --danger-color: #f43f5e;
+            --danger-bg: rgba(244, 63, 94, 0.12);
+            --code-bg: #05070b;
+            --code-header: #0d1017;
+            --syntax-key: #93c5fd;
+            --syntax-str: #86efac;
+            --syntax-num: #fca5a5;
+            --syntax-bool: #c4b5fd;
+            --syntax-null: #64748b;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+            --shadow-glow: 0 0 35px -5px rgba(139, 92, 246, 0.25);
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+        }
+
+        [data-theme="light"] {
+            --bg-canvas: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f1f5f9;
+            --bg-elevated: #e2e8f0;
+            --bg-input: #ffffff;
+            --border-subtle: #e2e8f0;
+            --border-glow: rgba(124, 58, 237, 0.2);
+            --border-strong: #cbd5e1;
+            --text-main: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent-primary: #7c3aed;
+            --accent-cyan: #0891b2;
+            --accent-hover: #6d28d9;
+            --accent-glow: rgba(124, 58, 237, 0.15);
+            --accent-tint: rgba(124, 58, 237, 0.08);
+            --success-color: #059669;
+            --success-bg: #ecfdf5;
+            --info-color: #2563eb;
+            --info-bg: #eff6ff;
+            --warning-color: #d97706;
+            --warning-bg: #fffbeb;
+            --danger-color: #e11d48;
+            --danger-bg: #fff1f2;
+            --code-bg: #0f172a;
+            --code-header: #1e293b;
+            --shadow-glow: 0 0 25px -5px rgba(124, 58, 237, 0.15);
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        html { scroll-behavior: smooth; font-size: 14.5px; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-sans);
+            background-color: var(--bg-canvas);
+            color: var(--text-main);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.18), transparent 70%),
+                linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 36px 36px, 36px 36px;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* Top Navigation Header */
+        header.top-nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            height: 64px;
+            background: rgba(7, 9, 14, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        [data-theme="light"] header.top-nav { background: rgba(248, 250, 252, 0.88); }
+
+        .brand-cluster {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-main);
+        }
+        .brand-logo-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 16px;
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+        .brand-text {
+            font-weight: 800;
+            font-size: 17px;
+            letter-spacing: -0.02em;
+        }
+        .badge-portal {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 3px 8px;
+            border-radius: 20px;
+            background: var(--accent-tint);
+            color: var(--accent-primary);
+            border: 1px solid var(--border-glow);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            background: var(--bg-card);
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-subtle);
+        }
+        .status-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+            animation: pulse-glow 2s infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.25); }
+        }
+
+        .btn-jump-console {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan));
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 12.5px;
+            padding: 7px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: 0 0 16px var(--accent-glow);
+            transition: all 0.2s;
+        }
+        .btn-jump-console:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
+        .btn-theme {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .btn-theme:hover { color: var(--text-main); border-color: var(--border-strong); }
+
+        .btn-mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            padding: 6px;
+        }
+
+        /* App Layout Container */
+        .app-layout {
+            display: flex;
+            min-height: calc(100vh - 64px);
+        }
+
+        /* Left Navigation Sidebar */
+        aside.left-sidebar {
+            width: 270px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 64px;
+            height: calc(100vh - 64px);
+            overflow-y: auto;
+            border-right: 1px solid var(--border-subtle);
+            padding: 24px 16px;
+            background: var(--bg-canvas);
+        }
+        aside.left-sidebar::-webkit-scrollbar { width: 4px; }
+        aside.left-sidebar::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 4px; }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 24px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px 8px 32px;
+            font-size: 12.5px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus { border-color: var(--accent-primary); }
+        .search-box svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .nav-group-header {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin: 18px 0 8px;
+            padding-left: 10px;
+        }
+        .nav-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .nav-links a {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 7px 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+        .nav-links a:hover {
+            color: var(--text-main);
+            background: var(--bg-card);
+        }
+        .nav-links a.active {
+            color: var(--accent-primary);
+            background: var(--accent-tint);
+            font-weight: 700;
+        }
+
+        .method-badge {
+            font-family: var(--font-mono);
+            font-size: 9.5px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            min-width: 36px;
+            text-align: center;
+        }
+        .method-badge.get { background: var(--success-bg); color: var(--success-color); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .method-badge.post { background: var(--info-bg); color: var(--info-color); border: 1px solid rgba(59, 130, 246, 0.2); }
+        .method-badge.delete { background: var(--danger-bg); color: var(--danger-color); border: 1px solid rgba(244, 63, 94, 0.2); }
+
+        /* Main Body Content */
+        main.content-area {
+            flex: 1;
+            padding: 40px 48px 120px;
+            min-width: 0;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Hero Banner */
+        .hero-banner {
+            padding: 48px 0 40px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .hero-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-primary);
+            margin-bottom: 20px;
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+        .hero-headline {
+            font-size: 44px;
+            font-weight: 900;
+            letter-spacing: -0.035em;
+            line-height: 1.15;
+            margin: 0 0 16px;
+            color: var(--text-main);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff 20%, #a78bfa 60%, #38bdf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 720px;
+            margin: 0 0 28px;
+            line-height: 1.6;
+        }
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 32px;
+        }
+        .btn-primary-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--accent-primary), #3b82f6);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 13.5px;
+            padding: 10px 22px;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: var(--shadow-glow);
+            transition: all 0.2s;
+        }
+        .btn-primary-action:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+        .base-url-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-main);
+        }
+
+        /* 4 Key Pillars Grid */
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        .pillar-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            transition: all 0.2s;
+        }
+        .pillar-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-card);
+        }
+        .pillar-icon {
+            font-size: 20px;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+        .pillar-title {
+            font-size: 13.5px;
+            font-weight: 800;
+            margin: 0 0 6px;
+            color: var(--text-main);
+        }
+        .pillar-desc {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* 2-Column Endpoint Split Layout (Stripe / Vexoran Caliber) */
+        .endpoint-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            padding: 48px 0;
+            border-top: 1px solid var(--border-subtle);
+            scroll-margin-top: 80px;
+        }
+        .endpoint-spec {
+            min-width: 0;
+        }
+        .endpoint-terminal {
+            min-width: 0;
+        }
+
+        .route-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .route-path {
+            font-family: var(--font-mono);
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+            background: var(--bg-elevated);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .endpoint-title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin: 0 0 10px;
+            color: var(--text-main);
+        }
+        .endpoint-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0 0 20px;
+            line-height: 1.65;
+        }
+
+        /* Tables */
+        .param-table-container {
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            overflow-x: auto;
+            margin: 18px 0;
+        }
+        table.param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        table.param-table th {
+            background: var(--bg-elevated);
+            padding: 9px 12px;
+            font-size: 10.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            text-align: left;
+        }
+        table.param-table td {
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            vertical-align: top;
+        }
+        table.param-table tr:last-child td { border-bottom: none; }
+        .p-name { font-family: var(--font-mono); font-weight: 700; color: var(--text-main); }
+        .p-type { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+        .p-req { font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: var(--danger-bg); color: var(--danger-color); margin-left: 6px; }
+        .p-opt { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: var(--bg-elevated); color: var(--text-muted); margin-left: 6px; }
+
+        /* Mac-Style Code Terminal Box */
+        .mac-terminal {
+            background: var(--code-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-card);
+            position: sticky;
+            top: 84px;
+        }
+        .terminal-header {
+            background: var(--code-header);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .mac-dots {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .mac-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .mac-dot.red { background: #ff5f56; }
+        .mac-dot.yellow { background: #ffbd2e; }
+        .mac-dot.green { background: #27c93f; }
+
+        .terminal-tabs {
+            display: flex;
+            gap: 6px;
+        }
+        .terminal-tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 11.5px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .terminal-tab-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+        .terminal-tab-btn.active { color: #ffffff; background: var(--accent-primary); }
+
+        .terminal-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-terminal-copy {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #d1d5db;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-terminal-copy:hover { background: rgba(255, 255, 255, 0.15); color: #ffffff; }
+
+        pre {
+            margin: 0;
+            padding: 14px 16px;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: #e2e8f0;
+        }
+        code { font-family: var(--font-mono); }
+        .json-key { color: var(--syntax-key); }
+        .json-string { color: var(--syntax-str); }
+        .json-number { color: var(--syntax-num); }
+        .json-boolean { color: var(--syntax-bool); font-weight: 700; }
+        .json-null { color: var(--syntax-null); font-style: italic; }
+
+        /* Integrated Playground / Sandbox Area */
+        .playground-section {
+            padding: 56px 0;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .console-box {
+            border: 2px solid var(--accent-primary);
+            border-radius: var(--radius-lg);
+            background: var(--bg-card);
+            box-shadow: 0 0 35px var(--accent-glow);
+            overflow: hidden;
+            margin-top: 24px;
+        }
+        .console-top {
+            padding: 16px 24px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .mode-pills {
+            display: flex;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 3px;
+        }
+        .mode-pill-btn {
+            background: none;
+            border: none;
+            padding: 6px 16px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-pill-btn.active {
+            background: var(--accent-primary);
+            color: #ffffff;
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+
+        .console-body {
+            padding: 24px;
+        }
+        .wallet-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 14px 20px;
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+        }
+        .stat-col {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .stat-num {
+            font-family: var(--font-mono);
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+        .stat-num.active { color: var(--success-color); }
+
+        .btn-run-request {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan));
+            color: #ffffff;
+            border: none;
+            font-size: 14px;
+            font-weight: 800;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .btn-run-request:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-run-request:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .endpoint-row { grid-template-columns: 1fr; gap: 24px; }
+            .mac-terminal { position: static; }
+        }
+
+        @media (max-width: 900px) {
+            .app-layout { flex-direction: column; }
+            aside.left-sidebar {
+                position: fixed;
+                top: 64px;
+                left: -100%;
+                z-index: 90;
+                width: 290px;
+                height: calc(100vh - 64px);
+                background: var(--bg-card);
+                transition: left 0.28s ease;
+                box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+            }
+            aside.left-sidebar.open { left: 0; }
+            .sidebar-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                top: 64px;
+                background: rgba(0,0,0,0.6);
+                z-index: 80;
+                backdrop-filter: blur(4px);
+            }
+            .sidebar-backdrop.open { display: block; }
+            .btn-mobile-toggle { display: block; }
+            main.content-area { padding: 32px 18px 80px; }
+            .hero-headline { font-size: 32px; }
+        }
+    </style>
+<link type="text/css" rel="stylesheet" charset="UTF-8" href="./AIVault Hub — Next-Gen Reseller API &amp; Interactive Console_files/m=el_main_css"></head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="top-nav">
+        <div style="display:flex;align-items:center;gap:14px;">
+            <button class="btn-mobile-toggle" id="btnMobileToggle" aria-label="Toggle navigation">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <a href="https://reseller.aivaulthub.store/api/v1/docs#overview" class="brand-cluster">
+                <div class="brand-logo-icon">A</div>
+                <div class="brand-text">AIVault Hub</div>
+                <span class="badge-portal">Enterprise API</span>
+            </a>
+        </div>
+
+        <div class="header-controls">
+            <div class="status-pill">
+                <span class="status-pulse"></span>
+                <span>Production Operational</span>
+            </div>
+            <a href="https://reseller.aivaulthub.store/api/v1/docs#console-section" class="btn-jump-console">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span>Interactive Console</span>
+            </a>
+            <button class="btn-theme" id="btnThemeToggle" title="Toggle Theme">
+                <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: block;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <svg id="iconSun" style="display: none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <!-- Sidebar Backdrop for mobile -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Left Navigation Sidebar -->
+        <aside class="left-sidebar" id="sidebar">
+            <div class="search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="filterNavInput" placeholder="Filter endpoints...">
+            </div>
+
+            <div class="nav-group-header">Platform Core</div>
+            <ul class="nav-links">
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#overview">Overview &amp; Base URL</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#authentication">Authentication</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#rate-limits">Rate Limits &amp; Headers</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#financial-safety">Atomic Safety &amp; Idempotency</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#price-calculator">Volume Price Calculator</a></li>
+            </ul>
+
+            <div class="nav-group-header">Reseller Endpoints</div>
+            <ul class="nav-links" id="endpointsNavList">
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-products"><span class="method-badge get">GET</span> /products</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-me"><span class="method-badge get">GET</span> /me</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-quote"><span class="method-badge get">GET</span> /quote</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-order"><span class="method-badge post">POST</span> /order</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-order-status"><span class="method-badge get">GET</span> /order/{id}</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-orders"><span class="method-badge get">GET</span> /orders</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-stats"><span class="method-badge get">GET</span> /stats</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-export"><span class="method-badge get">GET</span> /orders/export</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-rotate-key"><span class="method-badge post">POST</span> /keys/rotate</a></li>
+            </ul>
+
+            <div class="nav-group-header">Webhooks Engine</div>
+            <ul class="nav-links">
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#webhooks-guide">HMAC-SHA256 Setup</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-webhooks-create"><span class="method-badge post">POST</span> /webhooks</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-webhooks-list"><span class="method-badge get">GET</span> /webhooks</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-webhooks-delete"><span class="method-badge delete">DEL</span> /webhooks/{id}</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#ep-webhooks-test"><span class="method-badge post">POST</span> /webhooks/test</a></li>
+            </ul>
+
+            <div class="nav-group-header">Developer Tools</div>
+            <ul class="nav-links">
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#console-section">Interactive Playground</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#errors-catalog">Error Reference Catalog</a></li>
+                <li><a href="https://reseller.aivaulthub.store/api/v1/docs#changelog">Changelog &amp; Releases</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+
+            <!-- Hero Banner -->
+            <section class="hero-banner" id="overview">
+                <div class="hero-pill">
+                    <span>⚡ Enterprise Reseller Infrastructure • v1.2.0</span>
+                </div>
+                <h1 class="hero-headline">
+                    High-Speed Reseller API<br>
+                    <span class="gradient-text">Built for Next-Gen Telegram Bots</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Power your reseller panels and Telegram shops with sub-second digital fulfillment, atomic single-commit transactions, real-time HMAC webhooks, and locked 1$ = 100₹ predictability.
+                </p>
+
+                <div class="hero-actions">
+                    <a href="https://reseller.aivaulthub.store/api/v1/docs#console-section" class="btn-primary-action">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        <span>Launch Interactive Console</span>
+                    </a>
+                    <div class="base-url-pill">
+                        <span style="color:var(--text-muted);">BASE URL:</span>
+                        <span>https://reseller.aivaulthub.store/api/v1</span>
+                        <button class="btn-terminal-copy" onclick="copySnippetText('https://reseller.aivaulthub.store/api/v1', this)">Copy</button>
+                    </div>
+                </div>
+
+                <!-- 4 Pillars -->
+                <div class="pillars-grid">
+                    <div class="pillar-card">
+                        <div class="pillar-icon">⚡</div>
+                        <div class="pillar-title">&lt;50ms Response</div>
+                        <p class="pillar-desc">Edge-optimized JSON routing with automated background voucher delivery.</p>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-icon">🛡️</div>
+                        <div class="pillar-title">Atomic Settlement</div>
+                        <p class="pillar-desc">Single-commit wallet deduction &amp; order insert. Zero funds lost on failure.</p>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-icon">🔄</div>
+                        <div class="pillar-title">Zero-Debit Idempotency</div>
+                        <p class="pillar-desc">Pass <code>external_order_id</code> to safely retry failed network connections.</p>
+                    </div>
+                    <div class="pillar-card">
+                        <div class="pillar-icon">💵</div>
+                        <div class="pillar-title">Fixed 1$ = 100₹</div>
+                        <p class="pillar-desc">Completely immune to crypto volatility. Predictable margins across every order.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Authentication -->
+            <section class="endpoint-row" id="authentication">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="route-path">HTTP HEADERS</span>
+                    </div>
+                    <h2 class="endpoint-title">Authentication</h2>
+                    <p class="endpoint-desc">Every request requires your confidential API secret passed in the <code>X-API-Key</code> header. Treat your API key as a password.</p>
+
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead>
+                                <tr><th>Header</th><th>Type</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="p-name">X-API-Key</span> <span class="p-req">Required</span></td>
+                                    <td><span class="p-type">string</span></td>
+                                    <td>Your secret reseller API key (e.g. <code>sk_live_...</code>).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots">
+                                <span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span>
+                            </div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Header Example</span>
+                            <button class="btn-terminal-copy" onclick="copySnippetText('X-API-Key: sk_live_your_secret_key', this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: sk_live_your_secret_key" \
+  https://reseller.aivaulthub.store/api/v1/me</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rate Limits -->
+            <section class="endpoint-row" id="rate-limits">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="route-path">QUOTA HEADERS</span>
+                    </div>
+                    <h2 class="endpoint-title">Rate Limits &amp; Live Quota</h2>
+                    <p class="endpoint-desc">Requests are limited to <strong>60 requests per minute</strong> per API key. Live budget headers are returned on every HTTP response.</p>
+
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead>
+                                <tr><th>Header</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><span class="p-name">X-RateLimit-Limit</span></td><td>Allowed requests per 60-second window (<code>60</code>).</td></tr>
+                                <tr><td><span class="p-name">X-RateLimit-Remaining</span></td><td>Remaining requests available in current window.</td></tr>
+                                <tr><td><span class="p-name">X-RateLimit-Reset</span></td><td>Unix epoch timestamp when your quota refills.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response Headers</span>
+                            <button class="btn-terminal-copy" onclick="copySnippetText('X-RateLimit-Limit: 60\nX-RateLimit-Remaining: 59', this)">Copy</button>
+                        </div>
+<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 59
+X-RateLimit-Reset: 1788944424</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Financial Safety & Idempotency -->
+            <section class="endpoint-row" id="financial-safety">
+                <div class="endpoint-spec" style="grid-column: 1 / -1;">
+                    <div class="route-chip"><span class="route-path">GUARANTEES</span></div>
+                    <h2 class="endpoint-title">Atomic Settlement &amp; Zero-Debit Idempotency</h2>
+                    <p class="endpoint-desc">Automated reseller integrations require absolute financial reliability. Our platform is built on two core guarantees:</p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px;margin-top:16px;">
+                        <div class="pillar-card">
+                            <div class="pillar-icon">🛡️</div>
+                            <div class="pillar-title">1. Single-Commit Atomic Settlement</div>
+                            <p class="pillar-desc">Wallet deductions and order creation execute inside a single atomic SQLite transaction (<code>BEGIN IMMEDIATE ... COMMIT</code>). If fulfillment fails, funds automatically roll back. <strong>You are never debited without an order.</strong></p>
+                        </div>
+                        <div class="pillar-card">
+                            <div class="pillar-icon">🔄</div>
+                            <div class="pillar-title">2. Idempotent Replays (external_order_id)</div>
+                            <p class="pillar-desc">Pass your internal order reference in <code>external_order_id</code> when placing orders. If a network connection drops and your bot retries, the API returns the original order with <code>"idempotent_replay": true</code> — <strong>zero duplicate debits or duplicate orders.</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Price & Slab Calculator -->
+            <section class="endpoint-row" id="price-calculator">
+                <div class="endpoint-spec" style="grid-column: 1 / -1;">
+                    <div class="route-chip"><span class="route-path">SIMULATOR</span></div>
+                    <h2 class="endpoint-title">Interactive Volume Price &amp; Bulk Slab Calculator</h2>
+                    <p class="endpoint-desc">Visualize exact volume pricing, tier boundaries, bulk percentage discounts, and fixed USD/INR totals in real time before placing orders:</p>
+
+                    <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow-card);">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                            <div>
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-size:11.5px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Select Service</label>
+                                    <select id="calcSvc" style="width:100%;padding:10px 14px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-family:var(--font-sans);font-size:14px;outline:none;">
+                                        <option value="gemini" data-price="0.45" data-bulk-qty="500" data-bulk-pct="5">Gemini Pro 1 Month ($0.45 base • 5% off 500+)</option>
+                                        <option value="netflix" data-price="1.20" data-bulk-qty="100" data-bulk-pct="8">Netflix Premium 1 Month ($1.20 base • 8% off 100+)</option>
+                                        <option value="chatgpt" data-price="2.50" data-bulk-qty="50" data-bulk-pct="10">ChatGPT Plus Voucher ($2.50 base • 10% off 50+)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display:block;font-size:11.5px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Quantity: <span id="calcQtyVal" style="color:var(--accent-primary);font-weight:900;">500</span> units</label>
+                                    <input type="range" id="calcRange" min="1" max="2000" value="500" style="width:100%;accent-color:var(--accent-primary);cursor:pointer;">
+                                </div>
+                            </div>
+                            <div style="background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:18px;display:flex;flex-direction:column;gap:10px;">
+                                <div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--text-secondary);"><span>Base Unit Price:</span><strong id="resUnitPrice">$0.45 USD</strong></div>
+                                <div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--text-secondary);"><span>Base Total:</span><span id="resBaseTotal">$225.00 USD</span></div>
+                                <div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--success-color);"><span>Bulk Discount:</span><strong id="resDiscount">5% (-$11.25)</strong></div>
+                                <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:900;color:var(--accent-primary);border-top:1px solid var(--border-subtle);padding-top:10px;"><span>Final Order Cost:</span><span id="resFinalTotal">$213.75 USD</span></div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);"><span>Fixed INR Conversion (1$=100₹):</span><span id="resInrTotal">₹21,375.00 INR</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /products -->
+            <section class="endpoint-row" id="ep-products">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/products</span>
+                    </div>
+                    <h2 class="endpoint-title">List Available Products</h2>
+                    <p class="endpoint-desc">Returns real-time digital catalog services, live available stock, quantity pricing slabs, and bulk discount rules.</p>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <div class="terminal-tabs">
+                                <button class="terminal-tab-btn active" onclick="switchSnippet(this, 'curl')">cURL</button>
+                                <button class="terminal-tab-btn" onclick="switchSnippet(this, 'python')">Python</button>
+                                <button class="terminal-tab-btn" onclick="switchSnippet(this, 'node')">Node.js</button>
+                            </div>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+                        <div class="snippet-block" data-lang="curl">
+<pre><code>curl -X GET "https://reseller.aivaulthub.store/api/v1/products" \
+  -H "X-API-Key: YOUR_API_KEY"</code></pre>
+                        </div>
+                        <div class="snippet-block" data-lang="python" style="display:none;">
+<pre><code>import requests
+headers = {"X-API-Key": "YOUR_API_KEY"}
+res = requests.get("https://reseller.aivaulthub.store/api/v1/products", headers=headers)
+print(res.json())</code></pre>
+                        </div>
+                        <div class="snippet-block" data-lang="node" style="display:none;">
+<pre><code>const res = await fetch("https://reseller.aivaulthub.store/api/v1/products", {
+  headers: { "X-API-Key": "YOUR_API_KEY" }
+});
+console.log(await res.json());</code></pre>
+                        </div>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">
+                            Response (200 OK)
+                        </div>
+<pre><code class="json-content">{
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>,
+  <span class="json-key">"rate":</span> <span class="json-string">"1 USD = 100 INR (fixed)"</span>,
+  <span class="json-key">"products":</span> [
+    {
+      <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+      <span class="json-key">"name":</span> <span class="json-string">"Gemini Pro 1 Month"</span>,
+      <span class="json-key">"stock":</span> <span class="json-number">482</span>,
+      <span class="json-key">"custom_pricing":</span> <span class="json-boolean">false</span>,
+      <span class="json-key">"pricing_tiers":</span> [
+        {
+          <span class="json-key">"min":</span> <span class="json-number">1</span>,
+          <span class="json-key">"max":</span> <span class="json-number">99</span>,
+          <span class="json-key">"price":</span> <span class="json-number">0.5</span>
+        },
+        {
+          <span class="json-key">"min":</span> <span class="json-number">100</span>,
+          <span class="json-key">"max":</span> <span class="json-number">1000</span>,
+          <span class="json-key">"price":</span> <span class="json-number">0.45</span>
+        }
+      ],
+      <span class="json-key">"bulk_discounts":</span> [
+        {
+          <span class="json-key">"min_qty":</span> <span class="json-number">500</span>,
+          <span class="json-key">"discount_pct":</span> <span class="json-number">5</span>
+        }
+      ]
+    }
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /me -->
+            <section class="endpoint-row" id="ep-me">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/me</span>
+                    </div>
+                    <h2 class="endpoint-title">Account Profile &amp; Balance</h2>
+                    <p class="endpoint-desc">Returns your verified Telegram owner chat ID and active wallet balance in USD.</p>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <div class="terminal-tabs">
+                                <button class="terminal-tab-btn active" onclick="switchSnippet(this, 'curl')">cURL</button>
+                                <button class="terminal-tab-btn" onclick="switchSnippet(this, 'python')">Python</button>
+                            </div>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+                        <div class="snippet-block" data-lang="curl">
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  https://reseller.aivaulthub.store/api/v1/me</code></pre>
+                        </div>
+                        <div class="snippet-block" data-lang="python" style="display:none;">
+<pre><code>import requests
+r = requests.get("https://reseller.aivaulthub.store/api/v1/me", headers={"X-API-Key": "YOUR_API_KEY"})
+print(r.json())</code></pre>
+                        </div>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">
+                            Response (200 OK)
+                        </div>
+<pre><code class="json-content">{
+  <span class="json-key">"chat_id":</span> <span class="json-number">123456789</span>,
+  <span class="json-key">"balance":</span> <span class="json-number">145.5</span>,
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /quote -->
+            <section class="endpoint-row" id="ep-quote">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/quote</span>
+                    </div>
+                    <h2 class="endpoint-title">Price Quote Preview</h2>
+                    <p class="endpoint-desc">Validates exact order financial calculations before submission. Computes active tier, bulk discount savings, and wallet balance sufficiency without committing an order.</p>
+
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead>
+                                <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><span class="p-name">service_id</span> <span class="p-req">Required</span></td><td><span class="p-type">string</span></td><td>Product identifier.</td></tr>
+                                <tr><td><span class="p-name">quantity</span> <span class="p-req">Required</span></td><td><span class="p-type">integer</span></td><td>Desired order units.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">cURL Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  "https://reseller.aivaulthub.store/api/v1/quote?service_id=service_1&amp;quantity=500"</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">
+                            Response (200 OK)
+                        </div>
+<pre><code class="json-content">{
+  <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+  <span class="json-key">"service_name":</span> <span class="json-string">"Gemini Pro 1 Month"</span>,
+  <span class="json-key">"quantity":</span> <span class="json-number">500</span>,
+  <span class="json-key">"stock":</span> <span class="json-number">482</span>,
+  <span class="json-key">"stock_warning":</span> <span class="json-null">null</span>,
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>,
+  <span class="json-key">"pricing":</span> {
+    <span class="json-key">"unit_price":</span> <span class="json-number">0.45</span>,
+    <span class="json-key">"slab_range":</span> <span class="json-string">"100-1000"</span>,
+    <span class="json-key">"base_total":</span> <span class="json-number">225</span>,
+    <span class="json-key">"bulk_discount_pct":</span> <span class="json-number">5</span>,
+    <span class="json-key">"bulk_discount_amount":</span> <span class="json-number">11.25</span>,
+    <span class="json-key">"final_total":</span> <span class="json-number">213.75</span>,
+    <span class="json-key">"price_source":</span> <span class="json-string">"normal+bulk_discount"</span>
+  },
+  <span class="json-key">"your_balance":</span> <span class="json-number">350</span>,
+  <span class="json-key">"sufficient_balance":</span> <span class="json-boolean">true</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POST /order -->
+            <section class="endpoint-row" id="ep-order">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge post">POST</span>
+                        <span class="route-path">/api/v1/order</span>
+                    </div>
+                    <h2 class="endpoint-title">Place Automated Order</h2>
+                    <p class="endpoint-desc">Executes an atomic balance deduction and immediate digital product delivery. Always pass <code>external_order_id</code> for safe zero-duplicate retries.</p>
+
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead>
+                                <tr><th>Body Field</th><th>Type</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><span class="p-name">service_id</span> <span class="p-req">Required</span></td><td><span class="p-type">string</span></td><td>Target product ID.</td></tr>
+                                <tr><td><span class="p-name">quantity</span> <span class="p-req">Required</span></td><td><span class="p-type">integer</span></td><td>Number of units to purchase.</td></tr>
+                                <tr><td><span class="p-name">external_order_id</span> <span class="p-opt">Optional</span></td><td><span class="p-type">string</span></td><td>Your internal idempotency key to prevent double debiting.</td></tr>
+                                <tr><td><span class="p-name">accept_normal_price</span> <span class="p-opt">Optional</span></td><td><span class="p-type">boolean</span></td><td>Set true to override low-stock custom pricing protection.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">POST Request Payload</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -X POST "https://reseller.aivaulthub.store/api/v1/order" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_id": "service_1",
+    "quantity": 2,
+    "external_order_id": "bot_order_99812"
+  }'</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">
+                            Response (201 Created)
+                        </div>
+<pre><code class="json-content">{
+  <span class="json-key">"success":</span> <span class="json-boolean">true</span>,
+  <span class="json-key">"order_id":</span> <span class="json-string">"API89XKZ42"</span>,
+  <span class="json-key">"external_order_id":</span> <span class="json-string">"bot_order_99812"</span>,
+  <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+  <span class="json-key">"quantity":</span> <span class="json-number">2</span>,
+  <span class="json-key">"total_cost":</span> <span class="json-number">1</span>,
+  <span class="json-key">"new_balance":</span> <span class="json-number">144.5</span>,
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>,
+  <span class="json-key">"price_breakdown":</span> {
+    <span class="json-key">"unit_price":</span> <span class="json-number">0.5</span>,
+    <span class="json-key">"base_total":</span> <span class="json-number">1</span>,
+    <span class="json-key">"bulk_discount_pct":</span> <span class="json-number">0</span>,
+    <span class="json-key">"bulk_discount_amount":</span> <span class="json-number">0</span>,
+    <span class="json-key">"final_total":</span> <span class="json-number">1</span>,
+    <span class="json-key">"price_source":</span> <span class="json-string">"normal"</span>
+  },
+  <span class="json-key">"products":</span> [
+    <span class="json-string">"KEY-GEMINI-A1904-8842"</span>,
+    <span class="json-string">"KEY-GEMINI-B8912-7719"</span>
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Other Core Endpoints -->
+            <section class="endpoint-row" id="ep-stats">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/stats</span>
+                    </div>
+                    <h2 class="endpoint-title">Reseller Account Analytics</h2>
+                    <p class="endpoint-desc">Real-time financial analytics: order counts, total USD spend (today, 7d, 30d, all-time), and per-product order breakdowns. Filter by <code>start</code> and <code>end</code> timestamps.</p>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code class="json-content">{
+  <span class="json-key">"orders":</span> {
+    <span class="json-key">"today":</span> <span class="json-number">4</span>,
+    <span class="json-key">"7d":</span> <span class="json-number">28</span>,
+    <span class="json-key">"30d":</span> <span class="json-number">142</span>,
+    <span class="json-key">"all_time":</span> <span class="json-number">680</span>
+  },
+  <span class="json-key">"spending":</span> {
+    <span class="json-key">"today":</span> <span class="json-number">2.8</span>,
+    <span class="json-key">"7d":</span> <span class="json-number">18.2</span>,
+    <span class="json-key">"30d":</span> <span class="json-number">84.5</span>,
+    <span class="json-key">"all_time":</span> <span class="json-number">395</span>
+  },
+  <span class="json-key">"products_breakdown":</span> [
+    {
+      <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+      <span class="json-key">"name":</span> <span class="json-string">"Gemini Pro 1 Month"</span>,
+      <span class="json-key">"orders":</span> <span class="json-number">120</span>,
+      <span class="json-key">"quantity_ordered":</span> <span class="json-number">540</span>,
+      <span class="json-key">"total_spent":</span> <span class="json-number">243</span>
+    }
+  ],
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            
+            <!-- GET /order/{order_id} -->
+            <section class="endpoint-row" id="ep-order-status">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/order/{order_id}</span>
+                    </div>
+                    <h2 class="endpoint-title">Single Order Status &amp; Product Codes</h2>
+                    <p class="endpoint-desc">Fetches delivery status, timestamps, and delivered digital codes/coupons for any previous order using its unique <code>order_id</code>.</p>
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead><tr><th>Path Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="p-name">order_id</span> <span class="p-req">Required</span></td><td><span class="p-type">string</span></td><td>The unique order ID returned upon purchase (e.g. <code>API89XKZ42</code>).</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  https://reseller.aivaulthub.store/api/v1/order/API89XKZ42</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"order_id":</span> <span class="json-string">"API89XKZ42"</span>,
+  <span class="json-key">"status":</span> <span class="json-string">"delivered"</span>,
+  <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+  <span class="json-key">"quantity":</span> <span class="json-number">2</span>,
+  <span class="json-key">"total_cost":</span> <span class="json-number">1</span>,
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>,
+  <span class="json-key">"created_at":</span> <span class="json-string">"2026-09-09T14:00:00"</span>,
+  <span class="json-key">"products":</span> [
+    <span class="json-string">"KEY-GEMINI-A1904-8842"</span>,
+    <span class="json-string">"KEY-GEMINI-B8912-7719"</span>
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /orders -->
+            <section class="endpoint-row" id="ep-orders">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/orders</span>
+                    </div>
+                    <h2 class="endpoint-title">Paginated Order History</h2>
+                    <p class="endpoint-desc">Returns your historical purchases in reverse chronological order. Supports page-based navigation.</p>
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead><tr><th>Query Param</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="p-name">page</span> <span class="p-opt">Optional</span></td><td><span class="p-type">integer</span></td><td><code>1</code></td><td>Page number.</td></tr>
+                                <tr><td><span class="p-name">limit</span> <span class="p-opt">Optional</span></td><td><span class="p-type">integer</span></td><td><code>20</code></td><td>Max orders per page (up to 50).</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  "https://reseller.aivaulthub.store/api/v1/orders?page=1&amp;limit=20"</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"page":</span> <span class="json-number">1</span>,
+  <span class="json-key">"limit":</span> <span class="json-number">20</span>,
+  <span class="json-key">"currency":</span> <span class="json-string">"USD"</span>,
+  <span class="json-key">"orders":</span> [
+    {
+      <span class="json-key">"order_id":</span> <span class="json-string">"API89XKZ42"</span>,
+      <span class="json-key">"service_id":</span> <span class="json-string">"service_1"</span>,
+      <span class="json-key">"quantity":</span> <span class="json-number">2</span>,
+      <span class="json-key">"total_cost":</span> <span class="json-number">1</span>,
+      <span class="json-key">"status":</span> <span class="json-string">"delivered"</span>,
+      <span class="json-key">"created_at":</span> <span class="json-string">"2026-09-09T14:00:00"</span>
+    }
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /orders/export -->
+            <section class="endpoint-row" id="ep-export">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/orders/export</span>
+                    </div>
+                    <h2 class="endpoint-title">Bulk Order History Export (CSV / JSON)</h2>
+                    <p class="endpoint-desc">Download your complete transaction ledger for accounting, revenue reconciliation, and audits. Pass <code>format=csv</code> for an instant spreadsheet file.</p>
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead><tr><th>Query Param</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="p-name">format</span> <span class="p-opt">Optional</span></td><td><span class="p-type">string</span></td><td><code>csv</code> or <code>json</code> (default: json).</td></tr>
+                                <tr><td><span class="p-name">start</span> <span class="p-opt">Optional</span></td><td><span class="p-type">string</span></td><td>ISO 8601 start timestamp.</td></tr>
+                                <tr><td><span class="p-name">end</span> <span class="p-opt">Optional</span></td><td><span class="p-type">string</span></td><td>ISO 8601 end timestamp.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Download CSV</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  "https://reseller.aivaulthub.store/api/v1/orders/export?format=csv" \
+  -o orders_export.csv</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POST /keys/rotate -->
+            <section class="endpoint-row" id="ep-rotate-key">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge post">POST</span>
+                        <span class="route-path">/api/v1/keys/rotate</span>
+                    </div>
+                    <h2 class="endpoint-title">Self-Service API Key Rotation</h2>
+                    <p class="endpoint-desc">Instantly revokes your existing API key and issues a brand-new secret key. The previous key ceases functioning immediately.</p>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -X POST "https://reseller.aivaulthub.store/api/v1/keys/rotate" \
+  -H "X-API-Key: YOUR_OLD_API_KEY"</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"success":</span> <span class="json-boolean">true</span>,
+  <span class="json-key">"new_api_key":</span> <span class="json-string">"sk_live_9f83a04b12c8e9f..."</span>,
+  <span class="json-key">"message":</span> <span class="json-string">"Your old key has been revoked. Store this new key securely."</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Webhooks Architecture & Guide -->
+            <section class="endpoint-row" id="webhooks-guide">
+                <div class="endpoint-spec" style="grid-column: 1 / -1;">
+                    <div class="route-chip"><span class="route-path">REAL-TIME WEBHOOKS</span></div>
+                    <h2 class="endpoint-title">Webhooks Architecture &amp; Cryptographic Verification</h2>
+                    <p class="endpoint-desc">
+                        Webhooks eliminate the need for your bot to constantly poll the server asking <em>"Is the order ready yet?"</em>. 
+                        Whenever an order is delivered or queued, our engine immediately pushes a signed HTTPS POST notification directly to your server.
+                    </p>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:16px;margin:24px 0;">
+                        <div class="pillar-card">
+                            <div class="pillar-icon">🔔</div>
+                            <div class="pillar-title">order.delivered</div>
+                            <p class="pillar-desc">Fired when digital keys / coupons are assigned and ready for your customer.</p>
+                        </div>
+                        <div class="pillar-card">
+                            <div class="pillar-icon">⏳</div>
+                            <div class="pillar-title">order.queued</div>
+                            <p class="pillar-desc">Fired when stock is pending restock. Your order will fulfill automatically once restocked.</p>
+                        </div>
+                        <div class="pillar-card">
+                            <div class="pillar-icon">⚠️</div>
+                            <div class="pillar-title">order.failed</div>
+                            <p class="pillar-desc">Fired if delivery encounters an unrecoverable exception or error.</p>
+                        </div>
+                    </div>
+
+                    <h3>HMAC-SHA256 Signature Verification</h3>
+                    <p class="endpoint-desc">Every webhook delivery includes header <code>X-Webhook-Signature: sha256=&lt;hex&gt;</code>. Use your webhook secret to cryptographically verify authenticity:</p>
+                    <div class="mac-terminal" style="margin-top:16px;">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Python Signature Verifier</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>import hmac, hashlib
+
+def verify_webhook(raw_payload_bytes, signature_header, webhook_secret):
+    expected = "sha256=" + hmac.new(webhook_secret.encode(), raw_payload_bytes, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature_header)</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POST /webhooks -->
+            <section class="endpoint-row" id="ep-webhooks-create">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge post">POST</span>
+                        <span class="route-path">/api/v1/webhooks</span>
+                    </div>
+                    <h2 class="endpoint-title">Register Webhook Endpoint</h2>
+                    <p class="endpoint-desc">Registers an HTTPS endpoint on your server to receive real-time order events. Returns a secret token to verify HMAC signatures.</p>
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="p-name">url</span> <span class="p-req">Required</span></td><td><span class="p-type">string</span></td><td>Your HTTPS listener URL (e.g. <code>https://mybot.com/webhook</code>).</td></tr>
+                                <tr><td><span class="p-name">events</span> <span class="p-req">Required</span></td><td><span class="p-type">array</span></td><td>Events to subscribe: <code>["order.delivered", "order.queued"]</code>.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Register Endpoint</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -X POST "https://reseller.aivaulthub.store/api/v1/webhooks" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://mybot.com/webhooks/orders",
+    "events": ["order.delivered", "order.queued"]
+  }'</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (201 Created)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"id":</span> <span class="json-number">1</span>,
+  <span class="json-key">"url":</span> <span class="json-string">"https://mybot.com/webhooks/orders"</span>,
+  <span class="json-key">"events":</span> [
+    <span class="json-string">"order.delivered"</span>,
+    <span class="json-string">"order.queued"</span>
+  ],
+  <span class="json-key">"secret":</span> <span class="json-string">"9a38f7b2c01824d67e89ab32c10f8231e57c6..."</span>,
+  <span class="json-key">"active":</span> <span class="json-boolean">true</span>,
+  <span class="json-key">"note":</span> <span class="json-string">"Store this secret securely — use it to verify webhook signatures."</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GET /webhooks -->
+            <section class="endpoint-row" id="ep-webhooks-list">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge get">GET</span>
+                        <span class="route-path">/api/v1/webhooks</span>
+                    </div>
+                    <h2 class="endpoint-title">List Registered Webhooks</h2>
+                    <p class="endpoint-desc">Returns all active webhook endpoints currently receiving events for your reseller account.</p>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -H "X-API-Key: YOUR_API_KEY" \
+  https://reseller.aivaulthub.store/api/v1/webhooks</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"webhooks":</span> [
+    {
+      <span class="json-key">"id":</span> <span class="json-number">1</span>,
+      <span class="json-key">"url":</span> <span class="json-string">"https://mybot.com/webhooks/orders"</span>,
+      <span class="json-key">"events":</span> [
+        <span class="json-string">"order.delivered"</span>,
+        <span class="json-string">"order.queued"</span>
+      ],
+      <span class="json-key">"created_at":</span> <span class="json-string">"2026-09-09T14:00:00"</span>,
+      <span class="json-key">"active":</span> <span class="json-boolean">true</span>
+    }
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- DELETE /webhooks/{id} -->
+            <section class="endpoint-row" id="ep-webhooks-delete">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge delete">DEL</span>
+                        <span class="route-path">/api/v1/webhooks/{id}</span>
+                    </div>
+                    <h2 class="endpoint-title">Delete Webhook Endpoint</h2>
+                    <p class="endpoint-desc">Deactivates and removes a webhook subscription by its ID.</p>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Request</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -X DELETE "https://reseller.aivaulthub.store/api/v1/webhooks/1" \
+  -H "X-API-Key: YOUR_API_KEY"</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"deleted":</span> <span class="json-boolean">true</span>,
+  <span class="json-key">"id":</span> <span class="json-number">1</span>
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POST /webhooks/test -->
+            <section class="endpoint-row" id="ep-webhooks-test">
+                <div class="endpoint-spec">
+                    <div class="route-chip">
+                        <span class="method-badge post">POST</span>
+                        <span class="route-path">/api/v1/webhooks/test</span>
+                    </div>
+                    <h2 class="endpoint-title">Test Webhook Delivery Ping</h2>
+                    <p class="endpoint-desc">Dispatches an instant signed test event to all your registered webhooks and returns the HTTP status code received from your server, verifying connectivity.</p>
+                </div>
+                <div class="endpoint-terminal">
+                    <div class="mac-terminal">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Send Test Ping</span>
+                            <button class="btn-terminal-copy" onclick="copySnippet(this)">Copy</button>
+                        </div>
+<pre><code>curl -X POST "https://reseller.aivaulthub.store/api/v1/webhooks/test" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"event": "order.delivered"}'</code></pre>
+                        <div style="background:var(--bg-elevated);padding:6px 16px;border-top:1px solid var(--border-subtle);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Response (200 OK)</div>
+<pre><code class="json-content">{
+  <span class="json-key">"test_results":</span> [
+    {
+      <span class="json-key">"webhook_id":</span> <span class="json-number">1</span>,
+      <span class="json-key">"url":</span> <span class="json-string">"https://mybot.com/webhooks/orders"</span>,
+      <span class="json-key">"status":</span> <span class="json-number">200</span>,
+      <span class="json-key">"success":</span> <span class="json-boolean">true</span>
+    }
+  ]
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+<!-- Interactive Console & Sandbox Section -->
+            <section class="playground-section" id="console-section">
+                <h2 style="font-size:32px;font-weight:900;letter-spacing:-0.03em;margin:0 0 10px;">Interactive Developer Console</h2>
+                <p style="color:var(--text-secondary);font-size:15px;max-width:700px;margin:0 0 24px;">Execute real and simulated requests directly inside your browser. Test orders with a live sandbox wallet or connect your live API key.</p>
+
+                <div class="console-box">
+                    <div class="console-top">
+                        <div style="font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;">
+                            <span>API Console Terminal</span>
+                        </div>
+                        <div class="mode-pills">
+                            <button class="mode-pill-btn active" id="btnSb" onclick="switchConsoleMode('sandbox')">🧪 Sandbox Environment (Free)</button>
+                            <button class="mode-pill-btn" id="btnLive" onclick="switchConsoleMode('live')">🟢 Live Production</button>
+                        </div>
+                    </div>
+
+                    <div class="console-body">
+                        <!-- Sandbox Wallet Display -->
+                        <div class="wallet-banner" id="sandboxWalletDisplay">
+                            <div class="stat-col">
+                                <span class="stat-title">Sandbox Wallet Balance</span>
+                                <span class="stat-num active" id="sbLiveBal">$50.00 USD</span>
+                            </div>
+                            <div class="stat-col">
+                                <span class="stat-title">Sandbox Orders Created</span>
+                                <span class="stat-num" id="sbLiveOrders">0</span>
+                            </div>
+                            <button class="btn-terminal-copy" onclick="resetSandbox()" style="align-self:center;">Reset Sandbox State</button>
+                        </div>
+
+                        <!-- Live Mode Notice -->
+                        <div id="liveKeyBanner" style="display:none;background:var(--warning-bg);border:1px solid var(--warning-color);padding:14px;border-radius:var(--radius-md);margin-bottom:20px;">
+                            <div style="font-weight:800;font-size:13px;color:var(--warning-color);margin-bottom:4px;">Production Mode Enabled</div>
+                            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Your API key is kept in browser memory for this tab only. Real orders will deduct from your actual account balance.</div>
+                            <input type="password" class="form-control" id="liveSecretKey" placeholder="sk_live_your_actual_key" style="width:100%;padding:10px 14px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-family:var(--font-mono);font-size:13px;outline:none;">
+                        </div>
+
+                        <!-- Console Form -->
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Select Action / Endpoint</label>
+                            <select id="consoleEpSelect" onchange="updateConsoleInputs()" style="width:100%;padding:10px 14px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-size:13.5px;font-family:var(--font-mono);outline:none;cursor:pointer;">
+                                <option value="products" data-method="GET" data-url="/api/v1/products">GET /api/v1/products — Browse Inventory</option>
+                                <option value="me" data-method="GET" data-url="/api/v1/me">GET /api/v1/me — Check Wallet Balance</option>
+                                <option value="quote" data-method="GET" data-url="/api/v1/quote">GET /api/v1/quote — Price &amp; Discount Quote</option>
+                                <option value="order" data-method="POST" data-url="/api/v1/order">POST /api/v1/order — Place Instant Order</option>
+                                <option value="stats" data-method="GET" data-url="/api/v1/stats">GET /api/v1/stats — Account Analytics</option>
+                                <option value="webhooks_list" data-method="GET" data-url="/api/v1/webhooks">GET /api/v1/webhooks — List Webhooks</option>
+                                <option value="webhooks_test" data-method="POST" data-url="/api/v1/webhooks/test">POST /api/v1/webhooks/test — Test Webhook Ping</option>
+                            </select>
+                        </div>
+
+                        <div id="consoleDynamicInputs"></div>
+
+                        <button class="btn-run-request" id="btnExecuteConsole" onclick="runConsoleExecution()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <span id="btnRunLabel">Execute Request</span>
+                        </button>
+
+                        <!-- Terminal Response Output -->
+                        <div style="margin-top:24px;background:var(--code-bg);border:1px solid var(--border-subtle);border-radius:var(--radius-md);overflow:hidden;">
+                            <div style="background:var(--code-header);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;font-size:12px;border-bottom:1px solid var(--border-subtle);">
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span style="font-weight:700;">Response Output</span>
+                                    <span class="method-badge get" id="liveRespStatus">200 Ready</span>
+                                </div>
+                                <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);" id="liveLatency">0ms</span>
+                            </div>
+                            <pre><code class="json-content" id="liveOutputContent">{
+  <span class="json-key">"status":</span> <span class="json-string">"Ready"</span>,
+  <span class="json-key">"message":</span> <span class="json-string">"Click Execute Request to test this endpoint."</span>
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Catalog -->
+            <section class="endpoint-row" id="errors-catalog">
+                <div class="endpoint-spec" style="grid-column: 1 / -1;">
+                    <div class="route-chip"><span class="route-path">STATUS CODES</span></div>
+                    <h2 class="endpoint-title">Error Reference Catalog</h2>
+                    <p class="endpoint-desc">Comprehensive list of HTTP status codes, structured error keys, and remediation instructions:</p>
+
+                    <div class="param-table-container">
+                        <table class="param-table">
+                            <thead>
+                                <tr><th>Code</th><th>Error Key</th><th>Cause &amp; Remediation</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>400</code></td><td><span class="p-name">invalid_json</span></td><td>Malformed request body. Ensure valid JSON payload.</td></tr>
+                                <tr><td><code>400</code></td><td><span class="p-name">missing_parameter</span></td><td>Missing mandatory fields such as <code>service_id</code> or <code>quantity</code>.</td></tr>
+                                <tr><td><code>401</code></td><td><span class="p-name">missing_api_key</span></td><td>The <code>X-API-Key</code> header was omitted from request.</td></tr>
+                                <tr><td><code>401</code></td><td><span class="p-name">invalid_api_key</span></td><td>The API key was revoked, expired, or does not exist.</td></tr>
+                                <tr><td><code>402</code></td><td><span class="p-name">Insufficient balance</span></td><td>Your wallet balance is below the order total. Top up funds to proceed.</td></tr>
+                                <tr><td><code>404</code></td><td><span class="p-name">unknown_service</span></td><td>Requested <code>service_id</code> was not found in catalog.</td></tr>
+                                <tr><td><code>409</code></td><td><span class="p-name">Buffer Stock Conflict</span></td><td>Quantity crosses low-stock buffer. Resend with <code>"accept_normal_price": true</code>.</td></tr>
+                                <tr><td><code>429</code></td><td><span class="p-name">rate_limited</span></td><td>60 requests/min threshold exceeded. Back off until <code>X-RateLimit-Reset</code>.</td></tr>
+                                <tr><td><code>500</code></td><td><span class="p-name">internal_error</span></td><td>Atomic rollback executed safely. Zero balance was lost. Retry request.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer style="margin-top:64px;padding-top:24px;border-top:1px solid var(--border-subtle);text-align:center;color:var(--text-muted);font-size:13px;">
+                © 2026 AIVault Hub · Reseller API v1.2.0 · High-Performance Automation
+            </footer>
+
+        
+            <!-- Changelog -->
+            <section class="endpoint-row" id="changelog">
+                <div class="endpoint-spec" style="grid-column: 1 / -1;">
+                    <div class="route-chip"><span class="route-path">RELEASES</span></div>
+                    <h2 class="endpoint-title">API Changelog &amp; Updates</h2>
+                    <div class="mac-terminal" style="margin-top:16px;">
+                        <div class="terminal-header">
+                            <div class="mac-dots"><span class="mac-dot red"></span><span class="mac-dot yellow"></span><span class="mac-dot green"></span></div>
+                            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);">Version History</span>
+                        </div>
+<pre><code>v1.2.0 — Production Release (September 2026)
+- Added Webhooks Engine (register, list, delete, test ping with HMAC-SHA256).
+- Added GET /api/v1/stats analytics endpoint.
+- Added GET /api/v1/orders/export for CSV and JSON order downloads.
+- Added POST /api/v1/keys/rotate for instant key revocation and replacement.
+- Added real-time X-RateLimit-* response headers.
+
+v1.1.0 — Parity &amp; Safety Update
+- Locked exchange rate at 1 USD = 100 INR.
+- Added automatic bulk discount calculations matching Telegram bot logic.
+- Added GET /api/v1/quote pre-order price preview.
+- Added external_order_id idempotency guarantee.
+- Added single-commit atomic wallet deduction &amp; order creation.</code></pre>
+                    </div>
+                </div>
+            </section>
+</main>
+    </div>
+
+    <!-- Interactive JavaScript Engine -->
+    <script>
+        // Syntax Highlighting
+        function highlightJSON(json) {
+            if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    cls = (/:$/.test(match)) ? 'json-key' : 'json-string';
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        document.querySelectorAll('code.json-content').forEach(block => {
+            try {
+                const parsed = JSON.parse(block.textContent);
+                block.innerHTML = highlightJSON(parsed);
+            } catch(e) {}
+        });
+
+        // Theme Toggle
+        const btnTheme = document.getElementById('btnThemeToggle');
+        const iconMoon = document.getElementById('iconMoon');
+        const iconSun = document.getElementById('iconSun');
+
+        function setTheme(t) {
+            document.documentElement.setAttribute('data-theme', t);
+            localStorage.setItem('hub_theme', t);
+            if (t === 'light') {
+                iconMoon.style.display = 'none';
+                iconSun.style.display = 'block';
+            } else {
+                iconMoon.style.display = 'block';
+                iconSun.style.display = 'none';
+            }
+        }
+        setTheme(localStorage.getItem('hub_theme') || 'dark');
+
+        btnTheme.addEventListener('click', () => {
+            const cur = document.documentElement.getAttribute('data-theme');
+            setTheme(cur === 'light' ? 'dark' : 'light');
+        });
+
+        // Mobile Menu
+        const mobileToggle = document.getElementById('btnMobileToggle');
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebarBackdrop');
+
+        function toggleMenu(open) {
+            sidebar.classList.toggle('open', open);
+            backdrop.classList.toggle('open', open);
+        }
+        mobileToggle.addEventListener('click', () => toggleMenu(true));
+        backdrop.addEventListener('click', () => toggleMenu(false));
+        sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggleMenu(false)));
+
+        // Copy Snippet
+        function copySnippetText(txt, btn) {
+            navigator.clipboard.writeText(txt).then(() => {
+                const old = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.textContent = old, 1600);
+            });
+        }
+
+        function copySnippet(btn) {
+            const terminal = btn.closest('.mac-terminal');
+            const visibleBlock = terminal.querySelector('.snippet-block[style*="display: block"]') || terminal.querySelector('.snippet-block') || terminal.querySelector('pre');
+            if (visibleBlock) {
+                const code = visibleBlock.querySelector('code').textContent;
+                copySnippetText(code, btn);
+            }
+        }
+
+        function switchSnippet(btn, lang) {
+            const terminal = btn.closest('.mac-terminal');
+            terminal.querySelectorAll('.terminal-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            terminal.querySelectorAll('.snippet-block').forEach(p => {
+                p.style.display = p.getAttribute('data-lang') === lang ? 'block' : 'none';
+            });
+        }
+
+        // Live Calculator
+        const calcSvc = document.getElementById('calcSvc');
+        const calcRange = document.getElementById('calcRange');
+        const calcQtyVal = document.getElementById('calcQtyVal');
+        const resUnitPrice = document.getElementById('resUnitPrice');
+        const resBaseTotal = document.getElementById('resBaseTotal');
+        const resDiscount = document.getElementById('resDiscount');
+        const resFinalTotal = document.getElementById('resFinalTotal');
+        const resInrTotal = document.getElementById('resInrTotal');
+
+        function updateCalc() {
+            const opt = calcSvc.options[calcSvc.selectedIndex];
+            const price = parseFloat(opt.getAttribute('data-price'));
+            const bulkQty = parseInt(opt.getAttribute('data-bulk-qty'));
+            const bulkPct = parseFloat(opt.getAttribute('data-bulk-pct'));
+            const qty = parseInt(calcRange.value);
+
+            calcQtyVal.textContent = qty;
+            const baseTotal = price * qty;
+            const discountPct = qty >= bulkQty ? bulkPct : 0;
+            const discountAmt = baseTotal * (discountPct / 100);
+            const finalTotal = baseTotal - discountAmt;
+
+            resUnitPrice.textContent = '$' + price.toFixed(2) + ' USD';
+            resBaseTotal.textContent = '$' + baseTotal.toFixed(2) + ' USD';
+            if (discountPct > 0) {
+                resDiscount.textContent = discountPct + '% (-$' + discountAmt.toFixed(2) + ')';
+            } else {
+                resDiscount.textContent = 'None (' + bulkQty + '+ units gets ' + bulkPct + '% off)';
+            }
+            resFinalTotal.textContent = '$' + finalTotal.toFixed(2) + ' USD';
+            resInrTotal.textContent = '₹' + (finalTotal * 100).toLocaleString('en-IN', {minimumFractionDigits: 2}) + ' INR';
+        }
+
+        calcSvc.addEventListener('change', updateCalc);
+        calcRange.addEventListener('input', updateCalc);
+        updateCalc();
+
+        // Interactive Console Logic
+        let activeConsoleMode = 'sandbox';
+        let sbBalance = 50.00;
+        let sbOrders = 0;
+        const sbCatalog = {
+            service_1: { name: "Gemini Pro 1 Month", price: 0.45, stock: 482, bulkQty: 500, bulkPct: 5 },
+            service_2: { name: "Netflix Premium 1 Month", price: 1.20, stock: 120, bulkQty: 100, bulkPct: 8 },
+            service_3: { name: "ChatGPT Plus Voucher", price: 2.50, stock: 0, bulkQty: 50, bulkPct: 10 }
+        };
+
+        function switchConsoleMode(mode) {
+            activeConsoleMode = mode;
+            document.getElementById('btnSb').classList.toggle('active', mode === 'sandbox');
+            document.getElementById('btnLive').classList.toggle('active', mode === 'live');
+            document.getElementById('sandboxWalletDisplay').style.display = mode === 'sandbox' ? 'flex' : 'none';
+            document.getElementById('liveKeyBanner').style.display = mode === 'live' ? 'block' : 'none';
+        }
+
+        function resetSandbox() {
+            sbBalance = 50.00;
+            sbOrders = 0;
+            sbCatalog.service_1.stock = 482;
+            sbCatalog.service_2.stock = 120;
+            document.getElementById('sbLiveBal').textContent = '$50.00 USD';
+            document.getElementById('sbLiveOrders').textContent = '0';
+            setConsoleOutput(200, { message: "Sandbox wallet balance and stock inventory restored." }, 20);
+        }
+
+        function updateConsoleInputs() {
+            const ep = document.getElementById('consoleEpSelect').value;
+            const container = document.getElementById('consoleDynamicInputs');
+            let html = '';
+
+            if (ep === 'quote' || ep === 'order') {
+                html += `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Service ID</label>
+                        <select id="ciService" style="width:100%;padding:10px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-family:var(--font-mono);font-size:13px;outline:none;">
+                            <option value="service_1">service_1 (Gemini Pro - $0.45)</option>
+                            <option value="service_2">service_2 (Netflix - $1.20)</option>
+                            <option value="service_3">service_3 (ChatGPT - Out of Stock)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Quantity</label>
+                        <input type="number" id="ciQty" value="5" min="1" style="width:100%;padding:10px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-family:var(--font-mono);font-size:13px;outline:none;">
+                    </div>
+                </div>`;
+                if (ep === 'order') {
+                    html += `
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">External Order ID (Optional Idempotency Key)</label>
+                        <input type="text" id="ciExtId" placeholder="client_order_ref_1001" style="width:100%;padding:10px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-main);font-family:var(--font-mono);font-size:13px;outline:none;">
+                    </div>`;
+                }
+            }
+            container.innerHTML = html;
+        }
+        updateConsoleInputs();
+
+        function setConsoleOutput(status, data, ms) {
+            const badge = document.getElementById('liveRespStatus');
+            badge.textContent = status + (status >= 200 && status < 300 ? ' OK' : ' Error');
+            badge.className = 'method-badge ' + (status >= 200 && status < 300 ? 'get' : 'delete');
+            document.getElementById('liveLatency').textContent = ms + 'ms';
+            document.getElementById('liveOutputContent').innerHTML = highlightJSON(data);
+        }
+
+        async function runConsoleExecution() {
+            const btn = document.getElementById('btnExecuteConsole');
+            const lbl = document.getElementById('btnRunLabel');
+            const sel = document.getElementById('consoleEpSelect');
+            const ep = sel.value;
+            const method = sel.options[sel.selectedIndex].getAttribute('data-method');
+
+            btn.disabled = true;
+            lbl.textContent = 'Executing...';
+            const start = performance.now();
+
+            if (activeConsoleMode === 'live') {
+                const key = document.getElementById('liveSecretKey').value.trim();
+                if (!key) {
+                    btn.disabled = false;
+                    lbl.textContent = 'Execute Request';
+                    setConsoleOutput(401, { error: "missing_api_key", message: "Please input your secret API key above." }, 2);
+                    return;
+                }
+
+                let url = '/api/v1/';
+                let opts = { method: method, headers: { 'X-API-Key': key, 'Content-Type': 'application/json' } };
+
+                if (ep === 'products') url += 'products';
+                else if (ep === 'me') url += 'me';
+                else if (ep === 'quote') {
+                    const sid = document.getElementById('ciService').value;
+                    const qty = document.getElementById('ciQty').value;
+                    url += `quote?service_id=${encodeURIComponent(sid)}&quantity=${encodeURIComponent(qty)}`;
+                }
+                else if (ep === 'order') {
+                    url += 'order';
+                    const payload = {
+                        service_id: document.getElementById('ciService').value,
+                        quantity: parseInt(document.getElementById('ciQty').value)
+                    };
+                    const ext = document.getElementById('ciExtId')?.value.trim();
+                    if (ext) payload.external_order_id = ext;
+                    opts.body = JSON.stringify(payload);
+                }
+                else if (ep === 'stats') url += 'stats';
+                else if (ep === 'webhooks_list') url += 'webhooks';
+                else if (ep === 'webhooks_test') {
+                    url += 'webhooks/test';
+                    opts.body = JSON.stringify({ event: "order.delivered" });
+                }
+
+                try {
+                    const res = await fetch(url, opts);
+                    const latency = Math.round(performance.now() - start);
+                    const json = await res.json();
+                    setConsoleOutput(res.status, json, latency);
+                } catch(err) {
+                    setConsoleOutput(500, { error: "network_error", message: err.message }, Math.round(performance.now() - start));
+                } finally {
+                    btn.disabled = false;
+                    lbl.textContent = 'Execute Request';
+                }
+                return;
+            }
+
+            // Sandbox Simulation
+            const latency = Math.floor(Math.random() * 60) + 30;
+            await new Promise(r => setTimeout(r, latency));
+
+            if (ep === 'products') {
+                const pList = Object.keys(sbCatalog).map(k => ({
+                    service_id: k,
+                    name: sbCatalog[k].name,
+                    stock: sbCatalog[k].stock,
+                    custom_pricing: false,
+                    pricing_tiers: [{ min: 1, max: 1000, price: sbCatalog[k].price }],
+                    bulk_discounts: [{ min_qty: sbCatalog[k].bulkQty, discount_pct: sbCatalog[k].bulkPct }]
+                }));
+                setConsoleOutput(200, { currency: "USD", rate: "1 USD = 100 INR (fixed)", products: pList }, latency);
+            }
+            else if (ep === 'me') {
+                setConsoleOutput(200, { chat_id: 99887766, balance: sbBalance, currency: "USD" }, latency);
+            }
+            else if (ep === 'quote') {
+                const sid = document.getElementById('ciService').value;
+                const qty = parseInt(document.getElementById('ciQty').value) || 1;
+                const prod = sbCatalog[sid];
+                if (!prod) setConsoleOutput(404, { error: "No such service" }, latency);
+                else {
+                    const baseTotal = prod.price * qty;
+                    const discountPct = qty >= prod.bulkQty ? prod.bulkPct : 0;
+                    const discountAmt = baseTotal * (discountPct / 100);
+                    const finalTotal = baseTotal - discountAmt;
+                    setConsoleOutput(200, {
+                        service_id: sid,
+                        service_name: prod.name,
+                        quantity: qty,
+                        stock: prod.stock,
+                        pricing: {
+                            unit_price: prod.price,
+                            base_total: parseFloat(baseTotal.toFixed(2)),
+                            bulk_discount_pct: discountPct,
+                            bulk_discount_amount: parseFloat(discountAmt.toFixed(2)),
+                            final_total: parseFloat(finalTotal.toFixed(2)),
+                            price_source: discountPct > 0 ? "normal+bulk_discount" : "normal"
+                        },
+                        your_balance: sbBalance,
+                        sufficient_balance: sbBalance >= finalTotal
+                    }, latency);
+                }
+            }
+            else if (ep === 'order') {
+                const sid = document.getElementById('ciService').value;
+                const qty = parseInt(document.getElementById('ciQty').value) || 1;
+                const ext = document.getElementById('ciExtId')?.value.trim() || null;
+                const prod = sbCatalog[sid];
+
+                if (!prod) setConsoleOutput(404, { error: "No such service" }, latency);
+                else if (prod.stock < qty) setConsoleOutput(409, { error: "Insufficient stock. Current stock is " + prod.stock }, latency);
+                else {
+                    const baseTotal = prod.price * qty;
+                    const discountPct = qty >= prod.bulkQty ? prod.bulkPct : 0;
+                    const finalTotal = parseFloat((baseTotal * (1 - discountPct / 100)).toFixed(2));
+
+                    if (sbBalance < finalTotal) {
+                        setConsoleOutput(402, { error: "Insufficient balance" }, latency);
+                    } else {
+                        sbBalance = parseFloat((sbBalance - finalTotal).toFixed(2));
+                        prod.stock -= qty;
+                        sbOrders++;
+                        document.getElementById('sbLiveBal').textContent = '$' + sbBalance.toFixed(2) + ' USD';
+                        document.getElementById('sbLiveOrders').textContent = sbOrders;
+
+                        const deliveredKeys = Array.from({length: qty}, () => 'KEY-' + sid.toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase());
+
+                        const res = {
+                            success: true,
+                            order_id: "API" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+                            service_id: sid,
+                            quantity: qty,
+                            total_cost: finalTotal,
+                            new_balance: sbBalance,
+                            currency: "USD",
+                            price_breakdown: {
+                                unit_price: prod.price,
+                                base_total: baseTotal,
+                                bulk_discount_pct: discountPct,
+                                final_total: finalTotal,
+                                price_source: discountPct > 0 ? "normal+bulk_discount" : "normal"
+                            },
+                            products: deliveredKeys
+                        };
+                        if (ext) res.external_order_id = ext;
+                        setConsoleOutput(201, res, latency);
+                    }
+                }
+            }
+            else {
+                setConsoleOutput(200, { success: true, message: "Sandbox simulated response" }, latency);
+            }
+
+            btn.disabled = false;
+            lbl.textContent = 'Execute Request';
+        }
+
+        // Navigation filter
+        document.getElementById('filterNavInput').addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            document.querySelectorAll('#endpointsNavList li').forEach(li => {
+                li.style.display = li.textContent.toLowerCase().includes(val) ? '' : 'none';
+            });
+        });
+    </script><div id="goog-gt-tt" class="VIpgJd-yAWNEb-L7lbkb skiptranslate" style="display: none; border-radius: 12px; margin: 0 0 0 -23px; padding: 0; font-family: 'Google Sans', Arial, sans-serif;" data-id=""><div id="goog-gt-vt" class="VIpgJd-yAWNEb-hvhgNd"><div class="VIpgJd-yAWNEb-hvhgNd-Ud7fr"><img src="./AIVault Hub — Next-Gen Reseller API &amp; Interactive Console_files/24px.svg" width="24" height="24" alt=""><div class=" VIpgJd-yAWNEb-hvhgNd-IuizWc-i3jM8c " dir="ltr">原文</div></div><div class="VIpgJd-yAWNEb-hvhgNd-k77Iif"><div id="goog-gt-original-text" class="VIpgJd-yAWNEb-nVMfcd-fmcmS VIpgJd-yAWNEb-hvhgNd-axAV1"></div></div><div class="VIpgJd-yAWNEb-hvhgNd-N7Eqid ltr"><div class="VIpgJd-yAWNEb-hvhgNd-N7Eqid-B7I4Od ltr" dir="ltr"><div class="VIpgJd-yAWNEb-hvhgNd-UTujCb">请对此翻译评分</div><div class="VIpgJd-yAWNEb-hvhgNd-eO9mKe">您的反馈将用于改进谷歌翻译</div></div><div class="VIpgJd-yAWNEb-hvhgNd-xgov5 ltr"><button id="goog-gt-thumbUpButton" type="button" class="VIpgJd-yAWNEb-hvhgNd-bgm6sf" title="翻译质量很棒" aria-label="翻译质量很棒" aria-pressed="false"><span id="goog-gt-thumbUpIcon"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M21 7h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 0S7.08 6.85 7 7H2v13h16c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V9c0-1.1-.9-2-2-2zM7 18H4V9h3v9zm14-7l-3 7H9V8l4.34-4.34L12 9h9v2z"></path></svg></span><span id="goog-gt-thumbUpIconFilled"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M21 7h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 0S7.08 6.85 7 7v13h11c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V9c0-1.1-.9-2-2-2zM5 7H1v13h4V7z"></path></svg></span></button><button id="goog-gt-thumbDownButton" type="button" class="VIpgJd-yAWNEb-hvhgNd-bgm6sf" title="翻译质量很差" aria-label="翻译质量很差" aria-pressed="false"><span id="goog-gt-thumbDownIcon"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M3 17h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 24s7.09-6.85 7.17-7h5V4H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2zM17 6h3v9h-3V6zM3 13l3-7h9v10l-4.34 4.34L12 15H3v-2z"></path></svg></span><span id="goog-gt-thumbDownIconFilled"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M3 17h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 24s7.09-6.85 7.17-7V4H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2zm16 0h4V4h-4v13z"></path></svg></span></button></div></div><div id="goog-gt-votingHiddenPane" class="VIpgJd-yAWNEb-hvhgNd-aXYTce"><form id="goog-gt-votingForm" action="https://translate.googleapis.com/translate_voting?client=te_lib" method="post" target="votingFrame" class="VIpgJd-yAWNEb-hvhgNd-aXYTce"><input type="text" name="sl" id="goog-gt-votingInputSrcLang"><input type="text" name="tl" id="goog-gt-votingInputTrgLang"><input type="text" name="query" id="goog-gt-votingInputSrcText"><input type="text" name="gtrans" id="goog-gt-votingInputTrgText"><input type="text" name="vote" id="goog-gt-votingInputVote"></form><iframe name="votingFrame" frameborder="0" src="./AIVault Hub — Next-Gen Reseller API &amp; Interactive Console_files/saved_resource.html"></iframe></div></div></div>
+
+
+</body><div id="immersive-translate-popup" style="all: initial"><template shadowrootmode="open"><div id="mount" style="display: block;"><div class="imt-fb-container right imt-notranslate  " data-theme="dark" style="z-index: 2147483647; pointer-events: none; right: 0px; top: 335px; display: flex;"><div hidden="" class="imt-no-events " id="manga-button" style="position: relative;"><div class=" " style="position: relative; pointer-events: all; display: inline-block;"><div><div class="imt-manga-button btn-animate" style="opacity: 0.7; transform: translateX(2px);"><div style="position: relative;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style="vertical-align: middle;"><path d="M14.8853 4.92364C14.8853 4.92364 16.3905 10.4362 22.6668 4C22.6668 4 20.3381 10.8907 25.3364 10.0843C25.3364 10.0843 22.0563 15.6994 29 18.0599C29 18.0599 22.9934 19.306 21.1617 28C21.1617 28 17.7679 24.54 14.8853 27.3549C14.8853 27.3549 13.3233 23.5724 7.33097 26.27C7.33097 26.27 10.1141 20.6549 4.83179 21.0507C4.83179 21.0507 7.16057 18.8955 3 15.9047C3 15.9047 7.50137 16.1833 6.33697 11.7117C6.33697 11.7117 10.0005 12.3421 8.66576 6.82957C8.65156 6.81491 12.4855 9.80574 14.8853 4.92364Z" fill="#ED6D8F"></path><path d="M20.8599 13.7022C20.885 13.1361 20.9543 12.5713 20.9959 12.0052C21.0337 11.568 20.8107 11.2794 20.3876 11.18C20.0759 11.1013 19.7508 11.0867 19.433 11.137C19.1951 11.1945 18.9542 11.2396 18.7113 11.2721C18.2403 11.3028 17.9973 11.5275 17.9796 11.988C17.977 12.0833 17.9596 12.1777 17.928 12.268C17.3034 13.9102 16.6774 15.5499 16.0503 17.1873C16.0301 17.2401 16.0062 17.2904 15.9671 17.3776C15.7291 16.8975 15.4281 16.4898 15.2745 15.9986C14.8073 14.5152 14.3186 13.033 13.8312 11.5594C13.6826 11.1112 13.3489 10.9344 12.8754 11.0216C12.7889 11.0365 12.7008 11.0398 12.6134 11.0314C12.2241 10.9938 11.8311 11.0404 11.4623 11.1677C11.0946 11.2991 10.9498 11.557 11.0152 11.9254C11.0428 12.0371 11.0643 12.1503 11.0795 12.2643C11.1223 13.1902 11.1777 14.1087 11.2054 15.0321C11.257 16.7992 11.2117 18.5651 11.0858 20.3284C11.0644 20.6354 11.0304 20.9424 11.0228 21.2494C11.0115 21.6092 11.1613 21.7811 11.5266 21.8143C11.9976 21.8573 12.4711 21.8708 12.9421 21.9088C13.0309 21.9201 13.121 21.9003 13.1962 21.8528C13.2714 21.8053 13.3268 21.7334 13.3527 21.6497C13.3996 21.5394 13.4252 21.4216 13.4282 21.3022C13.4295 20.8258 13.4207 20.3493 13.4081 19.8741C13.393 19.3264 13.3917 18.7763 13.3438 18.231C13.2857 17.5839 13.266 16.934 13.2847 16.2847C13.2847 16.2466 13.291 16.2073 13.2985 16.1312C13.3338 16.2024 13.3514 16.2356 13.3665 16.2712C13.9017 17.5228 14.3617 18.8037 14.7443 20.1074C14.7928 20.2421 14.7928 20.3889 14.7443 20.5237C14.6322 20.8196 14.7141 21.037 14.9659 21.1377C15.4445 21.3268 15.9331 21.4926 16.4155 21.6731C16.4865 21.7033 16.566 21.7091 16.6408 21.6895C16.7157 21.6698 16.7815 21.6259 16.8273 21.565C16.9085 21.4643 16.9743 21.3526 17.0225 21.2335C17.0537 21.1374 17.0798 21.0399 17.1006 20.9412C17.3185 20.2425 17.5653 19.5499 17.7517 18.8438C17.9785 17.9723 18.2624 17.1158 18.6018 16.2798C18.6201 16.2439 18.6411 16.2094 18.6647 16.1766C18.6761 16.2319 18.6761 16.254 18.6761 16.2761C18.6345 17.59 18.5955 18.8978 18.5501 20.2056C18.5363 20.5949 18.491 20.9829 18.4809 21.3722C18.4721 21.705 18.6207 21.8708 18.9557 21.9002C19.4355 21.9432 19.9191 21.9592 20.4002 21.9973C20.4888 22.0079 20.5784 21.9875 20.653 21.9399C20.7277 21.8922 20.7827 21.8203 20.8082 21.7369C20.8531 21.6305 20.8766 21.5167 20.8775 21.4017C20.88 20.7668 20.8674 20.132 20.8674 19.4971C20.8662 19.2846 20.8687 19.0722 20.8523 18.8622C20.8158 18.3968 20.7264 17.9314 20.7339 17.4685C20.7515 16.2122 20.8044 14.9572 20.8599 13.7022Z" fill="white"></path></svg></div></div></div></div></div><div style="display: flex; align-items: center; flex-direction: row; gap: 8px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none" style="display: block; opacity: 0;"><g clip-path="url(#clip0_38845_9816)"><path d="M7 14C5.14348 14 3.36301 13.2625 2.05025 11.9497C0.737498 10.637 0 8.85652 0 7C0 5.14348 0.737498 3.36301 2.05025 2.05025C3.36301 0.737498 5.14348 0 7 0C8.85652 0 10.637 0.737498 11.9497 2.05025C13.2625 3.36301 14 5.14348 14 7C14 8.85652 13.2625 10.637 11.9497 11.9497C10.637 13.2625 8.85652 14 7 14Z" fill="#B1B1B1" fill-opacity="0.4"></path><path d="M6.11754 7.00052L4.18254 5.06452C4.06786 4.94725 4.00406 4.78948 4.00498 4.62546C4.00589 4.46144 4.07145 4.3044 4.18744 4.18841C4.30342 4.07243 4.46046 4.00687 4.62448 4.00595C4.7885 4.00503 4.94627 4.06884 5.06354 4.18352L6.99954 6.11852L8.93554 4.18352C8.99315 4.1246 9.06188 4.07771 9.13774 4.04554C9.2136 4.01337 9.29508 3.99656 9.37748 3.9961C9.45988 3.99564 9.54155 4.01153 9.61777 4.04285C9.69398 4.07417 9.76323 4.1203 9.82149 4.17857C9.87976 4.23683 9.92589 4.30608 9.95721 4.38229C9.98853 4.45851 10.0044 4.54018 10.004 4.62258C10.0035 4.70497 9.98669 4.78646 9.95452 4.86232C9.92235 4.93818 9.87545 5.00691 9.81654 5.06452L7.88154 7.00052L9.81654 8.93652C9.93122 9.05379 9.99502 9.21155 9.99411 9.37557C9.99319 9.5396 9.92763 9.69664 9.81164 9.81262C9.69566 9.9286 9.53862 9.99417 9.3746 9.99508C9.21058 9.996 9.05281 9.9322 8.93554 9.81752L6.99954 7.88252L5.06354 9.81752C5.00593 9.87643 4.93721 9.92333 4.86135 9.9555C4.78549 9.98767 4.704 10.0045 4.6216 10.0049C4.5392 10.0054 4.45753 9.9895 4.38131 9.95818C4.3051 9.92686 4.23585 9.88073 4.17759 9.82247C4.11932 9.7642 4.0732 9.69496 4.04188 9.61874C4.01056 9.54253 3.99467 9.46086 3.99513 9.37846C3.99559 9.29606 4.01239 9.21457 4.04456 9.13871C4.07673 9.06285 4.12363 8.99413 4.18254 8.93652L6.11754 7.00052Z" fill="white"></path></g><defs><clippath id="clip0_38845_9816"><rect width="14" height="14" fill="white"></rect></clippath></defs></svg><div style="position: relative;"><div class="imt-fb-btn right btn-animate  " dir="ltr" style="opacity: 0.7;"><div class=" " style="position: relative; pointer-events: all; display: inline-block;"><div><div class="imt-fb-btn-content"><svg class="imt-fb-logo-img imt-fb-logo-img-big-bg" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 14C0 6.26801 6.26801 0 14 0C21.732 0 28 6.26801 28 14C28 21.732 21.732 28 14 28C6.26801 28 0 21.732 0 14Z" fill="#ED6D8F"></path><path d="M7.30921 15.6381C7.53044 15.6381 7.70979 15.8175 7.70979 16.0387V19.0088C7.70979 19.934 8.45993 20.684 9.38526 20.684H11.7557C11.9769 20.684 12.1562 20.8634 12.1562 21.0846V22.152C12.1562 22.3732 11.9769 22.5526 11.7557 22.5526H9.38526C7.42782 22.5526 5.84099 20.966 5.84099 19.0088V16.0387C5.84099 15.8175 6.02034 15.6381 6.24157 15.6381H7.30921ZM18.9876 12.6944C19.1515 12.6944 19.2989 12.7943 19.3597 12.9466L22.9711 22.0036C23.076 22.2667 22.8822 22.5526 22.599 22.5526H21.4672C21.3016 22.5526 21.153 22.4506 21.0934 22.2961L20.2724 20.1673C20.2128 20.0128 20.0643 19.9108 19.8986 19.9108H16.7508C16.5852 19.9108 16.4366 20.0128 16.377 20.1673L15.556 22.2961C15.4964 22.4506 15.3478 22.5526 15.1822 22.5526H14.0504C13.7672 22.5526 13.5734 22.2667 13.6783 22.0036L17.2897 12.9466C17.3505 12.7943 17.4979 12.6944 17.6618 12.6944H18.9876ZM18.5116 15.6017C18.4456 15.4308 18.2038 15.4308 18.1378 15.6017L17.3016 17.7699C17.251 17.9011 17.3478 18.0423 17.4885 18.0423H19.1609C19.3016 18.0423 19.3984 17.9012 19.3478 17.7699L18.5116 15.6017ZM9.69589 5.30028C9.79943 4.8999 10.368 4.89991 10.4715 5.30028L11.1086 7.76368C11.3244 8.59845 11.9396 9.27221 12.7513 9.56299L14.9019 10.3334C15.2559 10.4602 15.2559 10.9608 14.9019 11.0876L12.7513 11.8581C11.9396 12.1489 11.3244 12.8226 11.1086 13.6574L10.4715 16.1208C10.368 16.5212 9.79943 16.5212 9.69589 16.1208L9.05884 13.6574C8.84297 12.8226 8.22786 12.1489 7.41615 11.8581L5.26548 11.0876C4.91151 10.9608 4.91151 10.4602 5.26548 10.3334L7.41615 9.56299C8.22786 9.27221 8.84297 8.59844 9.05884 7.76368L9.69589 5.30028ZM18.0064 6.20485C19.9639 6.20485 21.5507 7.79145 21.5507 9.74861V11.281C21.5507 11.5022 21.3713 11.6816 21.1501 11.6816H20.0825C19.8612 11.6816 19.6819 11.5022 19.6819 11.281V9.74861C19.6819 8.82341 18.9318 8.07338 18.0064 8.07338H14.4343C14.2131 8.07338 14.0337 7.89403 14.0337 7.6728V6.60543C14.0337 6.3842 14.2131 6.20486 14.4343 6.20485H18.0064Z" fill="white"></path></svg></div></div></div></div><div title="关闭悬浮球" class="imt-fb-close-button btn-animate" style="opacity: 0; pointer-events: none; filter: blur(1px); transition: opacity 110ms cubic-bezier(0.4, 0, 1, 1), filter 110ms cubic-bezier(0.4, 0, 1, 1); will-change: opacity, filter;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><g clip-path="url(#clip0_38845_9816)"><path d="M7 14C5.14348 14 3.36301 13.2625 2.05025 11.9497C0.737498 10.637 0 8.85652 0 7C0 5.14348 0.737498 3.36301 2.05025 2.05025C3.36301 0.737498 5.14348 0 7 0C8.85652 0 10.637 0.737498 11.9497 2.05025C13.2625 3.36301 14 5.14348 14 7C14 8.85652 13.2625 10.637 11.9497 11.9497C10.637 13.2625 8.85652 14 7 14Z" fill="#B1B1B1" fill-opacity="0.4"></path><path d="M6.11754 7.00052L4.18254 5.06452C4.06786 4.94725 4.00406 4.78948 4.00498 4.62546C4.00589 4.46144 4.07145 4.3044 4.18744 4.18841C4.30342 4.07243 4.46046 4.00687 4.62448 4.00595C4.7885 4.00503 4.94627 4.06884 5.06354 4.18352L6.99954 6.11852L8.93554 4.18352C8.99315 4.1246 9.06188 4.07771 9.13774 4.04554C9.2136 4.01337 9.29508 3.99656 9.37748 3.9961C9.45988 3.99564 9.54155 4.01153 9.61777 4.04285C9.69398 4.07417 9.76323 4.1203 9.82149 4.17857C9.87976 4.23683 9.92589 4.30608 9.95721 4.38229C9.98853 4.45851 10.0044 4.54018 10.004 4.62258C10.0035 4.70497 9.98669 4.78646 9.95452 4.86232C9.92235 4.93818 9.87545 5.00691 9.81654 5.06452L7.88154 7.00052L9.81654 8.93652C9.93122 9.05379 9.99502 9.21155 9.99411 9.37557C9.99319 9.5396 9.92763 9.69664 9.81164 9.81262C9.69566 9.9286 9.53862 9.99417 9.3746 9.99508C9.21058 9.996 9.05281 9.9322 8.93554 9.81752L6.99954 7.88252L5.06354 9.81752C5.00593 9.87643 4.93721 9.92333 4.86135 9.9555C4.78549 9.98767 4.704 10.0045 4.6216 10.0049C4.5392 10.0054 4.45753 9.9895 4.38131 9.95818C4.3051 9.92686 4.23585 9.88073 4.17759 9.82247C4.11932 9.7642 4.0732 9.69496 4.04188 9.61874C4.01056 9.54253 3.99467 9.46086 3.99513 9.37846C3.99559 9.29606 4.01239 9.21457 4.04456 9.13871C4.07673 9.06285 4.12363 8.99413 4.18254 8.93652L6.11754 7.00052Z" fill="white"></path></g><defs><clippath id="clip0_38845_9816"><rect width="14" height="14" fill="white"></rect></clippath></defs></svg></div></div><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none" style="display: none; opacity: 0;"><g clip-path="url(#clip0_38845_9816)"><path d="M7 14C5.14348 14 3.36301 13.2625 2.05025 11.9497C0.737498 10.637 0 8.85652 0 7C0 5.14348 0.737498 3.36301 2.05025 2.05025C3.36301 0.737498 5.14348 0 7 0C8.85652 0 10.637 0.737498 11.9497 2.05025C13.2625 3.36301 14 5.14348 14 7C14 8.85652 13.2625 10.637 11.9497 11.9497C10.637 13.2625 8.85652 14 7 14Z" fill="#B1B1B1" fill-opacity="0.4"></path><path d="M6.11754 7.00052L4.18254 5.06452C4.06786 4.94725 4.00406 4.78948 4.00498 4.62546C4.00589 4.46144 4.07145 4.3044 4.18744 4.18841C4.30342 4.07243 4.46046 4.00687 4.62448 4.00595C4.7885 4.00503 4.94627 4.06884 5.06354 4.18352L6.99954 6.11852L8.93554 4.18352C8.99315 4.1246 9.06188 4.07771 9.13774 4.04554C9.2136 4.01337 9.29508 3.99656 9.37748 3.9961C9.45988 3.99564 9.54155 4.01153 9.61777 4.04285C9.69398 4.07417 9.76323 4.1203 9.82149 4.17857C9.87976 4.23683 9.92589 4.30608 9.95721 4.38229C9.98853 4.45851 10.0044 4.54018 10.004 4.62258C10.0035 4.70497 9.98669 4.78646 9.95452 4.86232C9.92235 4.93818 9.87545 5.00691 9.81654 5.06452L7.88154 7.00052L9.81654 8.93652C9.93122 9.05379 9.99502 9.21155 9.99411 9.37557C9.99319 9.5396 9.92763 9.69664 9.81164 9.81262C9.69566 9.9286 9.53862 9.99417 9.3746 9.99508C9.21058 9.996 9.05281 9.9322 8.93554 9.81752L6.99954 7.88252L5.06354 9.81752C5.00593 9.87643 4.93721 9.92333 4.86135 9.9555C4.78549 9.98767 4.704 10.0045 4.6216 10.0049C4.5392 10.0054 4.45753 9.9895 4.38131 9.95818C4.3051 9.92686 4.23585 9.88073 4.17759 9.82247C4.11932 9.7642 4.0732 9.69496 4.04188 9.61874C4.01056 9.54253 3.99467 9.46086 3.99513 9.37846C3.99559 9.29606 4.01239 9.21457 4.04456 9.13871C4.07673 9.06285 4.12363 8.99413 4.18254 8.93652L6.11754 7.00052Z" fill="white"></path></g><defs><clippath id="clip0_38845_9816"><rect width="14" height="14" fill="white"></rect></clippath></defs></svg></div><div class="btn-animate" style="margin-top: 10px; transform: translateX(-5px); opacity: 0; pointer-events: none; filter: blur(1px); transition: opacity 110ms cubic-bezier(0.4, 0, 1, 1), filter 110ms cubic-bezier(0.4, 0, 1, 1); will-change: opacity, filter;"><div class=" btn-animate" style="position: relative; pointer-events: none; display: inline-block;"><div><div class="imt-fb-round-button"><svg class="imt-fb-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px;"><path d="M17 8.66797H11.375" stroke="#ED6D8F" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.625 15.332L7 15.332" stroke="#ED6D8F" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15.125 17C16.1605 17 17 16.1605 17 15.125C17 14.0895 16.1605 13.25 15.125 13.25C14.0895 13.25 13.25 14.0895 13.25 15.125C13.25 16.1605 14.0895 17 15.125 17Z" stroke="#ED6D8F" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8.875 10.75C9.91053 10.75 10.75 9.91053 10.75 8.875C10.75 7.83947 9.91053 7 8.875 7C7.83947 7 7 7.83947 7 8.875C7 9.91053 7.83947 10.75 8.875 10.75Z" stroke="#ED6D8F" stroke-linecap="round" stroke-linejoin="round"></path><rect x="3" y="4" width="18" height="16" rx="1.66667" stroke="#ED6D8F"></rect></svg></div></div></div></div><div class="btn-animate" style="margin-top: 10px; transform: translateX(-5px); opacity: 0; pointer-events: none; filter: blur(1px); transition: opacity 110ms cubic-bezier(0.4, 0, 1, 1), filter 110ms cubic-bezier(0.4, 0, 1, 1); will-change: opacity, filter;"><div class=" btn-animate" style="position: relative; pointer-events: none; display: inline-block;"><div><div class="imt-fb-round-button"><svg class="imt-fb-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none"><mask id="mask0_43829_2633" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20" style="mask-type: alpha;"><rect width="20" height="20" fill="#D9D9D9"></rect></mask><g mask="url(#mask0_43829_2633)"><path d="M9.99546 12.2609C10.1639 12.2609 10.305 12.2055 10.4188 12.0946C10.5327 11.9838 10.5896 11.8441 10.5896 11.6755C10.5896 11.507 10.5342 11.3659 10.4234 11.2521C10.3124 11.1384 10.1727 11.0815 10.0042 11.0815C9.83574 11.0815 9.69463 11.1369 9.58088 11.2478C9.46699 11.3586 9.41005 11.4982 9.41005 11.6667C9.41005 11.8353 9.46546 11.9765 9.5763 12.0903C9.68727 12.204 9.82699 12.2609 9.99546 12.2609ZM9.99546 10.1936C10.148 10.1936 10.2771 10.1418 10.3828 10.0382C10.4886 9.93443 10.5415 9.80568 10.5415 9.65193V5.20318C10.5415 5.04943 10.49 4.92075 10.3871 4.81713C10.2844 4.71338 10.1567 4.66151 10.0042 4.66151C9.85171 4.66151 9.72261 4.71338 9.61692 4.81713C9.51109 4.92075 9.45817 5.04943 9.45817 5.20318V9.65193C9.45817 9.80568 9.50963 9.93443 9.61255 10.0382C9.71532 10.1418 9.84296 10.1936 9.99546 10.1936ZM5.03192 14.5846L3.55359 16.063C3.34262 16.2739 3.10032 16.3221 2.82671 16.2076C2.55324 16.093 2.4165 15.8864 2.4165 15.5878V3.75776C2.4165 3.38262 2.54602 3.06554 2.80505 2.80651C3.06407 2.54748 3.38116 2.41797 3.7563 2.41797H16.2434C16.6185 2.41797 16.9356 2.54748 17.1946 2.80651C17.4537 3.06554 17.5832 3.38262 17.5832 3.75776V13.2448C17.5832 13.62 17.4537 13.9371 17.1946 14.1961C16.9356 14.4551 16.6185 14.5846 16.2434 14.5846H5.03192ZM4.58317 13.5013H16.2434C16.3075 13.5013 16.3663 13.4746 16.4196 13.4211C16.4731 13.3678 16.4998 13.309 16.4998 13.2448V3.75776C16.4998 3.69359 16.4731 3.63484 16.4196 3.58151C16.3663 3.52804 16.3075 3.5013 16.2434 3.5013H3.7563C3.69213 3.5013 3.63338 3.52804 3.58005 3.58151C3.52657 3.63484 3.49984 3.69359 3.49984 3.75776V14.5928L4.58317 13.5013Z" fill="#ED6D8F"></path></g></svg></div></div></div></div><div hidden="" id="immersive-translate-popup-overlay" class="immersive-translate-popup-overlay"><div class="immersive-translate-popup-wrapper" style="position: fixed; top: 335px; right: 65px;"></div></div></div></div></template></div></html>

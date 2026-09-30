@@ -1669,7 +1669,7 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jioCfg := GetJioPricingConfig()
-	jioSalePrice := CalculateJioSalePrice(jioCfg.CachedCost, jioCfg)
+	jioSalePrice := GetCurrentJioSalePrice()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -1684,6 +1684,7 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 			"sale_price":   jioSalePrice,
 			"pricing_mode": jioCfg.PricingMode,
 			"fixed_price":  jioCfg.FixedPrice,
+			"fixed_markup": jioCfg.FixedMarkup,
 			"ratio":        jioCfg.Ratio,
 			"cached_cost":  jioCfg.CachedCost,
 		},
@@ -2119,7 +2120,7 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 			keyVal = k
 		}
 
-		suppBalance := pName == "vente" || pName == "acczone"
+		suppBalance := pName == "vente" || pName == "acczone" || pName == "aivault"
 		suppDeposit := pName == "vente"
 
 		list = append(list, SupplierDTO{

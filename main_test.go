@@ -5003,6 +5003,122 @@ func TestJioPricingAPIAndOrderExport(t *testing.T) {
 	}
 }
 
+// TestJioPricingStrategyAndDashboardConsistency 验证重构后 Jio 价格管理：
+// 1. 彻底移除了第三方通用采购网关 (external_api)
+// 2. 价格配置策略成本感知 Jio 供应商配置的策略
+// 3. 最终销售价格与仪表盘 (Dashboard) 以及用户下单/兑换扣减金额 100% 绝对一致
+func TestJioPricingStrategyAndDashboardConsistency(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		t.Skip("MySQL not available")
+	}
+
+	ctx := context.Background()
+
+	// 1. 验证 GetAllJioProviderCosts 中绝对不包含 external_api
+	costs, errCosts := GetAllJioProviderCosts(ctx)
+	if errCosts != nil {
+		t.Fatalf("GetAllJioProviderCosts failed: %v", errCosts)
+	}
+	for _, c := range costs {
+		if c.ProviderKey == "external_api" || strings.Contains(c.ProviderName, "第三方通用采购网关") {
+			t.Fatalf("forbidden provider 'external_api' still exists in costs: %+v", c)
+		}
+	}
+
+	// 2. 验证从供应商策略获取成本
+	// 注册 Mock 并设置当前激活供应商为 mock，基准价格 0.40
+	RegisterJioProvider(&MockJioProvider{})
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'mock', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'mock'")
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_dispatch_strategy', 'specific', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'specific'")
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_pricing_cached_cost', '0.40', NOW()) ON DUPLICATE KEY UPDATE setting_value = '0.40'")
+
+	strategyInfo := GetJioSupplierStrategyCostInfo(ctx, false)
+	if strategyInfo.StrategyType != StrategySpecific {
+		t.Errorf("expected StrategySpecific, got '%s'", strategyInfo.StrategyType)
+	}
+	if strategyInfo.CostUSD <= 0 {
+		t.Errorf("expected positive strategy cost USD, got %.2f", strategyInfo.CostUSD)
+	}
+
+	// 3. 设置价格管理为固定加价模式：固定加价 ￥2.00，汇率 7.20
+	// 成本: 0.40 * 7.20 = 2.88，加价 2.00 => 4.88
+	adminCookie := createTestAdminSession(t, "admin_jio_test", "admin", []string{"orders", "jio_pricing", "settings", "dashboard"})
+	updatePayload := map[string]interface{}{
+		"pricing_mode":    "fixed_markup",
+		"fixed_markup":    2.00,
+		"exchange_rate":   7.20,
+		"round_mode":      "round",
+		"round_precision": 2,
+	}
+	bodyBytes, _ := json.Marshal(updatePayload)
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/api/admin/jio/pricing", bytes.NewBuffer(bodyBytes))
+	reqUpdate.AddCookie(adminCookie)
+	rrUpdate := httptest.NewRecorder()
+	handleAdminJioPricing(rrUpdate, reqUpdate)
+	if rrUpdate.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleAdminJioPricing POST, got %d", rrUpdate.Code)
+	}
+
+	// 4. 获取当前统一计算的售价
+	currentPrice := GetCurrentJioSalePrice()
+	if currentPrice != 4.88 {
+		t.Errorf("expected currentPrice 4.88, got %.2f", currentPrice)
+	}
+
+	// 5. 验证仪表盘接口返回的 sale_price 必须与 currentPrice 完全一致
+	reqDash := httptest.NewRequest(http.MethodGet, "/api/admin/dashboard/stats", nil)
+	reqDash.AddCookie(adminCookie)
+	rrDash := httptest.NewRecorder()
+	requireAdmin(handleAdminDashboardStats)(rrDash, reqDash)
+	if rrDash.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleAdminDashboardStats, got %d. Body: %s", rrDash.Code, rrDash.Body.String())
+	}
+	var dashResp struct {
+		Success    bool `json:"success"`
+		JioPricing struct {
+			SalePrice   float64 `json:"sale_price"`
+			PricingMode string  `json:"pricing_mode"`
+			FixedMarkup float64 `json:"fixed_markup"`
+		} `json:"jio_pricing"`
+	}
+	if err := json.Unmarshal(rrDash.Body.Bytes(), &dashResp); err != nil {
+		t.Fatalf("failed to decode dashboard response: %v", err)
+	}
+	if dashResp.JioPricing.SalePrice != currentPrice {
+		t.Fatalf("dashboard sale_price (%.2f) does NOT match GetCurrentJioSalePrice (%.2f)",
+			dashResp.JioPricing.SalePrice, currentPrice)
+	}
+
+	// 6. 验证切换为固定价格模式 (fixed: ￥5.50) 时，各处同样绝对一致
+	fixedPayload := map[string]interface{}{
+		"pricing_mode": "fixed",
+		"fixed_price":  5.50,
+	}
+	fixedBytes, _ := json.Marshal(fixedPayload)
+	reqFixed := httptest.NewRequest(http.MethodPost, "/api/admin/jio/pricing", bytes.NewBuffer(fixedBytes))
+	reqFixed.AddCookie(adminCookie)
+	rrFixed := httptest.NewRecorder()
+	handleAdminJioPricing(rrFixed, reqFixed)
+
+	priceAfterFixed := GetCurrentJioSalePrice()
+	if priceAfterFixed != 5.50 {
+		t.Errorf("expected fixed sale price 5.50, got %.2f", priceAfterFixed)
+	}
+
+	rrDashFixed := httptest.NewRecorder()
+	requireAdmin(handleAdminDashboardStats)(rrDashFixed, reqDash)
+	var dashFixedResp struct {
+		JioPricing struct {
+			SalePrice float64 `json:"sale_price"`
+		} `json:"jio_pricing"`
+	}
+	_ = json.Unmarshal(rrDashFixed.Body.Bytes(), &dashFixedResp)
+	if dashFixedResp.JioPricing.SalePrice != 5.50 {
+		t.Fatalf("dashboard sale_price (%.2f) does NOT match fixed price 5.50", dashFixedResp.JioPricing.SalePrice)
+	}
+}
+
 func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
 	initTestDB(t)
 	if db == nil {
@@ -5027,9 +5143,11 @@ func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
 		t.Fatalf("failed to insert system key: %v", errKey)
 	}
 
-	// 确保定价为固定 5.00 元
+	// 确保定价为固定 5.00 元，且调度策略为 mock
 	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_pricing_mode', 'fixed', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'fixed'")
 	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_pricing_fixed_price', '5.00', NOW()) ON DUPLICATE KEY UPDATE setting_value = '5.00'")
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_dispatch_strategy', 'specific', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'specific'")
+	_, _ = db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'mock', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'mock'")
 
 	// 3. C端提交兑换：此时操作员余额为 0.00 < 5.00，必须被拦截报错
 	redeemPayload := map[string]string{
@@ -5601,6 +5719,401 @@ func TestJioPricingFixedMarkupMode(t *testing.T) {
 	salePrice2 := CalculateJioSalePrice(0.40, cfg)
 	if salePrice2 != 6.30 {
 		t.Fatalf("expected sale price 6.30, got %f", salePrice2)
+	}
+}
+
+// TestJioWalletPermissionsAndTransactionIsolation 测试 Jio 储值钱包权限与流水隔离
+func TestJioWalletPermissionsAndTransactionIsolation(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 创建超级管理员、赋予权限的操作员1、未赋予权限的操作员2
+	now := time.Now()
+	resAdmin, errAdmin := db.Exec(`
+		INSERT INTO admins (username, password_hash, role, jio_balance, created_at, updated_at) 
+		VALUES ('test_super_admin', 'hashpass', 'admin', 500.00, ?, ?)`, now, now)
+	if errAdmin != nil {
+		t.Fatalf("failed to insert admin: %v", errAdmin)
+	}
+	adminID, _ := resAdmin.LastInsertId()
+	adminToken := fmt.Sprintf("session-admin-%d-%d", adminID, now.UnixNano())
+	_, _ = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		adminToken, adminID, now.Add(24*time.Hour), now)
+	adminCookie := &http.Cookie{Name: "admin_session", Value: adminToken}
+
+	resOp1, errOp1 := db.Exec(`
+		INSERT INTO admins (username, password_hash, role, jio_balance, created_at, updated_at) 
+		VALUES ('test_op1_with_perm', 'hashpass', 'user', 0.00, ?, ?)`, now, now)
+	if errOp1 != nil {
+		t.Fatalf("failed to insert op1: %v", errOp1)
+	}
+	op1ID, _ := resOp1.LastInsertId()
+	op1Token := fmt.Sprintf("session-op1-%d-%d", op1ID, now.UnixNano())
+	_, _ = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		op1Token, op1ID, now.Add(24*time.Hour), now)
+	op1Cookie := &http.Cookie{Name: "admin_session", Value: op1Token}
+	// 显式为 op1 分配 jio_wallet 菜单权限
+	_, _ = db.Exec("INSERT INTO admin_permissions (admin_id, permission, created_at) VALUES (?, 'jio_wallet', ?)", op1ID, now)
+
+	resOp2, errOp2 := db.Exec(`
+		INSERT INTO admins (username, password_hash, role, jio_balance, created_at, updated_at) 
+		VALUES ('test_op2_no_perm', 'hashpass', 'user', 0.00, ?, ?)`, now, now)
+	if errOp2 != nil {
+		t.Fatalf("failed to insert op2: %v", errOp2)
+	}
+	op2ID, _ := resOp2.LastInsertId()
+	op2Token := fmt.Sprintf("session-op2-%d-%d", op2ID, now.UnixNano())
+	_, _ = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		op2Token, op2ID, now.Add(24*time.Hour), now)
+	op2Cookie := &http.Cookie{Name: "admin_session", Value: op2Token}
+	// op2 没有任何权限，特别是不拥有 jio_wallet
+
+	// 2. 检查 handleAdminCheck：op2 不应该拥有 jio_wallet，op1 应该拥有 jio_wallet
+	reqCheckOp2 := httptest.NewRequest(http.MethodGet, "/api/admin/check", nil)
+	reqCheckOp2.AddCookie(op2Cookie)
+	rrCheckOp2 := httptest.NewRecorder()
+	handleAdminCheck(rrCheckOp2, reqCheckOp2)
+	var respCheckOp2 struct {
+		Success     bool     `json:"success"`
+		Permissions []string `json:"permissions"`
+	}
+	_ = json.Unmarshal(rrCheckOp2.Body.Bytes(), &respCheckOp2)
+	for _, p := range respCheckOp2.Permissions {
+		if p == "jio_wallet" {
+			t.Fatalf("op2 without permission should NOT have jio_wallet, but got: %v", respCheckOp2.Permissions)
+		}
+	}
+
+	reqCheckOp1 := httptest.NewRequest(http.MethodGet, "/api/admin/check", nil)
+	reqCheckOp1.AddCookie(op1Cookie)
+	rrCheckOp1 := httptest.NewRecorder()
+	handleAdminCheck(rrCheckOp1, reqCheckOp1)
+	var respCheckOp1 struct {
+		Success     bool     `json:"success"`
+		Permissions []string `json:"permissions"`
+	}
+	_ = json.Unmarshal(rrCheckOp1.Body.Bytes(), &respCheckOp1)
+	hasJioWallet := false
+	for _, p := range respCheckOp1.Permissions {
+		if p == "jio_wallet" {
+			hasJioWallet = true
+			break
+		}
+	}
+	if !hasJioWallet {
+		t.Fatalf("op1 with permission SHOULD have jio_wallet, but got: %v", respCheckOp1.Permissions)
+	}
+
+	// 3. op2 尝试访问受 requirePermission("jio_wallet") 保护的接口，必须返回 403 Forbidden
+	reqSummaryOp2 := httptest.NewRequest(http.MethodGet, "/api/admin/jio/wallet/summary", nil)
+	reqSummaryOp2.AddCookie(op2Cookie)
+	rrSummaryOp2 := httptest.NewRecorder()
+	requirePermission("jio_wallet", handleAdminJioWalletSummary)(rrSummaryOp2, reqSummaryOp2)
+	if rrSummaryOp2.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for op2 accessing jio wallet summary, got %d", rrSummaryOp2.Code)
+	}
+
+	// 4. op1 (非超级管理员) 尝试调用直接充值(免扣款)接口 /api/admin/jio/wallet/recharge，必须被拦截 (403 Forbidden)
+	directPayload := map[string]interface{}{
+		"amount": 100.00,
+		"remark": "测试普通用户尝试直接免扣款充值",
+	}
+	directBytes, _ := json.Marshal(directPayload)
+	reqDirectOp1 := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/recharge", bytes.NewBuffer(directBytes))
+	reqDirectOp1.AddCookie(op1Cookie)
+	rrDirectOp1 := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletSelfRecharge)(rrDirectOp1, reqDirectOp1)
+	if rrDirectOp1.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when op1 tries direct recharge, got %d", rrDirectOp1.Code)
+	}
+
+	// 5. 超级管理员调用直接充值 /api/admin/jio/wallet/recharge，应该成功 (200 OK)
+	adminDirectPayload := map[string]interface{}{
+		"amount": 200.00,
+		"remark": "管理员自充值测试",
+	}
+	adminDirectBytes, _ := json.Marshal(adminDirectPayload)
+	reqDirectAdmin := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/recharge", bytes.NewBuffer(adminDirectBytes))
+	reqDirectAdmin.AddCookie(adminCookie)
+	rrDirectAdmin := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletSelfRecharge)(rrDirectAdmin, reqDirectAdmin)
+	if rrDirectAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin direct recharge, got %d: %s", rrDirectAdmin.Code, rrDirectAdmin.Body.String())
+	}
+
+	// 6. 管理员给 op1 充值 88.00 元
+	op1RechargePayload := map[string]interface{}{
+		"target_admin_id": op1ID,
+		"amount":          88.00,
+		"remark":          "给操作员1充值资金",
+	}
+	op1RechargeBytes, _ := json.Marshal(op1RechargePayload)
+	reqAdminRecharge := httptest.NewRequest(http.MethodPost, "/api/admin/jio/wallet/admin_recharge", bytes.NewBuffer(op1RechargeBytes))
+	reqAdminRecharge.AddCookie(adminCookie)
+	rrAdminRecharge := httptest.NewRecorder()
+	requireSuperAdmin(handleAdminJioWalletAdminRecharge)(rrAdminRecharge, reqAdminRecharge)
+	if rrAdminRecharge.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin recharging op1, got %d: %s", rrAdminRecharge.Code, rrAdminRecharge.Body.String())
+	}
+
+	// 7. 测试流水隔离：op1 只能看到属于自己的 1 条流水，绝不能看到 admin 的充值流水
+	reqOp1Tx := httptest.NewRequest(http.MethodGet, "/api/admin/jio/wallet/transactions?page=1&page_size=20", nil)
+	reqOp1Tx.AddCookie(op1Cookie)
+	rrOp1Tx := httptest.NewRecorder()
+	requirePermission("jio_wallet", handleAdminJioWalletTransactions)(rrOp1Tx, reqOp1Tx)
+	if rrOp1Tx.Code != http.StatusOK {
+		t.Fatalf("expected 200 for op1 transactions, got %d", rrOp1Tx.Code)
+	}
+	var txDataOp1 struct {
+		Success bool `json:"success"`
+		Total   int  `json:"total"`
+		Records []struct {
+			ID      int64   `json:"id"`
+			AdminID int64   `json:"admin_id"`
+			Amount  float64 `json:"amount"`
+		} `json:"records"`
+	}
+	_ = json.Unmarshal(rrOp1Tx.Body.Bytes(), &txDataOp1)
+	if txDataOp1.Total != 1 {
+		t.Fatalf("expected op1 to see exactly 1 transaction, got %d", txDataOp1.Total)
+	}
+	if txDataOp1.Records[0].AdminID != op1ID {
+		t.Fatalf("expected record to belong to op1 (ID %d), got %d", op1ID, txDataOp1.Records[0].AdminID)
+	}
+
+	// 8. op1 恶意传入 admin_id 参数试图越权查其他用户：必须仍然被强制隔离为本人
+	reqOp1Tamper := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/jio/wallet/transactions?admin_id=%d", adminID), nil)
+	reqOp1Tamper.AddCookie(op1Cookie)
+	rrOp1Tamper := httptest.NewRecorder()
+	requirePermission("jio_wallet", handleAdminJioWalletTransactions)(rrOp1Tamper, reqOp1Tamper)
+	var txDataTamper struct {
+		Total   int `json:"total"`
+		Records []struct {
+			AdminID int64 `json:"admin_id"`
+		} `json:"records"`
+	}
+	_ = json.Unmarshal(rrOp1Tamper.Body.Bytes(), &txDataTamper)
+	if txDataTamper.Total != 1 || txDataTamper.Records[0].AdminID != op1ID {
+		t.Fatalf("security violation: op1 tampered admin_id and got non-own records: %v", txDataTamper.Records)
+	}
+
+	// 9. 超级管理员查询流水：能够看到全部流水 (admin自充 + op1充值，共 2 条)
+	reqAdminTx := httptest.NewRequest(http.MethodGet, "/api/admin/jio/wallet/transactions?page=1&page_size=20", nil)
+	reqAdminTx.AddCookie(adminCookie)
+	rrAdminTx := httptest.NewRecorder()
+	requirePermission("jio_wallet", handleAdminJioWalletTransactions)(rrAdminTx, reqAdminTx)
+	var txDataAdmin struct {
+		Total int `json:"total"`
+	}
+	_ = json.Unmarshal(rrAdminTx.Body.Bytes(), &txDataAdmin)
+	if txDataAdmin.Total < 2 {
+		t.Fatalf("expected admin to see at least 2 transactions, got %d", txDataAdmin.Total)
+	}
+}
+
+// TestJioSuppliersPermissionControl 测试 Jio 供应商的独立菜单与 API 权限控制
+func TestJioSuppliersPermissionControl(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		t.Skip("MySQL not available")
+	}
+
+	now := time.Now()
+	// 1. 创建普通操作员并授予 jio_suppliers 权限
+	resWithPerm, _ := db.Exec(`
+		INSERT INTO admins (username, password_hash, role, jio_balance, created_at, updated_at)
+		VALUES ('op_with_suppliers', 'hash', 'user', 0.00, ?, ?)`, now, now)
+	opWithPermID, _ := resWithPerm.LastInsertId()
+	tokenWithPerm := fmt.Sprintf("session-with-perm-%d", opWithPermID)
+	_, _ = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		tokenWithPerm, opWithPermID, now.Add(24*time.Hour), now)
+	cookieWithPerm := &http.Cookie{Name: "admin_session", Value: tokenWithPerm}
+	_, _ = db.Exec("INSERT INTO admin_permissions (admin_id, permission, created_at) VALUES (?, 'jio_suppliers', ?)", opWithPermID, now)
+
+	// 2. 创建无 jio_suppliers 权限的普通操作员
+	resNoPerm, _ := db.Exec(`
+		INSERT INTO admins (username, password_hash, role, jio_balance, created_at, updated_at)
+		VALUES ('op_no_suppliers', 'hash', 'user', 0.00, ?, ?)`, now, now)
+	opNoPermID, _ := resNoPerm.LastInsertId()
+	tokenNoPerm := fmt.Sprintf("session-no-perm-%d", opNoPermID)
+	_, _ = db.Exec("INSERT INTO admin_sessions (token, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		tokenNoPerm, opNoPermID, now.Add(24*time.Hour), now)
+	cookieNoPerm := &http.Cookie{Name: "admin_session", Value: tokenNoPerm}
+
+	// 3. 无权限者调用 Jio 供应商接口应被拦截 (403 Forbidden)
+	reqNoPerm := httptest.NewRequest(http.MethodGet, "/api/admin/jio/suppliers", nil)
+	reqNoPerm.AddCookie(cookieNoPerm)
+	rrNoPerm := httptest.NewRecorder()
+	requirePermission("jio_suppliers", handleAdminJioSuppliersList)(rrNoPerm, reqNoPerm)
+	if rrNoPerm.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for operator without jio_suppliers, got %d", rrNoPerm.Code)
+	}
+
+	// 4. 有权限者调用 Jio 供应商接口应正常放行 (200 OK)
+	reqWithPerm := httptest.NewRequest(http.MethodGet, "/api/admin/jio/suppliers", nil)
+	reqWithPerm.AddCookie(cookieWithPerm)
+	rrWithPerm := httptest.NewRecorder()
+	requirePermission("jio_suppliers", handleAdminJioSuppliersList)(rrWithPerm, reqWithPerm)
+	if rrWithPerm.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for operator with jio_suppliers, got %d", rrWithPerm.Code)
+	}
+}
+
+// TestAIVaultJioProvider 验证 AIVault Hub 供应商适配器的完整业务流程
+func TestAIVaultJioProvider(t *testing.T) {
+	initTestDB(t)
+
+	// 1. 构建 Mock AIVault Server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("X-API-Key")
+		if apiKey == "invalid-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":   "invalid_api_key",
+				"message": "The API key was revoked, expired, or does not exist.",
+			})
+			return
+		}
+
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/me":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"chat_id":  123456789,
+				"balance":  99.50,
+				"currency": "USD",
+			})
+
+		case r.Method == http.MethodGet && r.URL.Path == "/products":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"currency": "USD",
+				"products": []map[string]interface{}{
+					{
+						"service_id":     "service_1",
+						"name":           "Gemini Pro 1 Month",
+						"stock":          150,
+						"custom_pricing": false,
+						"pricing_tiers": []map[string]interface{}{
+							{"min": 1, "max": 99, "price": 0.45},
+						},
+					},
+				},
+			})
+
+		case r.Method == http.MethodPost && r.URL.Path == "/order":
+			var req map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			if apiKey == "low-balance-key" {
+				w.WriteHeader(http.StatusPaymentRequired)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Insufficient balance",
+				})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":           true,
+				"order_id":          "AV-TEST-9988",
+				"external_order_id": req["external_order_id"],
+				"service_id":        req["service_id"],
+				"quantity":          req["quantity"],
+				"total_cost":        0.45,
+				"new_balance":       99.05,
+				"currency":          "USD",
+				"products": []string{
+					"https://families.google.com/join/aivault-token-test",
+				},
+			})
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer mockServer.Close()
+
+	// 2. 配置 AIVault 供应商并注入 mockServer.URL
+	cfg := map[string]interface{}{
+		"api_key":    "valid-aivault-key",
+		"base_url":   mockServer.URL,
+		"service_id": "service_1",
+	}
+	if err := SaveSupplierConfig("aivault", cfg); err != nil {
+		t.Fatalf("SaveSupplierConfig failed: %v", err)
+	}
+
+	p, err := GetJioProvider("aivault")
+	if err != nil || p == nil {
+		t.Fatalf("GetJioProvider aivault failed: %v", err)
+	}
+	if p.Name() != "aivault" {
+		t.Fatalf("expected provider name 'aivault', got '%s'", p.Name())
+	}
+
+	// 3. 测试查询余额
+	ctx := context.Background()
+	bal, errBal := p.GetBalance(ctx)
+	if errBal != nil {
+		t.Fatalf("GetBalance failed: %v", errBal)
+	}
+	if bal.Balance != 99.50 || bal.Currency != "USD" {
+		t.Fatalf("expected balance 99.50 USD, got %f %s", bal.Balance, bal.Currency)
+	}
+	if !strings.Contains(bal.Username, "123456789") {
+		t.Fatalf("expected username to contain chat_id 123456789, got %s", bal.Username)
+	}
+
+	// 4. 测试商品与价格列表拉取
+	products, errProds := p.GetProducts(ctx)
+	if errProds != nil {
+		t.Fatalf("GetProducts failed: %v", errProds)
+	}
+	if len(products) != 1 {
+		t.Fatalf("expected 1 product, got %d", len(products))
+	}
+	if products[0].PriceUSD != 0.45 || products[0].ID != "service_1" || *products[0].Stock != 150 {
+		t.Fatalf("unexpected product data: %+v", products[0])
+	}
+
+	// 5. 测试下单购买与卡密链接提取
+	res, errPurch := p.Purchase(ctx, SupplierPurchaseRequest{
+		ProductID: "service_1",
+		Quantity:  1,
+	})
+	if errPurch != nil {
+		t.Fatalf("Purchase failed: %v", errPurch)
+	}
+	if res.OrderID != "AV-TEST-9988" {
+		t.Fatalf("expected order ID 'AV-TEST-9988', got '%s'", res.OrderID)
+	}
+	if res.Link != "https://families.google.com/join/aivault-token-test" {
+		t.Fatalf("unexpected link extracted: %s", res.Link)
+	}
+	if *res.BalanceAfter != 99.05 {
+		t.Fatalf("expected balance_after 99.05, got %f", *res.BalanceAfter)
+	}
+
+	// 6. 测试 GetOfferLink C 端直调入口
+	link, errLink := p.GetOfferLink(ctx, "test-secret-card-99", "default")
+	if errLink != nil {
+		t.Fatalf("GetOfferLink failed: %v", errLink)
+	}
+	if link != "https://families.google.com/join/aivault-token-test" {
+		t.Fatalf("unexpected link from GetOfferLink: %s", link)
+	}
+
+	// 7. 测试 402 余额不足异常提示
+	cfgLowBal := map[string]interface{}{
+		"api_key":    "low-balance-key",
+		"base_url":   mockServer.URL,
+		"service_id": "service_1",
+	}
+	_ = SaveSupplierConfig("aivault", cfgLowBal)
+	_, errLowBal := p.Purchase(ctx, SupplierPurchaseRequest{ProductID: "service_1", Quantity: 1})
+	if errLowBal == nil || !strings.Contains(errLowBal.Error(), "余额不足") {
+		t.Fatalf("expected insufficient balance error, got: %v", errLowBal)
 	}
 }
 

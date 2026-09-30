@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Jio 供应商管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="./admin.css?v=1.1.3">
-    <script src="./admin.js?v=1.1.0"></script>
+    <link rel="stylesheet" href="./admin.css?v=1.1.4">
+    <script src="./admin.js?v=1.2.0"></script>
     <style>
         /* Base Buttons Standard */
         .btn {
@@ -228,7 +228,7 @@
         /* Suppliers Header & Layout */
         .suppliers-overview-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px;
             margin-bottom: 20px;
         }
@@ -915,6 +915,15 @@
 
                 <div class="stat-card">
                     <div class="stat-card-title">
+                        <span>AIVault 账户储值余额</span>
+                        <span style="font-size: 10px; background: #fae8ff; color: #86198f; padding: 2px 6px; border-radius: 4px; font-weight: 700;">LIVE</span>
+                    </div>
+                    <div class="stat-card-val" id="overview-aivault-balance" style="color: #059669;">--</div>
+                    <div class="stat-card-sub" id="overview-aivault-user">正在查询...</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-title">
                         <span>最优 Gemini 采购单价</span>
                         <span style="font-size: 10px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 700;">LOWEST</span>
                     </div>
@@ -1196,6 +1205,44 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Check Login Status & Menu Permission
+            async function checkLogin() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        window.applyNavPermissions(data.role, data.permissions);
+                        if (data.role !== 'admin' && !(data.permissions || []).includes('jio_suppliers')) {
+                            window.location.href = '/admin/dashboard.html';
+                            return;
+                        }
+                    } else {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    }
+                } catch (e) {
+                    window.clearAuthCache();
+                    window.location.href = '/admin/login.html';
+                }
+            }
+            checkLogin();
+
+            // Logout event
+            const btnLogout = document.getElementById('btn-logout');
+            if (btnLogout) {
+                btnLogout.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await fetch('/api/admin/logout', { method: 'POST' });
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    } catch (e) {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    }
+                });
+            }
+
             let suppliersList = [];
             let activeProviderKey = 'vente';
             let currentDispatchStrategy = 'auto_lowest_cost';
@@ -1212,6 +1259,8 @@
             const overviewVenteUser = document.getElementById('overview-vente-user');
             const overviewAcczoneBalance = document.getElementById('overview-acczone-balance');
             const overviewAcczoneUser = document.getElementById('overview-acczone-user');
+            const overviewAivaultBalance = document.getElementById('overview-aivault-balance');
+            const overviewAivaultUser = document.getElementById('overview-aivault-user');
             const overviewBestPrice = document.getElementById('overview-best-price');
             const overviewBestProvider = document.getElementById('overview-best-provider');
 
@@ -1542,6 +1591,21 @@
                                 </div>
                             </div>
                         `;
+                    } else if (s.name === 'aivault') {
+                        balanceHtml = `
+                            <div class="supplier-balance-box">
+                                <div>
+                                    <div class="balance-label">AIVault 官方账户储值余额</div>
+                                    <div class="balance-amount text-supported" id="balance-val-${s.name}">查询中...</div>
+                                    <div class="balance-extra" id="balance-sub-${s.name}">正在拉取 /api/v1/me...</div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <button type="button" class="btn-action btn-action-outline" onclick="fetchSingleBalance('${s.name}')" style="padding: 6px 12px; font-size: 11px;">
+                                        刷新余额
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     } else {
                         balanceHtml = `
                             <div class="supplier-balance-box">
@@ -1693,6 +1757,9 @@
                     } else if (pName === 'acczone') {
                         overviewAcczoneBalance.textContent = `$${parseFloat(bal).toFixed(2)}`;
                         overviewAcczoneUser.textContent = `商户: ${balance.username || '已连接'}`;
+                    } else if (pName === 'aivault') {
+                        overviewAivaultBalance.textContent = `$${parseFloat(bal).toFixed(2)}`;
+                        overviewAivaultUser.textContent = `商户: ${balance.username || '已连接'}`;
                     }
                 } else {
                     valEl.textContent = '未连接或报错';
@@ -1705,6 +1772,9 @@
                     } else if (pName === 'acczone') {
                         overviewAcczoneBalance.textContent = '未连接';
                         overviewAcczoneUser.textContent = '请检查 API Key';
+                    } else if (pName === 'aivault') {
+                        overviewAivaultBalance.textContent = '未连接';
+                        overviewAivaultUser.textContent = '请检查 API Key';
                     }
                 }
             }
@@ -1854,6 +1924,31 @@
                             <input type="text" class="field-input" id="cfg-acc-url" value="${cfg.api_url || 'https://api.acczone.xyz/buyCpn'}">
                         </div>
                     `;
+                } else if (pName === 'aivault') {
+                    body.innerHTML = `
+                        <input type="hidden" id="cfg-provider-key" value="aivault">
+                        <div class="field-group">
+                            <label class="field-label">
+                                <span>AIVault Reseller API Key (必填)</span>
+                                <span class="field-hint">对应 X-API-Key 认证头</span>
+                            </label>
+                            <input type="text" class="field-input" id="cfg-aivault-key" value="${cfg.api_key || cfg.apikey || ''}" placeholder="填入 AIVault Reseller API Key">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">
+                                <span>API Base URL (可选)</span>
+                                <span class="field-hint">默认: https://reseller.aivaulthub.store/api/v1</span>
+                            </label>
+                            <input type="text" class="field-input" id="cfg-aivault-url" value="${cfg.base_url || 'https://reseller.aivaulthub.store/api/v1'}">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">
+                                <span>默认 Gemini 商品/服务 ID (必填/建议)</span>
+                                <span class="field-hint">例如 service_1</span>
+                            </label>
+                            <input type="text" class="field-input" id="cfg-aivault-service-id" value="${cfg.service_id || 'service_1'}" placeholder="例如 service_1">
+                        </div>
+                    `;
                 } else {
                     body.innerHTML = `
                         <input type="hidden" id="cfg-provider-key" value="${pName}">
@@ -1879,6 +1974,12 @@
                         apikey: document.getElementById('cfg-acc-key').value.trim(),
                         service_key: document.getElementById('cfg-acc-service').value.trim(),
                         api_url: document.getElementById('cfg-acc-url').value.trim()
+                    };
+                } else if (pName === 'aivault') {
+                    payload = {
+                        api_key: document.getElementById('cfg-aivault-key').value.trim(),
+                        base_url: document.getElementById('cfg-aivault-url').value.trim(),
+                        service_id: document.getElementById('cfg-aivault-service-id').value.trim()
                     };
                 }
 
@@ -1920,6 +2021,8 @@
                     defaultPid = cfg.product_id || '12';
                 } else if (pName === 'acczone') {
                     defaultPid = cfg.service_key || 'gemini';
+                } else if (pName === 'aivault') {
+                    defaultPid = cfg.service_id || 'service_1';
                 } else {
                     defaultPid = '12';
                 }

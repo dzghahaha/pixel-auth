@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Jio 储值钱包 - Pixel 订阅</title>
     <link rel="stylesheet" href="./admin.css?v=1.1.4">
-    <script src="./admin.js?v=1.1.2"></script>
+    <script src="./admin.js?v=1.2.0"></script>
     <style>
         .wallet-metrics-grid {
             display: grid;
@@ -367,8 +367,73 @@
                 </select>
 
                 <input type="text" id="filter-query" class="search-input-field" placeholder="搜索卡密 / 备注关键词...">
-                <input type="date" id="filter-start-date" class="search-input-field" style="width: 140px;" title="起始日期">
-                <input type="date" id="filter-end-date" class="search-input-field" style="width: 140px;" title="截止日期">
+
+                <!-- Premium Custom Datepicker Component -->
+                <div class="datepicker-wrapper" id="datepicker-wrapper">
+                    <!-- The Trigger (displays current selection) -->
+                    <div class="datepicker-trigger" id="datepicker-trigger">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span id="datepicker-display-value">时间范围：全部时间</span>
+                        </div>
+                        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    
+                    <!-- The Datepicker Popover Card -->
+                    <div class="datepicker-popup" id="datepicker-popup">
+                        <!-- Top Row: Shortcuts inside the popup -->
+                        <div class="popover-shortcuts" id="popover-shortcuts">
+                            <button type="button" class="btn-popover-shortcut" data-range="today">今天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="yesterday">昨天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="this_month">本月</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="7days">最近 7 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="30days">最近 30 天</button>
+                            <button type="button" class="btn-popover-shortcut" data-range="all">全部</button>
+                        </div>
+                        
+                        <!-- Divider -->
+                        <div class="popover-divider"></div>
+                        
+                        <!-- Middle Row: Date Inputs -->
+                        <div class="popover-inputs">
+                            <div class="popover-input-field">
+                                <span class="field-label">开始日期</span>
+                                <input type="text" id="filter-start-date" readonly placeholder="开始日期">
+                            </div>
+                            <span class="popover-separator">至</span>
+                            <div class="popover-input-field">
+                                <span class="field-label">结束日期</span>
+                                <input type="text" id="filter-end-date" readonly placeholder="结束日期">
+                            </div>
+                        </div>
+
+                        <!-- Custom Calendar month view -->
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button type="button" class="btn-calendar-nav" id="btn-prev-month">&lt;</button>
+                                <span class="calendar-month-year" id="calendar-month-year">2026年9月</span>
+                                <button type="button" class="btn-calendar-nav" id="btn-next-month">&gt;</button>
+                            </div>
+                            <div class="calendar-weekdays">
+                                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                            </div>
+                            <div class="calendar-days-grid" id="calendar-days-grid"></div>
+                        </div>
+                        
+                        <!-- Footer Row: Actions -->
+                        <div class="popover-footer">
+                            <button type="button" class="btn-popover-reset" id="btn-popover-reset">清除时间</button>
+                            <button type="button" class="btn-popover-apply" id="btn-popover-apply">应用筛选</button>
+                        </div>
+                    </div>
+                </div>
 
                 <button type="button" id="btn-search-wallet" class="btn-action-secondary">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;">
@@ -407,7 +472,6 @@
                 <table class="result-table">
                     <thead>
                         <tr>
-                            <th style="width: 60px; text-align: center;">流水ID</th>
                             <th class="col-user admin-only hidden" style="min-width: 100px;">账户用户</th>
                             <th style="width: 115px; text-align: center;">交易类型</th>
                             <th style="width: 120px; text-align: right;">变动金额</th>
@@ -421,7 +485,7 @@
                     </thead>
                     <tbody id="transactions-table-body">
                         <tr>
-                            <td colspan="10" style="padding: 48px 0; text-align: center;">
+                            <td colspan="9" style="padding: 48px 0; text-align: center;">
                                 <div class="loader-spinner" style="margin: 0 auto 10px auto;"></div>
                                 <span style="font-size: 13px; color: var(--slate-400);">正在加载资金流水数据...</span>
                             </td>
@@ -608,6 +672,272 @@
             const filterEndDate = document.getElementById('filter-end-date');
             const btnSearchWallet = document.getElementById('btn-search-wallet');
             const btnResetWallet = document.getElementById('btn-reset-wallet');
+
+            // Custom Floating Datepicker elements
+            const datepickerWrapper = document.getElementById('datepicker-wrapper');
+            const datepickerTrigger = document.getElementById('datepicker-trigger');
+            const datepickerPopup = document.getElementById('datepicker-popup');
+            const datepickerDisplay = document.getElementById('datepicker-display-value');
+            const popoverShortcuts = document.getElementById('popover-shortcuts');
+            const btnPopoverReset = document.getElementById('btn-popover-reset');
+            const btnPopoverApply = document.getElementById('btn-popover-apply');
+            const btnPrevMonth = document.getElementById('btn-prev-month');
+            const btnNextMonth = document.getElementById('btn-next-month');
+            const calendarMonthYear = document.getElementById('calendar-month-year');
+            const calendarDaysGrid = document.getElementById('calendar-days-grid');
+
+            let calendarCurrentDate = new Date();
+            let selectedStartDate = null;
+            let selectedEndDate = null;
+
+            const padNum = (n) => n.toString().padStart(2, '0');
+            const toLocalDateStr = (d) => {
+                return d ? `${d.getFullYear()}-${padNum(d.getMonth() + 1)}-${padNum(d.getDate())}` : '';
+            };
+
+            function updateDatePickerDisplay() {
+                const start = toLocalDateStr(selectedStartDate);
+                const end = toLocalDateStr(selectedEndDate);
+
+                if (start && end) {
+                    if (start === end) {
+                        datepickerDisplay.textContent = `时间范围: ${start}`;
+                    } else {
+                        datepickerDisplay.textContent = `${start} 至 ${end}`;
+                    }
+                } else if (start) {
+                    datepickerDisplay.textContent = `${start} 起`;
+                } else if (end) {
+                    datepickerDisplay.textContent = `至 ${end}`;
+                } else {
+                    datepickerDisplay.textContent = '时间范围：全部时间';
+                }
+            }
+
+            function syncSelectionsToInputs() {
+                if (filterStartDate) filterStartDate.value = toLocalDateStr(selectedStartDate);
+                if (filterEndDate) filterEndDate.value = toLocalDateStr(selectedEndDate);
+                updateDatePickerDisplay();
+            }
+
+            function highlightCell(cell, date) {
+                const time = date.getTime();
+                const start = selectedStartDate ? selectedStartDate.getTime() : null;
+                const end = selectedEndDate ? selectedEndDate.getTime() : null;
+
+                if (start && end) {
+                    if (time === start) {
+                        cell.classList.add('selected-start');
+                    } else if (time === end) {
+                        cell.classList.add('selected-end');
+                    } else if (time > start && time < end) {
+                        cell.classList.add('selected-range');
+                    }
+                } else if (start) {
+                    if (time === start) {
+                        cell.classList.add('selected-single');
+                    }
+                }
+            }
+
+            function handleDayClick(date) {
+                const clickedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+                if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
+                    selectedStartDate = clickedDate;
+                    selectedEndDate = null;
+                    if (popoverShortcuts) {
+                        popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                    }
+                } else {
+                    if (clickedDate < selectedStartDate) {
+                        selectedStartDate = clickedDate;
+                        selectedEndDate = null;
+                    } else {
+                        selectedEndDate = clickedDate;
+                    }
+                }
+
+                syncSelectionsToInputs();
+                renderCalendar();
+            }
+
+            function renderCalendar() {
+                if (!calendarDaysGrid || !calendarMonthYear) return;
+                const year = calendarCurrentDate.getFullYear();
+                const month = calendarCurrentDate.getMonth();
+
+                calendarMonthYear.textContent = `${year}年${month + 1}月`;
+                calendarDaysGrid.innerHTML = '';
+
+                const firstDay = new Date(year, month, 1);
+                let startDayIndex = firstDay.getDay();
+
+                const totalDays = new Date(year, month + 1, 0).getDate();
+
+                const prevMonthTotalDays = new Date(year, month, 0).getDate();
+                for (let i = startDayIndex - 1; i >= 0; i--) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    const d = prevMonthTotalDays - i;
+                    cell.textContent = d;
+
+                    const cellDate = new Date(year, month - 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+
+                for (let d = 1; d <= totalDays; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell';
+                    cell.textContent = d;
+
+                    const cellDate = new Date(year, month, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+
+                const currentCells = startDayIndex + totalDays;
+                const remainingCells = 42 - currentCells;
+                for (let d = 1; d <= remainingCells; d++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'calendar-day-cell outside';
+                    cell.textContent = d;
+
+                    const cellDate = new Date(year, month + 1, d);
+                    highlightCell(cell, cellDate);
+                    cell.addEventListener('click', () => handleDayClick(cellDate));
+                    calendarDaysGrid.appendChild(cell);
+                }
+            }
+
+            if (btnPrevMonth) {
+                btnPrevMonth.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+                    renderCalendar();
+                });
+            }
+
+            if (btnNextMonth) {
+                btnNextMonth.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+                    renderCalendar();
+                });
+            }
+
+            if (datepickerTrigger) {
+                datepickerTrigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = datepickerWrapper.classList.contains('open');
+                    if (isOpen) {
+                        datepickerWrapper.classList.remove('open');
+                    } else {
+                        datepickerWrapper.classList.add('open');
+                        renderCalendar();
+                    }
+                });
+            }
+
+            if (datepickerPopup) {
+                datepickerPopup.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
+
+            document.addEventListener('click', () => {
+                if (datepickerWrapper) datepickerWrapper.classList.remove('open');
+            });
+
+            if (btnPopoverReset) {
+                btnPopoverReset.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectedStartDate = null;
+                    selectedEndDate = null;
+                    if (popoverShortcuts) {
+                        popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                    }
+
+                    syncSelectionsToInputs();
+                    renderCalendar();
+                    if (datepickerWrapper) datepickerWrapper.classList.remove('open');
+
+                    currentPage = 1;
+                    loadTransactions();
+                });
+            }
+
+            if (btnPopoverApply) {
+                btnPopoverApply.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (datepickerWrapper) datepickerWrapper.classList.remove('open');
+                    currentPage = 1;
+                    loadTransactions();
+                });
+            }
+
+            if (popoverShortcuts) {
+                popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+
+                        const range = btn.getAttribute('data-range');
+                        if (range === 'all') {
+                            selectedStartDate = null;
+                            selectedEndDate = null;
+                        } else {
+                            const now = new Date();
+                            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                            if (range === 'today') {
+                                selectedStartDate = today;
+                                selectedEndDate = today;
+                            } else if (range === 'yesterday') {
+                                const yesterday = new Date(today);
+                                yesterday.setDate(today.getDate() - 1);
+                                selectedStartDate = yesterday;
+                                selectedEndDate = yesterday;
+                            } else if (range === 'this_month') {
+                                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                                selectedStartDate = firstDay;
+                                selectedEndDate = today;
+                            } else if (range === '7days') {
+                                const daysAgo = new Date(today);
+                                daysAgo.setDate(today.getDate() - 6);
+                                selectedStartDate = daysAgo;
+                                selectedEndDate = today;
+                            } else if (range === '30days') {
+                                const daysAgo = new Date(today);
+                                daysAgo.setDate(today.getDate() - 29);
+                                selectedStartDate = daysAgo;
+                                selectedEndDate = today;
+                            }
+                        }
+
+                        syncSelectionsToInputs();
+                        renderCalendar();
+                        if (datepickerWrapper) datepickerWrapper.classList.remove('open');
+
+                        currentPage = 1;
+                        loadTransactions();
+                    });
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (datepickerWrapper && datepickerWrapper.classList.contains('open')) {
+                        datepickerWrapper.classList.remove('open');
+                    }
+                }
+            });
+
+            renderCalendar();
 
             // Self Recharge Modal
             const modalSelfRecharge = document.getElementById('modal-self-recharge');
@@ -799,8 +1129,14 @@
                     return;
                 }
 
+                // Non-admin is strictly not allowed to use direct mode
+                if (currentRole !== 'admin' && checkAdminDirectRecharge && checkAdminDirectRecharge.checked) {
+                    showToast('普通用户无免支付直接充值权限，请使用在线支付');
+                    return;
+                }
+
                 // If super admin and checked direct mode
-                if (currentRole === 'admin' && checkAdminDirectRecharge.checked) {
+                if (currentRole === 'admin' && checkAdminDirectRecharge && checkAdminDirectRecharge.checked) {
                     btnConfirmSelfRecharge.disabled = true;
                     btnConfirmSelfRecharge.textContent = '提交中...';
 
@@ -960,7 +1296,7 @@
             async function loadTransactions() {
                 transactionsTableBody.innerHTML = `
                     <tr>
-                        <td colspan="10" style="padding: 36px 0; text-align: center;">
+                        <td colspan="9" style="padding: 36px 0; text-align: center;">
                             <div class="loader-spinner" style="margin: 0 auto 10px auto;"></div>
                             <span style="font-size: 13px; color: var(--slate-400);">正在加载资金流水数据...</span>
                         </td>
@@ -974,8 +1310,8 @@
                 if (filterType.value) params.set('type', filterType.value);
                 if (filterAdminUser.value) params.set('admin_id', filterAdminUser.value);
                 if (filterQuery.value.trim()) params.set('query', filterQuery.value.trim());
-                if (filterStartDate.value) params.set('start_date', filterStartDate.value);
-                if (filterEndDate.value) params.set('end_date', filterEndDate.value);
+                if (filterStartDate && filterStartDate.value) params.set('start_date', filterStartDate.value);
+                if (filterEndDate && filterEndDate.value) params.set('end_date', filterEndDate.value);
 
                 try {
                     const res = await fetch(`/api/admin/jio/wallet/transactions?${params.toString()}`);
@@ -985,18 +1321,18 @@
                         renderTransactions(data.records || []);
                         updatePagination();
                     } else {
-                        transactionsTableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 24px;">${escapeHtml(data.message || '加载流水失败')}</td></tr>`;
+                        transactionsTableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 24px;">${escapeHtml(data.message || '加载流水失败')}</td></tr>`;
                     }
                 } catch (e) {
                     console.error(e);
-                    transactionsTableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #ef4444; padding: 24px;">网络异常，无法连接至服务器</td></tr>`;
+                    transactionsTableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 24px;">网络异常，无法连接至服务器</td></tr>`;
                 }
             }
 
             // Render Transactions Table Rows
             function renderTransactions(records) {
                 if (!records || records.length === 0) {
-                    transactionsTableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 36px; color: var(--slate-400);">暂无相关资金流水记录</td></tr>';
+                    transactionsTableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 36px; color: var(--slate-400);">暂无相关资金流水记录</td></tr>';
                     return;
                 }
 
@@ -1023,7 +1359,6 @@
                     const userName = r.admin_nickname ? `${escapeHtml(r.admin_username)} (${escapeHtml(r.admin_nickname)})` : escapeHtml(r.admin_username);
 
                     tr.innerHTML = `
-                        <td style="text-align: center; font-size: 12px; color: var(--slate-500);">${r.id}</td>
                         <td class="col-user admin-only hidden" style="font-weight: 600; color: var(--slate-800);">${userName}</td>
                         <td style="text-align: center;">
                             <span class="service-badge" style="background:${tInfo.bg}; color:${tInfo.color}; font-size: 11px;">${tInfo.name}</span>
@@ -1086,8 +1421,13 @@
                 filterType.value = '';
                 filterAdminUser.value = '';
                 filterQuery.value = '';
-                filterStartDate.value = '';
-                filterEndDate.value = '';
+                selectedStartDate = null;
+                selectedEndDate = null;
+                syncSelectionsToInputs();
+                if (popoverShortcuts) {
+                    popoverShortcuts.querySelectorAll('.btn-popover-shortcut').forEach(b => b.classList.remove('active'));
+                }
+                renderCalendar();
                 currentPage = 1;
                 loadTransactions();
             });

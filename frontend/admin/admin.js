@@ -1,4 +1,20 @@
 // Global Loading UI HTML Helpers
+window.showToast = function(message, duration = 2200) {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast hidden';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    if (toast._timer) clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, duration);
+};
+
 window.getTableLoadingHTML = function(colspan, text = '正在加载数据，请稍候...') {
     return `
         <tr>
@@ -245,14 +261,25 @@ window.applyNavPermissions = function(role, permissions) {
         '/admin/settings.html': 'settings',
         '/admin/jio_pricing.html': 'jio_pricing',
         '/admin/jio_wallet.html': 'jio_wallet',
-        '/admin/jio_suppliers.html': 'jio_pricing',
+        '/admin/jio_suppliers.html': 'jio_suppliers',
         '/admin/users.html': 'users',
         '/admin/faqs.html': 'faqs'
     };
 
     document.querySelectorAll('a.nav-item').forEach(link => {
         if (link.classList.contains('logout')) return;
-        const href = link.getAttribute('href');
+        let href = link.getAttribute('href') || '';
+        try {
+            if (href.startsWith('http')) {
+                href = new URL(href).pathname;
+            } else {
+                href = href.split('?')[0].split('#')[0];
+                if (!href.startsWith('/admin/') && href.indexOf('.html') !== -1) {
+                    href = '/admin/' + href.replace(/^\.\//, '');
+                }
+            }
+        } catch (e) {}
+
         if (menuMap[href]) {
             const key = menuMap[href];
             if (currentRole !== 'admin' && !currentPerms.includes(key)) {
@@ -260,6 +287,9 @@ window.applyNavPermissions = function(role, permissions) {
             } else {
                 link.style.display = '';
             }
+        } else if (currentRole !== 'admin') {
+            // 普通操作员默认不展示未授权的系统管理链接
+            link.style.display = 'none';
         }
     });
 

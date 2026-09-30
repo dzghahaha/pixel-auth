@@ -124,8 +124,8 @@ func GetJioProvider(name string) (JioProvider, error) {
 func GetAllJioProviders() []JioProvider {
 	jioProvidersMu.RLock()
 	defer jioProvidersMu.RUnlock()
-	// 按照正式商用顺序返回: vente, acczone, 其他真实提供商
-	order := []string{"vente", "acczone"}
+	// 按照正式商用顺序返回: vente, acczone, aivault, 其他真实提供商
+	order := []string{"vente", "acczone", "aivault"}
 	seen := make(map[string]bool)
 	var list []JioProvider
 
@@ -148,7 +148,7 @@ func GetAllJioProviders() []JioProvider {
 func GetActiveJioProvider() JioProvider {
 	activeName := strings.ToLower(strings.TrimSpace(getSetting("jio_active_provider", "vente")))
 	p, err := GetJioProvider(activeName)
-	if err == nil && p != nil && p.Name() != "mock" {
+	if err == nil && p != nil {
 		return p
 	}
 	// Fallback to default vente or acczone provider
@@ -1397,6 +1397,439 @@ func (v *VenteJioProvider) GetDepositStatus(ctx context.Context, depositID strin
 	}, nil
 }
 
+// =========================================================================
+// 4. AIVault 供应商实现 (AIVaultJioProvider) - 基于 AIVault Reseller API 规范对接
+// =========================================================================
+
+// AIVaultJioProvider 接入 AIVault Hub Reseller API 供应商
+type AIVaultJioProvider struct {
+	client *http.Client
+}
+
+func (a *AIVaultJioProvider) Name() string {
+	return "aivault"
+}
+
+func (a *AIVaultJioProvider) DisplayName() string {
+	return "AIVault 采购平台 (AIVault Hub Reseller API)"
+}
+
+// getEffectiveConfig 读取 AIVault 供应商当前有效配置
+func (a *AIVaultJioProvider) getEffectiveConfig() (apiKey, baseURL, defaultServiceID string) {
+	cfg := GetSupplierConfig("aivault")
+	if val, ok := cfg["api_key"].(string); ok {
+		apiKey = strings.TrimSpace(val)
+	}
+	if apiKey == "" {
+		if val, ok := cfg["apikey"].(string); ok {
+			apiKey = strings.TrimSpace(val)
+		}
+	}
+	if val, ok := cfg["base_url"].(string); ok {
+		baseURL = strings.TrimSpace(val)
+	}
+	if val, ok := cfg["service_id"].(string); ok {
+		defaultServiceID = strings.TrimSpace(val)
+	}
+
+	if baseURL == "" {
+		baseURL = "https://reseller.aivaulthub.store/api/v1"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if defaultServiceID == "" {
+		defaultServiceID = "service_1"
+	}
+	return
+}
+
+func (a *AIVaultJioProvider) getClient() *http.Client {
+	if a.client != nil {
+		return a.client
+	}
+	return getJioHTTPClient(25 * time.Second)
+}
+
+// GetBalance 查询 AIVault 账户及储值钱包余额: GET /api/v1/me
+func (a *AIVaultJioProvider) GetBalance(ctx context.Context) (*SupplierBalance, error) {
+	apiKey, baseURL, _ := a.getEffectiveConfig()
+	if apiKey == "" {
+		return nil, errors.New("未配置 AIVault 的 api_key，请在「Jio 供应商管理」中设置")
+	}
+
+	reqURL := baseURL + "/me"
+	httpReq, errReq := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if errReq != nil {
+		return nil, fmt.Errorf("构建 AIVault 请求失败: %w", errReq)
+	}
+	httpReq.Header.Set("X-API-Key", apiKey)
+	httpReq.Header.Set("User-Agent", "Pixel-Auth-Client/1.0")
+
+	resp, errResp := a.getClient().Do(httpReq)
+	if errResp != nil {
+		return nil, fmt.Errorf("请求 AIVault 接口失败: %w", errResp)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, fmt.Errorf("读取 AIVault 响应失败: %w", errRead)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(bodyBytes, &errResp)
+		if errResp.Message != "" {
+			return nil, fmt.Errorf("AIVault 提示 (HTTP %d, %s): %s", resp.StatusCode, errResp.Error, errResp.Message)
+		}
+		return nil, fmt.Errorf("AIVault 返回 HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var meResp struct {
+		ChatID   int64   `json:"chat_id"`
+		Balance  float64 `json:"balance"`
+		Currency string  `json:"currency"`
+	}
+	if errJSON := json.Unmarshal(bodyBytes, &meResp); errJSON != nil {
+		return nil, fmt.Errorf("解析 AIVault 账户余额响应失败: %w", errJSON)
+	}
+
+	uname := fmt.Sprintf("Chat ID: %d", meResp.ChatID)
+
+	return &SupplierBalance{
+		Supported: true,
+		Balance:   meResp.Balance,
+		Currency:  "USD",
+		Username:  uname,
+		KeyName:   maskSecret(apiKey),
+		Status:    "正常在线",
+		RawData:   meResp,
+	}, nil
+}
+
+// GetProducts 获取 AIVault 商品列表: GET /api/v1/products
+func (a *AIVaultJioProvider) GetProducts(ctx context.Context) ([]SupplierProduct, error) {
+	apiKey, baseURL, _ := a.getEffectiveConfig()
+	if apiKey == "" {
+		return nil, errors.New("未配置 AIVault 的 api_key，请在「Jio 供应商管理」中设置")
+	}
+
+	reqURL := baseURL + "/products"
+	httpReq, errReq := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if errReq != nil {
+		return nil, fmt.Errorf("构建 AIVault 请求失败: %w", errReq)
+	}
+	httpReq.Header.Set("X-API-Key", apiKey)
+	httpReq.Header.Set("User-Agent", "Pixel-Auth-Client/1.0")
+
+	resp, errResp := a.getClient().Do(httpReq)
+	if errResp != nil {
+		return nil, fmt.Errorf("请求 AIVault 产品列表失败: %w", errResp)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, fmt.Errorf("读取 AIVault 响应失败: %w", errRead)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("AIVault 产品接口返回 HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var catResp struct {
+		Currency string `json:"currency"`
+		Products []struct {
+			ServiceID     string  `json:"service_id"`
+			Name          string  `json:"name"`
+			Stock         int     `json:"stock"`
+			CustomPricing bool    `json:"custom_pricing"`
+			PricingTiers  []struct {
+				Min   int     `json:"min"`
+				Max   int     `json:"max"`
+				Price float64 `json:"price"`
+			} `json:"pricing_tiers"`
+		} `json:"products"`
+	}
+
+	if errJSON := json.Unmarshal(bodyBytes, &catResp); errJSON != nil {
+		return nil, fmt.Errorf("解析 AIVault 产品列表失败: %w", errJSON)
+	}
+
+	var results []SupplierProduct
+	for _, p := range catResp.Products {
+		price := 0.50
+		if len(p.PricingTiers) > 0 && p.PricingTiers[0].Price > 0 {
+			price = p.PricingTiers[0].Price
+		}
+		stockCopy := p.Stock
+		results = append(results, SupplierProduct{
+			ID:            p.ServiceID,
+			Name:          p.Name,
+			PriceUSD:      price,
+			StandardPrice: price,
+			PricingType:   "tiered",
+			DeliveryType:  "activation",
+			Stock:         &stockCopy,
+			IsActive:      p.Stock > 0,
+			RawData:       p,
+		})
+	}
+	return results, nil
+}
+
+// Purchase 购买下单接口: POST /api/v1/order
+func (a *AIVaultJioProvider) Purchase(ctx context.Context, req SupplierPurchaseRequest) (*SupplierPurchaseResult, error) {
+	apiKey, baseURL, defaultServiceID := a.getEffectiveConfig()
+	if apiKey == "" {
+		return nil, errors.New("未配置 AIVault 的 api_key")
+	}
+
+	serviceID := strings.TrimSpace(req.ProductID)
+	if serviceID == "" {
+		serviceID = defaultServiceID
+	}
+
+	if serviceID == "" {
+		products, errProds := a.GetProducts(ctx)
+		if errProds == nil && len(products) > 0 {
+			for _, p := range products {
+				if strings.Contains(strings.ToLower(p.Name), "gemini") {
+					serviceID = p.ID
+					break
+				}
+			}
+			if serviceID == "" {
+				serviceID = products[0].ID
+			}
+		}
+	}
+	if serviceID == "" {
+		serviceID = "service_1"
+	}
+
+	qty := req.Quantity
+	if qty <= 0 {
+		qty = 1
+	}
+
+	extOrderID := strings.TrimSpace(req.CustomerReference)
+	if extOrderID == "" {
+		extOrderID = strings.TrimSpace(req.IdempotencyKey)
+	}
+	if extOrderID == "" {
+		extOrderID = fmt.Sprintf("pix-%d-%04d", time.Now().UnixNano(), time.Now().Nanosecond()%10000)
+	}
+
+	payload := map[string]interface{}{
+		"service_id":          serviceID,
+		"quantity":            qty,
+		"external_order_id":   extOrderID,
+		"accept_normal_price": true,
+	}
+
+	payloadBytes, _ := json.Marshal(payload)
+	reqURL := baseURL + "/order"
+
+	httpReq, errReq := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payloadBytes))
+	if errReq != nil {
+		return nil, fmt.Errorf("构建 AIVault 下单请求失败: %w", errReq)
+	}
+	httpReq.Header.Set("X-API-Key", apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("User-Agent", "Pixel-Auth-Client/1.0")
+
+	resp, errResp := a.getClient().Do(httpReq)
+	if errResp != nil {
+		return nil, fmt.Errorf("请求 AIVault 下单网络失败: %w", errResp)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, fmt.Errorf("读取 AIVault 下单响应失败: %w", errRead)
+	}
+
+	if resp.StatusCode == http.StatusPaymentRequired { // 402
+		return nil, errors.New("AIVault 供应商账户余额不足，请及时充值")
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		var errResp struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(bodyBytes, &errResp)
+		if errResp.Message != "" {
+			return nil, fmt.Errorf("AIVault 下单失败 (%s): %s", errResp.Error, errResp.Message)
+		}
+		return nil, fmt.Errorf("AIVault 下单返回 HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var orderResp struct {
+		Success         bool     `json:"success"`
+		OrderID         string   `json:"order_id"`
+		ExternalOrderID string   `json:"external_order_id"`
+		ServiceID       string   `json:"service_id"`
+		Quantity        int      `json:"quantity"`
+		TotalCost       float64  `json:"total_cost"`
+		NewBalance      float64  `json:"new_balance"`
+		Currency        string   `json:"currency"`
+		Products        []string `json:"products"`
+	}
+
+	if errJSON := json.Unmarshal(bodyBytes, &orderResp); errJSON != nil {
+		return nil, fmt.Errorf("解析 AIVault 下单响应失败: %w", errJSON)
+	}
+
+	var links []string
+	for _, p := range orderResp.Products {
+		pStr := strings.TrimSpace(p)
+		if pStr != "" {
+			extracted := extractURLFromText(pStr)
+			if extracted != "" {
+				links = append(links, extracted)
+			} else {
+				links = append(links, pStr)
+			}
+		}
+	}
+
+	// 若尚未返回 items，尝试快速轮询一次 GET /api/v1/order/{order_id}
+	if len(links) == 0 && orderResp.OrderID != "" {
+		time.Sleep(1 * time.Second)
+		polledOrder, errPoll := a.fetchOrderDetails(ctx, orderResp.OrderID)
+		if errPoll == nil && polledOrder != nil {
+			links = polledOrder.Items
+		}
+	}
+
+	finalLink := ""
+	if len(links) > 0 {
+		finalLink = links[0]
+	}
+
+	balAfter := orderResp.NewBalance
+
+	return &SupplierPurchaseResult{
+		OrderID:      orderResp.OrderID,
+		Link:         finalLink,
+		Items:        links,
+		AmountUSD:    orderResp.TotalCost,
+		BalanceAfter: &balAfter,
+		Status:       "COMPLETED",
+		RawData:      orderResp,
+	}, nil
+}
+
+// fetchOrderDetails 查询 AIVault 历史订单状态: GET /api/v1/order/{order_id}
+func (a *AIVaultJioProvider) fetchOrderDetails(ctx context.Context, orderID string) (*SupplierPurchaseResult, error) {
+	apiKey, baseURL, _ := a.getEffectiveConfig()
+	if apiKey == "" {
+		return nil, errors.New("未配置 AIVault 的 api_key")
+	}
+
+	reqURL := fmt.Sprintf("%s/order/%s", baseURL, url.PathEscape(orderID))
+	httpReq, errReq := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if errReq != nil {
+		return nil, errReq
+	}
+	httpReq.Header.Set("X-API-Key", apiKey)
+	httpReq.Header.Set("User-Agent", "Pixel-Auth-Client/1.0")
+
+	resp, errResp := a.getClient().Do(httpReq)
+	if errResp != nil {
+		return nil, errResp
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, errRead
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("AIVault 订单查询返回 HTTP %d", resp.StatusCode)
+	}
+
+	var statusResp struct {
+		OrderID   string   `json:"order_id"`
+		Status    string   `json:"status"`
+		ServiceID string   `json:"service_id"`
+		Quantity  int      `json:"quantity"`
+		TotalCost float64  `json:"total_cost"`
+		Currency  string   `json:"currency"`
+		Products  []string `json:"products"`
+	}
+	if errJSON := json.Unmarshal(bodyBytes, &statusResp); errJSON != nil {
+		return nil, errJSON
+	}
+
+	var links []string
+	for _, p := range statusResp.Products {
+		pStr := strings.TrimSpace(p)
+		if pStr != "" {
+			extracted := extractURLFromText(pStr)
+			if extracted != "" {
+				links = append(links, extracted)
+			} else {
+				links = append(links, pStr)
+			}
+		}
+	}
+
+	finalLink := ""
+	if len(links) > 0 {
+		finalLink = links[0]
+	}
+
+	return &SupplierPurchaseResult{
+		OrderID:   statusResp.OrderID,
+		Link:      finalLink,
+		Items:     links,
+		AmountUSD: statusResp.TotalCost,
+		Status:    statusResp.Status,
+	}, nil
+}
+
+// GetOfferLink C 端卡密兑换时统一调度的链接获取入口
+func (a *AIVaultJioProvider) GetOfferLink(ctx context.Context, cardSecret, vendorKey string) (string, error) {
+	if strings.TrimSpace(cardSecret) == "" {
+		return "", errors.New("卡密不能为空")
+	}
+
+	res, err := a.Purchase(ctx, SupplierPurchaseRequest{
+		Quantity:          1,
+		CustomerReference: fmt.Sprintf("card_%s", strings.TrimSpace(cardSecret)),
+		IdempotencyKey:    fmt.Sprintf("jio_redeem_%s", strings.TrimSpace(cardSecret)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("AIVault 兑换链接获取失败: %w", err)
+	}
+
+	if res.Link == "" {
+		return "", errors.New("AIVault 未返回有效的兑换链接或卡密内容")
+	}
+
+	return res.Link, nil
+}
+
+// CreateDeposit 自主充值接口 (AIVault 暂未开放自动充值接口)
+func (a *AIVaultJioProvider) CreateDeposit(ctx context.Context, amountUSD float64) (*SupplierDepositResult, error) {
+	return &SupplierDepositResult{
+		Supported: false,
+	}, errors.New("AIVault 暂未开放自动充值接口，请登录 AIVault 官网或 Telegram 机器人充值")
+}
+
+// GetDepositStatus 查询充值单状态 (AIVault 不支持)
+func (a *AIVaultJioProvider) GetDepositStatus(ctx context.Context, depositID string) (*SupplierDepositResult, error) {
+	return &SupplierDepositResult{
+		Supported: false,
+	}, errors.New("AIVault 暂未开放自动充值接口")
+}
+
 // extractURLFromText 从文本内容中匹配提取第一个 HTTP/HTTPS 链接
 var urlRegex = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
@@ -1406,9 +1839,10 @@ func extractURLFromText(s string) string {
 }
 
 func init() {
-	// 仅注册正式商用供应商
 	RegisterJioProvider(&VenteJioProvider{})
 	RegisterJioProvider(&AcczoneJioProvider{})
+	RegisterJioProvider(&AIVaultJioProvider{})
+	RegisterJioProvider(&MockJioProvider{})
 }
 
 // =========================================================================

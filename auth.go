@@ -222,19 +222,22 @@ func (h *adminStaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			// Map file path to permission key
 			filePermissionMap := map[string]string{
-				"/admin/dashboard.html":   "dashboard",
-				"/admin/orders.html":      "orders",
-				"/admin/keys.html":        "keys",
-				"/admin/convert.html":     "convert",
-				"/admin/reset.html":       "reset",
-				"/admin/generate.html":    "generate",
-				"/admin/buy.html":         "buy",
-				"/admin/buy_records.html": "buy",
-				"/admin/vendors.html":     "vendors",
-				"/admin/logs.html":        "logs",
-				"/admin/settings.html":    "settings",
-				"/admin/jio_pricing.html": "jio_pricing",
-				"/admin/jio_wallet.html":  "jio_wallet",
+				"/admin/dashboard.html":     "dashboard",
+				"/admin/orders.html":        "orders",
+				"/admin/keys.html":          "keys",
+				"/admin/convert.html":       "convert",
+				"/admin/reset.html":         "reset",
+				"/admin/generate.html":      "generate",
+				"/admin/buy.html":           "buy",
+				"/admin/buy_records.html":   "buy",
+				"/admin/vendors.html":       "vendors",
+				"/admin/devices.html":       "devices",
+				"/admin/logs.html":          "logs",
+				"/admin/faqs.html":          "faqs",
+				"/admin/settings.html":      "settings",
+				"/admin/jio_pricing.html":   "jio_pricing",
+				"/admin/jio_wallet.html":    "jio_wallet",
+				"/admin/jio_suppliers.html": "jio_suppliers",
 			}
 
 			if path == "/admin/users.html" {
@@ -404,7 +407,7 @@ func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
 
 	permissions := []string{}
 	if role == "admin" {
-		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs", "devices", "faqs", "jio_pricing", "jio_wallet"}
+		permissions = []string{"dashboard", "orders", "keys", "convert", "reset", "generate", "buy", "vendors", "settings", "logs", "devices", "faqs", "jio_pricing", "jio_wallet", "jio_suppliers"}
 	} else {
 		rows, err := db.Query("SELECT permission FROM admin_permissions WHERE admin_id = ?", adminID)
 		if err == nil {
@@ -416,8 +419,6 @@ func handleAdminCheck(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		// Jio Wallet is available to all logged-in admin users
-		permissions = append(permissions, "jio_wallet")
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{

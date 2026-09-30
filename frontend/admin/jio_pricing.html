@@ -3,10 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Jio 价格管理 - Pixel 订阅</title>
-    <link rel="stylesheet" href="./admin.css?v=1.1.3">
-    <script src="./admin.js?v=1.1.0"></script>
+    <title>Jio 销售价格管理 - Pixel 订阅</title>
+    <link rel="stylesheet" href="./admin.css?v=1.1.4">
+    <script src="./admin.js?v=1.2.0"></script>
     <style>
+        /* Top Supplier Strategy Link Banner */
+        .strategy-banner {
+            background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+
+        .strategy-banner-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .strategy-badge-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: #e0e7ff;
+            color: #4338ca;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .strategy-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--slate-900);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .strategy-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        .strategy-pill.auto {
+            background: #d1fae5;
+            color: #065f46;
+            border-color: #a7f3d0;
+        }
+
+        .strategy-desc {
+            font-size: 13px;
+            color: var(--slate-600);
+            margin-top: 2px;
+        }
+
+        .strategy-banner-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .btn-link-suppliers {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #4338ca;
+            background: #ffffff;
+            border: 1px solid #c7d2fe;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+
+        .btn-link-suppliers:hover {
+            background: #f5f3ff;
+            border-color: #a5b4fc;
+            color: #3730a3;
+        }
+
         /* Top Metrics Row */
         .pricing-metrics-row {
             display: grid;
@@ -50,7 +144,15 @@
             font-family: var(--font-mono, "JetBrains Mono", monospace);
             display: flex;
             align-items: baseline;
-            gap: 5px;
+            gap: 4px;
+        }
+
+        .metric-card-val.highlight {
+            color: #4338ca;
+        }
+
+        .metric-card-val.profit {
+            color: #059669;
         }
 
         .metric-card-unit {
@@ -68,20 +170,34 @@
             margin-top: 4px;
         }
 
-        /* Multi-Provider Showcase Section */
-        .providers-section {
+        /* Main 2-Column Layout */
+        .pricing-main-layout {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 20px;
             margin-bottom: 24px;
+            align-items: start;
         }
 
-        .section-header-bar {
+        .card-box {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+
+        .card-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
+            margin-bottom: 20px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--slate-100);
         }
 
-        .section-title {
-            font-size: 15px;
+        .card-header-title {
+            font-size: 16px;
             font-weight: 700;
             color: var(--slate-900);
             display: flex;
@@ -89,252 +205,95 @@
             gap: 8px;
         }
 
-        .section-subtitle {
-            font-size: 12px;
-            color: var(--slate-400);
-            font-weight: normal;
-        }
-
-        .provider-cards-grid {
+        /* Pricing Mode Tabs */
+        .mode-tabs {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-        }
-
-        .provider-card {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 18px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
-            position: relative;
-            transition: all 0.2s ease;
-        }
-
-        .provider-card:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-        }
-
-        .provider-card.is-benchmark {
-            border-color: #818cf8;
-            background: linear-gradient(180deg, #fbfbfe 0%, #ffffff 100%);
-            box-shadow: 0 0 0 1px #818cf8, 0 4px 12px rgba(99, 102, 241, 0.08);
-        }
-
-        .provider-card-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 10px;
-        }
-
-        .provider-name-group {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-
-        .provider-name {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--slate-900);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .provider-sub-key {
-            font-size: 11px;
-            color: var(--slate-400);
-            font-family: var(--font-mono, monospace);
-        }
-
-        .provider-badges-group {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
-        }
-
-        .badge-system-active {
-            font-size: 10px;
-            font-weight: 700;
-            background: #e0e7ff;
-            color: #4338ca;
-            padding: 2px 7px;
-            border-radius: 4px;
-            border: 1px solid #c7d2fe;
-            white-space: nowrap;
-        }
-
-        .badge-benchmark {
-            font-size: 10px;
-            font-weight: 700;
-            background: #ecfdf5;
-            color: #059669;
-            padding: 2px 7px;
-            border-radius: 4px;
-            border: 1px solid #a7f3d0;
-            white-space: nowrap;
-        }
-
-        .provider-cost-display {
-            background: var(--slate-50);
-            border: 1px solid var(--slate-100);
-            border-radius: 8px;
-            padding: 12px 14px;
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-        }
-
-        .provider-cost-usd {
-            font-size: 22px;
-            font-weight: 800;
-            color: var(--slate-900);
-            font-family: var(--font-mono, monospace);
-        }
-
-        .provider-cost-cny {
-            font-size: 13px;
-            font-weight: 600;
-            color: #4f46e5;
-            font-family: var(--font-mono, monospace);
-        }
-
-        .provider-card-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--slate-400);
-            padding-top: 6px;
-            border-top: 1px solid var(--slate-100);
-        }
-
-        .provider-status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-weight: 600;
-        }
-
-        .status-dot-green {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #10b981;
-            display: inline-block;
-            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-        }
-
-        .status-dot-gray {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #94a3b8;
-            display: inline-block;
-        }
-
-        .btn-set-benchmark {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--slate-700);
-            padding: 3px 8px;
-            border-radius: 5px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .btn-set-benchmark:hover {
-            background: #ffffff;
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-
-        /* Main Workspace: Config Form (Left) & Simulator (Right) */
-        .pricing-main-layout {
-            display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 20px;
-            align-items: start;
-        }
-
-        /* Segmented Mode Switcher */
-        .mode-segmented {
-            display: inline-flex;
+            gap: 8px;
             background: var(--slate-100);
-            border-radius: 8px;
             padding: 4px;
-            gap: 4px;
-            width: 100%;
+            border-radius: 10px;
             margin-bottom: 20px;
         }
 
-        .mode-segment-btn {
-            flex: 1;
-            padding: 10px 16px;
+        .mode-tab-btn {
             border: none;
             background: transparent;
-            color: var(--slate-600);
+            padding: 9px 12px;
+            border-radius: 8px;
             font-size: 13px;
             font-weight: 600;
-            border-radius: 6px;
+            color: var(--slate-600);
             cursor: pointer;
             transition: all 0.15s ease;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
         }
 
-        .mode-segment-btn:hover {
+        .mode-tab-btn:hover {
             color: var(--slate-900);
         }
 
-        .mode-segment-btn.active {
+        .mode-tab-btn.active {
             background: #ffffff;
-            color: var(--primary);
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            color: #4338ca;
+            font-weight: 700;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         }
 
-        /* Form styling */
-        .config-form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 16px;
+        .mode-tab-sub {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--slate-400);
         }
 
-        .config-form-label {
+        .mode-tab-btn.active .mode-tab-sub {
+            color: #6366f1;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            display: block;
             font-size: 13px;
             font-weight: 600;
-            color: var(--slate-800);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            color: var(--slate-700);
+            margin-bottom: 6px;
         }
 
-        .config-form-hint {
+        .form-hint {
             font-size: 12px;
-            color: var(--slate-400);
-            font-weight: normal;
+            color: var(--slate-500);
+            margin-top: 4px;
+            line-height: 1.4;
         }
 
-        .config-input-wrapper {
+        .input-wrapper {
             position: relative;
             display: flex;
             align-items: center;
         }
 
-        .config-input-prefix {
+        .input-prefix {
             position: absolute;
             left: 12px;
             font-size: 13px;
             font-weight: 700;
+            color: var(--slate-400);
+            pointer-events: none;
+            font-family: var(--font-mono, monospace);
+        }
+
+        .input-suffix {
+            position: absolute;
+            right: 12px;
+            font-size: 12px;
+            font-weight: 600;
             color: var(--slate-400);
             pointer-events: none;
         }
@@ -352,10 +311,15 @@
             outline: none;
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
             box-sizing: border-box;
+            font-family: var(--font-mono, monospace);
         }
 
         .config-input.has-prefix {
             padding-left: 32px;
+        }
+
+        .config-input.has-suffix {
+            padding-right: 48px;
         }
 
         .config-input:focus {
@@ -363,7 +327,6 @@
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
         }
 
-        /* Pure clean native select without any duplicate custom dropdown wrapper */
         .select-clean {
             appearance: none;
             -webkit-appearance: none;
@@ -387,17 +350,19 @@
             box-sizing: border-box;
         }
 
-        .select-clean:hover {
-            border-color: var(--slate-400);
-        }
-
         .select-clean:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
         }
 
-        /* Simulator Card */
-        .simulator-card {
+        .form-row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        /* Right Column: Breakdown & Live Calculation Preview */
+        .preview-box {
             background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
             border: 1px solid var(--border-color);
             border-radius: 12px;
@@ -405,43 +370,45 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
         }
 
-        .simulator-step {
+        .preview-step {
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-size: 13px;
-            padding: 9px 12px;
+            padding: 10px 14px;
             background: #ffffff;
             border: 1px solid var(--slate-200);
             border-radius: 8px;
         }
 
-        .simulator-step-label {
+        .preview-step-label {
             color: var(--slate-600);
             font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        .simulator-step-val {
+        .preview-step-val {
             font-family: var(--font-mono, monospace);
             font-weight: 700;
             color: var(--slate-900);
         }
 
-        .final-price-box {
+        .preview-final-card {
             background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
             border: 1px solid #c7d2fe;
             border-radius: 12px;
-            padding: 18px 20px;
+            padding: 20px;
+            text-align: center;
             display: flex;
             flex-direction: column;
             gap: 6px;
-            text-align: center;
         }
 
-        .final-price-title {
+        .preview-final-label {
             font-size: 12px;
             font-weight: 700;
             color: #4338ca;
@@ -449,18 +416,66 @@
             text-transform: uppercase;
         }
 
-        .final-price-amount {
-            font-size: 34px;
+        .preview-final-price {
+            font-size: 36px;
             font-weight: 900;
             color: #312e81;
             font-family: var(--font-mono, monospace);
+            line-height: 1.1;
         }
 
-        .final-price-desc {
+        .preview-sync-note {
             font-size: 12px;
             color: #4338ca;
-            line-height: 1.4;
             font-weight: 600;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .btn-save-primary {
+            width: 100%;
+            height: 44px;
+            background: var(--primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-save-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-save-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Bottom Real Suppliers Table */
+        .suppliers-table-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px 24px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+
+        .table-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
         }
 
         .btn-refresh-cost {
@@ -469,8 +484,8 @@
             gap: 6px;
             background: #ffffff;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 6px 12px;
+            border-radius: 8px;
+            padding: 7px 14px;
             font-size: 12px;
             font-weight: 600;
             color: var(--slate-700);
@@ -492,22 +507,21 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Detail Services Table inside Card */
-        .services-detail-card {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 18px 20px;
-            margin-top: 20px;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
         }
+
+        .status-dot.online { background: #10b981; }
+        .status-dot.offline { background: #ef4444; }
+        .status-dot.active { background: #6366f1; }
 
         @media (max-width: 1024px) {
             .pricing-metrics-row {
                 grid-template-columns: repeat(2, 1fr);
-            }
-            .provider-cards-grid {
-                grid-template-columns: 1fr;
             }
             .pricing-main-layout {
                 grid-template-columns: 1fr;
@@ -516,6 +530,13 @@
 
         @media (max-width: 640px) {
             .pricing-metrics-row {
+                grid-template-columns: 1fr;
+            }
+            .strategy-banner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .form-row-2 {
                 grid-template-columns: 1fr;
             }
         }
@@ -550,788 +571,598 @@
             <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
         </nav>
 
-        <!-- 头部区域 -->
-        <header class="app-header">
-            <div class="header-left">
-                <!-- 价格标签图标 SVG -->
-                <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="1" x2="12" y2="23"></line>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                </svg>
-                <div style="display: flex; flex-direction: column;">
-                    <span class="header-title">Jio 价格管理</span>
-                    <span style="font-size: 12px; color: var(--slate-500); margin-top: 2px;">实时监控第三方平台成本，灵活适配多供应商与比例加价核算体系</span>
-                </div>
-            </div>
-            <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
-                <a href="/admin/jio_suppliers.html" class="btn btn-secondary" style="font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-                    Jio 供应商管理 &rarr;
-                </a>
-                <button type="button" id="btn-refresh-cost" class="btn-refresh-cost" title="重新请求全部第三方接口刷新成本">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <polyline points="1 20 1 14 7 14"></polyline>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                    <span>刷新第三方成本</span>
-                </button>
-                <div id="admin-user-display" style="font-size:13px; color:var(--slate-600); font-weight: 500;">
-                    管理员: -
-                </div>
-            </div>
-        </header>
-
-        <!-- 顶部指标卡片 -->
-        <div class="pricing-metrics-row">
-            <div class="metric-card">
-                <div class="metric-card-top">
-                    <span>基准成本 (Gemini Link)</span>
-                    <span id="metric-benchmark-badge" style="font-size: 10px; background: #e0e7ff; color: #4338ca; font-weight: 700; padding: 2px 6px; border-radius: 4px;">Acczone</span>
-                </div>
-                <div class="metric-card-val">
-                    <span id="metric-cost-usd">$0.40</span>
-                    <span class="metric-card-unit">USD</span>
-                </div>
-                <div class="metric-card-foot">
-                    <span style="color: var(--slate-400);">折合:</span>
-                    <span id="metric-cost-cny" style="font-weight: 700; color: var(--slate-800);">￥2.88 CNY</span>
-                    <span id="metric-latency-text" style="margin-left: auto; font-size: 11px; color: #10b981;">延时 160ms</span>
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-card-top">
-                    <span>当前系统核算售价</span>
-                    <span class="status-badge" style="background:#e0e7ff; color:#4338ca; font-weight:700;">生效中</span>
-                </div>
-                <div class="metric-card-val">
-                    <span id="metric-sale-price" style="color: #4f46e5;">￥4.32</span>
-                    <span class="metric-card-unit">元/张</span>
-                </div>
-                <div class="metric-card-foot">
-                    <span style="color: var(--slate-400);">预估单张利润:</span>
-                    <span id="metric-profit-val" style="font-weight: 700; color: #15803d;">+￥1.44 (33.3%)</span>
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-card-top">
-                    <span>定价算法策略</span>
-                </div>
-                <div class="metric-card-val" style="font-size: 20px; font-weight: 700;">
-                    <span id="metric-mode-name">比例加价模式</span>
-                </div>
-                <div class="metric-card-foot">
-                    <span id="metric-round-rule" style="color: var(--slate-600); font-size: 12px;">向上取整 (保留2位小数)</span>
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-card-top">
-                    <span>基准汇率与渠道</span>
-                </div>
-                <div class="metric-card-val">
-                    <span id="metric-exchange-rate">7.2000</span>
-                    <span class="metric-card-unit">USD/CNY</span>
-                </div>
-                <div class="metric-card-foot">
-                    <span id="metric-online-providers" style="color: #059669; font-weight: 600;">已连接 2 个可用渠道</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- 多第三方供应商实时成本监控区域 -->
-        <section class="providers-section">
-            <div class="section-header-bar">
+        <main class="main-content">
+            <!-- 顶栏 -->
+            <header class="content-header">
                 <div>
-                    <span class="section-title">
-                        第三方采购渠道成本概览
-                        <span class="section-subtitle">(支持接入多个外部第三方平台，实时监测成本变动并支持优选定价)</span>
-                    </span>
+                    <h1 class="page-title">Jio 销售价格管理</h1>
+                    <p class="page-subtitle">定价策略自动感知并以 Jio 供应商策略成本为基准，销售价格与仪表盘及用户下单扣款实时严格对齐</p>
                 </div>
-                <span id="cost-last-updated" style="font-size: 12px; color: var(--slate-400); font-family: var(--font-mono, monospace);">-</span>
-            </div>
-
-            <div class="provider-cards-grid" id="provider-cards-container">
-                <!-- 动态生成各第三方渠道卡片 -->
-            </div>
-        </section>
-
-        <!-- 主体区域：左侧配置，右侧试算与监控 -->
-        <div class="pricing-main-layout">
-            <!-- 左侧：销售价格配置表单 -->
-            <div class="card" style="padding: 24px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: var(--slate-900); margin: 0 0 16px 0;">Jio 销售价格配置策略</h3>
-                
-                <!-- 三种算法切换 Segmented -->
-                <div class="mode-segmented" style="display: grid; grid-template-columns: repeat(3, 1fr);">
-                    <button type="button" class="mode-segment-btn" id="btn-mode-fixed" data-mode="fixed">固定价格模式 (Fixed)</button>
-                    <button type="button" class="mode-segment-btn" id="btn-mode-fixed-markup" data-mode="fixed_markup">固定金额加价 (Markup)</button>
-                    <button type="button" class="mode-segment-btn active" id="btn-mode-ratio" data-mode="ratio">比例倍数加价 (Ratio)</button>
+                <div class="user-info">
+                    <span id="admin-user-display" class="user-badge">管理员: 加载中...</span>
                 </div>
+            </header>
 
-                <!-- 固定价格模式输入组 -->
-                <div id="section-fixed-mode" class="hidden">
-                    <div class="config-form-group">
-                        <label class="config-form-label">
-                            <span>固定销售单价 (元/张)</span>
-                            <span class="config-form-hint">不论上游成本如何波动，始终按此固定售价核算订单</span>
-                        </label>
-                        <div class="config-input-wrapper">
-                            <span class="config-input-prefix">￥</span>
-                            <input type="number" step="0.01" min="0" id="input-fixed-price" class="config-input has-prefix" placeholder="5.00" value="5.00">
+            <!-- 顶部：供应商策略联动横幅 (感知 Jio 供应商策略) -->
+            <div class="strategy-banner">
+                <div class="strategy-banner-left">
+                    <div class="strategy-badge-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="strategy-title">
+                            <span>基准采购成本来源</span>
+                            <span id="banner-strategy-pill" class="strategy-pill">检测中...</span>
+                        </div>
+                        <div id="banner-strategy-desc" class="strategy-desc">
+                            自动从 Jio 供应商策略实时获取当前优选渠道成本，作为销售价格设定的基准
                         </div>
                     </div>
                 </div>
+                <div class="strategy-banner-actions">
+                    <a href="/admin/jio_suppliers.html" class="btn-link-suppliers">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span>配置供应商调度策略</span>
+                    </a>
+                </div>
+            </div>
 
-                <!-- 动态加价计算输入组 (比例加价 或 固定金额加价) -->
-                <div id="section-ratio-mode">
-                    <!-- 基准成本渠道选择 -->
-                    <div class="config-form-group">
-                        <label class="config-form-label">
-                            <span>定价成本基准来源 (适配多供应商)</span>
-                            <span class="config-form-hint">决定用于价格计算的基准成本获取方式</span>
-                        </label>
-                        <select id="select-benchmark-source" class="no-custom select-clean">
-                            <option value="active">跟随系统当前启用供应商 (与系统设置联动)</option>
-                            <option value="lowest">全渠道自动优选最低成本 (Auto-Lowest Cost)</option>
-                            <option value="vente">锁定 Vente 采购平台 (VenteBot Reseller API)</option>
-                            <option value="acczone">锁定 Acczone 采购平台 (api.acczone.xyz)</option>
-                            <option value="manual">手动自定义基准成本输入</option>
+            <!-- 核心数据指标行 -->
+            <div class="pricing-metrics-row">
+                <!-- 指标 1：策略基准成本 -->
+                <div class="metric-card">
+                    <div class="metric-card-top">
+                        <span>供应商策略采购成本</span>
+                        <span id="metric-provider-name" style="font-size: 11px; font-weight: 700; color: #4338ca;">-</span>
+                    </div>
+                    <div class="metric-card-val">
+                        <span id="metric-cost-usd">$0.00</span>
+                        <span class="metric-card-unit">USD</span>
+                    </div>
+                    <div class="metric-card-foot">
+                        <span>折合:</span>
+                        <strong id="metric-cost-cny" style="color: var(--slate-800);">￥0.00 CNY</strong>
+                    </div>
+                </div>
+
+                <!-- 指标 2：最终销售单价 (仪表盘/下单扣除一致) -->
+                <div class="metric-card">
+                    <div class="metric-card-top">
+                        <span>最终销售结算单价</span>
+                        <span style="font-size: 11px; color: #10b981; font-weight: 700;">全端实时同步</span>
+                    </div>
+                    <div class="metric-card-val highlight">
+                        <span id="metric-sale-price">￥5.00</span>
+                        <span class="metric-card-unit">元/张</span>
+                    </div>
+                    <div class="metric-card-foot">
+                        <span id="metric-mode-desc">固定销售价格模式</span>
+                    </div>
+                </div>
+
+                <!-- 指标 3：单张预估利润 -->
+                <div class="metric-card">
+                    <div class="metric-card-top">
+                        <span>单张预估毛利</span>
+                        <span id="metric-profit-margin" style="font-size: 11px; color: #059669; font-weight: 700;">毛利率 0%</span>
+                    </div>
+                    <div class="metric-card-val profit">
+                        <span id="metric-profit-amount">+￥0.00</span>
+                        <span class="metric-card-unit">元</span>
+                    </div>
+                    <div class="metric-card-foot">
+                        <span>最终售价减去策略采购成本</span>
+                    </div>
+                </div>
+
+                <!-- 指标 4：美元汇率 -->
+                <div class="metric-card">
+                    <div class="metric-card-top">
+                        <span>美元折算汇率</span>
+                        <span style="font-size: 11px; color: var(--slate-400);">USD / CNY</span>
+                    </div>
+                    <div class="metric-card-val">
+                        <span id="metric-exchange-rate">7.2000</span>
+                    </div>
+                    <div class="metric-card-foot">
+                        <span>可在下方配置区随汇率调整</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主工作区：左侧定价策略配置，右侧试算与核算透视 -->
+            <div class="pricing-main-layout">
+                <!-- 左侧：销售价格配置表单 -->
+                <div class="card-box">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            <span>销售价格设定策略</span>
+                        </div>
+                    </div>
+
+                    <!-- 3 种定价模式选择 -->
+                    <div class="mode-tabs">
+                        <button type="button" class="mode-tab-btn" data-mode="fixed" id="tab-mode-fixed">
+                            <span>固定销售单价</span>
+                            <span class="mode-tab-sub">直接统一定价</span>
+                        </button>
+                        <button type="button" class="mode-tab-btn" data-mode="fixed_markup" id="tab-mode-fixed-markup">
+                            <span>固定金额加价</span>
+                            <span class="mode-tab-sub">成本 + 固定利润</span>
+                        </button>
+                        <button type="button" class="mode-tab-btn active" data-mode="ratio" id="tab-mode-ratio">
+                            <span>比例倍数加价</span>
+                            <span class="mode-tab-sub">成本 × 利润系数</span>
+                        </button>
+                    </div>
+
+                    <!-- 模式 1：固定价格参数 -->
+                    <div class="form-group" id="group-fixed-price" style="display: none;">
+                        <label class="form-label" for="input-fixed-price">固定最终销售单价 (元/张)</label>
+                        <div class="input-wrapper">
+                            <span class="input-prefix">￥</span>
+                            <input type="number" step="0.01" min="0" class="config-input has-prefix" id="input-fixed-price" value="5.00">
+                        </div>
+                        <div class="form-hint">直接按填写的固定单价售卖，仪表盘展示与用户下单扣除管理员钱包均以此为准。</div>
+                    </div>
+
+                    <!-- 模式 2：固定加价参数 -->
+                    <div class="form-group" id="group-fixed-markup" style="display: none;">
+                        <label class="form-label" for="input-fixed-markup">基于成本的单张固定加价 (元/张)</label>
+                        <div class="input-wrapper">
+                            <span class="input-prefix">￥</span>
+                            <input type="number" step="0.01" min="0" class="config-input has-prefix" id="input-fixed-markup" value="2.00">
+                        </div>
+                        <div class="form-hint">最终售价 = Jio 供应商策略成本(折合CNY) + 固定加价金额。确保每单锁定稳定毛利。</div>
+                    </div>
+
+                    <!-- 模式 3：比例倍数加价参数 -->
+                    <div class="form-group" id="group-ratio">
+                        <label class="form-label" for="input-ratio">加价倍数系数 (Ratio)</label>
+                        <div class="input-wrapper">
+                            <input type="number" step="0.05" min="1.0" class="config-input has-suffix" id="input-ratio" value="1.50">
+                            <span class="input-suffix">倍</span>
+                        </div>
+                        <div class="form-hint">最终售价 = Jio 供应商策略成本(折合CNY) × 加价倍数。跟随上游进价浮动。</div>
+                    </div>
+
+                    <!-- 通用参数：汇率与取整规则 -->
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label" for="input-exchange-rate">美元换算汇率 (USD/CNY)</label>
+                            <div class="input-wrapper">
+                                <input type="number" step="0.01" min="1" class="config-input" id="input-exchange-rate" value="7.2000">
+                            </div>
+                            <div class="form-hint">折算供应商上游美元成本使用</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="select-round-mode">取整规则</label>
+                            <select class="select-clean" id="select-round-mode">
+                                <option value="round">四舍五入 (Round)</option>
+                                <option value="ceil">向上进位取整 (Ceil)</option>
+                                <option value="floor">向下截断取整 (Floor)</option>
+                            </select>
+                            <div class="form-hint">小数位处理方式</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="select-round-precision">小数保留位数</label>
+                        <select class="select-clean" id="select-round-precision">
+                            <option value="2">保留 2 位小数 (精确到分，推荐)</option>
+                            <option value="1">保留 1 位小数 (精确到角)</option>
+                            <option value="0">取整到整数元</option>
                         </select>
                     </div>
 
-                    <!-- 手动成本输入行 (仅当选择 manual 时显示) -->
-                    <div class="config-form-group hidden" id="group-manual-cost">
-                        <label class="config-form-label">
-                            <span>自定义基准成本 (USD)</span>
-                            <span class="config-form-hint">手动指定上游美元成本进行试算</span>
-                        </label>
-                        <div class="config-input-wrapper">
-                            <span class="config-input-prefix">$</span>
-                            <input type="number" step="0.01" min="0.01" id="input-manual-cost" class="config-input has-prefix" placeholder="0.40" value="0.40">
-                        </div>
-                    </div>
-
-                    <!-- 固定金额加价输入组 (仅在 fixed_markup 模式显示) -->
-                    <div class="config-form-group" id="group-fixed-markup" style="display: none;">
-                        <label class="config-form-label">
-                            <span>每单固定加价金额 (元/张)</span>
-                            <span class="config-form-hint">售价 = 采购成本 (折合人民币) + 固定加价，确保每单固定净利润</span>
-                        </label>
-                        <div class="config-input-wrapper">
-                            <span class="config-input-prefix">￥</span>
-                            <input type="number" step="0.1" min="0" id="input-fixed-markup" class="config-input has-prefix" placeholder="2.00" value="2.00">
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;" id="row-ratio-exchange">
-                        <div class="config-form-group">
-                            <label class="config-form-label">
-                                <span>美元基准汇率 (USD/CNY)</span>
-                            </label>
-                            <div class="config-input-wrapper">
-                                <span class="config-input-prefix">$</span>
-                                <input type="number" step="0.01" min="0.1" id="input-exchange-rate" class="config-input has-prefix" placeholder="7.20" value="7.20">
-                            </div>
-                        </div>
-
-                        <div class="config-form-group" id="group-ratio">
-                            <label class="config-form-label">
-                                <span>加价倍数 (比例系数)</span>
-                                <span class="config-form-hint">如 1.50 表示加价 50%</span>
-                            </label>
-                            <div class="config-input-wrapper">
-                                <span class="config-input-prefix">×</span>
-                                <input type="number" step="0.05" min="1.0" id="input-ratio" class="config-input has-prefix" placeholder="1.50" value="1.50">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                        <div class="config-form-group">
-                            <label class="config-form-label">
-                                <span>小数取整算法</span>
-                            </label>
-                            <!-- 使用 no-custom select-clean 确保无任何重叠边框 -->
-                            <select id="select-round-mode" class="no-custom select-clean">
-                                <option value="ceil">向上取整进位 (Ceil - 建议，保障毛利)</option>
-                                <option value="floor">向下舍去截断 (Floor - 舍弃尾数)</option>
-                                <option value="round">标准四舍五入 (Round - 平衡定价)</option>
-                            </select>
-                        </div>
-
-                        <div class="config-form-group">
-                            <label class="config-form-label">
-                                <span>小数保留精度</span>
-                            </label>
-                            <select id="select-round-precision" class="no-custom select-clean">
-                                <option value="2">保留 2 位小数 (精确到分，如 ￥4.32)</option>
-                                <option value="1">保留 1 位小数 (精确到角，如 ￥4.30)</option>
-                                <option value="0">取整到整数 (精确到元，如 ￥5.00)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="border-top: 1px solid var(--border-color); margin-top: 20px; padding-top: 20px; display: flex; justify-content: flex-end;">
-                    <button type="button" id="btn-save-pricing" class="btn-submit" style="padding: 10px 30px; font-size: 14px; font-weight: 600; width: auto; margin: 0;">
-                        保存价格配置
+                    <button type="button" class="btn-save-primary" id="btn-save-pricing">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        <span>保存价格配置</span>
                     </button>
                 </div>
-            </div>
 
-            <!-- 右侧：实时价格试算器与说明 -->
-            <div style="display: flex; flex-direction: column; gap: 20px;">
-                <div class="simulator-card">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span style="font-size: 14px; font-weight: 700; color: var(--slate-900);">实时定价试算与公式解析</span>
-                        <span id="sim-source-tag" style="font-size: 11px; color: #4f46e5; background: #eef2ff; padding: 2px 8px; border-radius: 4px; font-weight: 600;">基准: Acczone</span>
+                <!-- 右侧：实时试算与核算透视图 -->
+                <div class="card-box">
+                    <div class="card-header">
+                        <div class="card-header-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="2" width="16" height="20" rx="2"/>
+                                <line x1="8" y1="6" x2="16" y2="6"/>
+                                <line x1="16" y1="14" x2="16" y2="18"/>
+                                <path d="M16 10h.01"/>
+                                <path d="M12 10h.01"/>
+                                <path d="M8 10h.01"/>
+                                <path d="M12 14h.01"/>
+                                <path d="M8 14h.01"/>
+                                <path d="M12 18h.01"/>
+                                <path d="M8 18h.01"/>
+                            </svg>
+                            <span>计价核算实时透视图</span>
+                        </div>
                     </div>
 
-                    <div class="simulator-step">
-                        <span class="simulator-step-label">上游基准成本 (USD)</span>
-                        <span class="simulator-step-val" id="sim-cost-usd">$0.40</span>
-                    </div>
+                    <div class="preview-box">
+                        <div class="preview-step">
+                            <span class="preview-step-label">
+                                <span>1. 供应商策略成本:</span>
+                            </span>
+                            <span class="preview-step-val" id="calc-step-cost-usd">$0.35 USD</span>
+                        </div>
 
-                    <div class="simulator-step" id="sim-row-cny">
-                        <span class="simulator-step-label">折合人民币成本 (成本 × 汇率)</span>
-                        <span class="simulator-step-val" id="sim-cost-cny">￥2.88</span>
-                    </div>
+                        <div class="preview-step">
+                            <span class="preview-step-label">
+                                <span>2. 汇率折算人民币:</span>
+                            </span>
+                            <span class="preview-step-val" id="calc-step-cost-cny">￥2.52 CNY</span>
+                        </div>
 
-                    <div class="simulator-step" id="sim-row-raw">
-                        <span class="simulator-step-label">比例乘算原值 (折合 × 倍数)</span>
-                        <span class="simulator-step-val" id="sim-raw-val">￥4.3200</span>
-                    </div>
+                        <div class="preview-step">
+                            <span class="preview-step-label" id="calc-step-strategy-label">
+                                <span>3. 定价算法处理 (比例 1.50x):</span>
+                            </span>
+                            <span class="preview-step-val" id="calc-step-raw-price">￥3.78</span>
+                        </div>
 
-                    <div class="simulator-step" id="sim-row-rule">
-                        <span class="simulator-step-label">小数取整处理</span>
-                        <span class="simulator-step-val" id="sim-rule-desc">向上取整 (保留2位)</span>
-                    </div>
+                        <div class="preview-step">
+                            <span class="preview-step-label">
+                                <span>4. 精度取整规则:</span>
+                            </span>
+                            <span class="preview-step-val" id="calc-step-round-desc">四舍五入 (保留2位)</span>
+                        </div>
 
-                    <div class="final-price-box">
-                        <div class="final-price-title">最终执行销售单价</div>
-                        <div class="final-price-amount" id="sim-final-price">￥4.32</div>
-                        <div class="final-price-desc" id="sim-profit-desc">
-                            预计单张利润 ￥1.44 (毛利率 33.3%)
+                        <!-- 最终生效销售价格 -->
+                        <div class="preview-final-card">
+                            <span class="preview-final-label">最终生效销售价格 (当前策略结算价)</span>
+                            <div class="preview-final-price" id="calc-final-price">￥5.00</div>
+                            <div class="preview-sync-note">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                <span>仪表盘与用户卡密下单扣减严格以此价格结算</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- 提示卡片 -->
-                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 20px; font-size: 12px; color: var(--slate-600); line-height: 1.6;">
-                    <div style="font-weight: 700; color: var(--slate-900); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            <!-- 底部：各真实供应商采购成本明细表格 (已彻底去除 External API) -->
+            <div class="suppliers-table-card">
+                <div class="table-toolbar">
+                    <div class="card-header-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                            <polyline points="2 17 12 22 22 17"/>
+                            <polyline points="2 12 12 17 22 12"/>
                         </svg>
-                        多第三方多服务扩展说明
+                        <span>真实对接供应商接口成本对比</span>
                     </div>
-                    <div>1. 系统后续接入新的第三方接口时，只需在提供者列表中注册，本页面会自动同步呈现其实时成本与延时。</div>
-                    <div>2. 用户在客户端提交 Jio 激活或生成订单时，系统将即时根据当前选定的定价策略核算销售价格并落库持久化保存。</div>
+                    <button type="button" class="btn-refresh-cost" id="btn-refresh-cost">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <polyline points="1 20 1 14 7 14"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        <span>重新拉取供应商成本</span>
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="result-table" style="font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th>供应商平台</th>
+                                <th>商品/服务代码</th>
+                                <th>上游采购成本 (USD)</th>
+                                <th>折算成本 (CNY)</th>
+                                <th>接口延迟</th>
+                                <th>运行状态</th>
+                                <th>策略命中状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suppliers-tbody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: var(--slate-400); padding: 24px;">加载供应商成本数据中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </div>
-
-        <!-- 详细服务表格 -->
-        <div class="services-detail-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-                <span style="font-size: 14px; font-weight: 700; color: var(--slate-900);">各渠道提供服务明细列表</span>
-                <span style="font-size: 12px; color: var(--slate-400);">支持直接对比各供应商同名服务成本单价</span>
-            </div>
-
-            <div class="table-container" style="box-shadow: none; border: 1px solid var(--slate-200); border-radius: 8px;">
-                <table class="result-table" style="font-size: 12px;">
-                    <thead>
-                        <tr>
-                            <th>供应商渠道</th>
-                            <th>服务代码</th>
-                            <th>服务名称</th>
-                            <th style="text-align: right;">美元成本</th>
-                            <th style="text-align: right;">折合人民币</th>
-                            <th style="text-align: center;">响应耗时</th>
-                            <th style="text-align: center;">渠道状态</th>
-                            <th style="text-align: right;">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="costs-table-body">
-                        <tr>
-                            <td colspan="8" style="text-align: center; padding: 24px; color: var(--slate-400);">正在获取第三方成本数据...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        </main>
     </div>
 
-    <!-- 弹窗提示组件 -->
+    <!-- 全局 Toast 提示容器 -->
     <div id="toast" class="toast hidden"></div>
 
     <script>
+        function showToast(message, duration = 2200) {
+            let toast = document.getElementById('toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                toast.className = 'toast hidden';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            if (toast._timer) clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, duration);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const adminUserDisplay = document.getElementById('admin-user-display');
             const btnLogout = document.getElementById('btn-logout');
-            const toast = document.getElementById('toast');
 
-            // Metrics
-            const metricCostUsd = document.getElementById('metric-cost-usd');
-            const metricCostCny = document.getElementById('metric-cost-cny');
-            const metricBenchmarkBadge = document.getElementById('metric-benchmark-badge');
-            const metricLatencyText = document.getElementById('metric-latency-text');
+            // Strategy Banner Elements
+            const bannerStrategyPill = document.getElementById('banner-strategy-pill');
+            const bannerStrategyDesc = document.getElementById('banner-strategy-desc');
+
+            // Metric Cards
+            const metricProviderName = document.getElementById('metric-provider-name');
+            const metricCostUSD = document.getElementById('metric-cost-usd');
+            const metricCostCNY = document.getElementById('metric-cost-cny');
             const metricSalePrice = document.getElementById('metric-sale-price');
-            const metricProfitVal = document.getElementById('metric-profit-val');
-            const metricModeName = document.getElementById('metric-mode-name');
-            const metricRoundRule = document.getElementById('metric-round-rule');
+            const metricModeDesc = document.getElementById('metric-mode-desc');
+            const metricProfitAmount = document.getElementById('metric-profit-amount');
+            const metricProfitMargin = document.getElementById('metric-profit-margin');
             const metricExchangeRate = document.getElementById('metric-exchange-rate');
-            const metricOnlineProviders = document.getElementById('metric-online-providers');
 
-            // Form
-            const btnModeFixed = document.getElementById('btn-mode-fixed');
-            const btnModeFixedMarkup = document.getElementById('btn-mode-fixed-markup');
-            const btnModeRatio = document.getElementById('btn-mode-ratio');
-            const sectionFixedMode = document.getElementById('section-fixed-mode');
-            const sectionRatioMode = document.getElementById('section-ratio-mode');
+            // Tab Buttons
+            const tabFixed = document.getElementById('tab-mode-fixed');
+            const tabFixedMarkup = document.getElementById('tab-mode-fixed-markup');
+            const tabRatio = document.getElementById('tab-mode-ratio');
+
+            // Form Groups
+            const groupFixedPrice = document.getElementById('group-fixed-price');
             const groupFixedMarkup = document.getElementById('group-fixed-markup');
-            const inputFixedMarkup = document.getElementById('input-fixed-markup');
             const groupRatio = document.getElementById('group-ratio');
-            const selectBenchmarkSource = document.getElementById('select-benchmark-source');
-            const groupManualCost = document.getElementById('group-manual-cost');
-            const inputManualCost = document.getElementById('input-manual-cost');
+
+            // Form Inputs
             const inputFixedPrice = document.getElementById('input-fixed-price');
-            const inputExchangeRate = document.getElementById('input-exchange-rate');
+            const inputFixedMarkup = document.getElementById('input-fixed-markup');
             const inputRatio = document.getElementById('input-ratio');
+            const inputExchangeRate = document.getElementById('input-exchange-rate');
             const selectRoundMode = document.getElementById('select-round-mode');
             const selectRoundPrecision = document.getElementById('select-round-precision');
             const btnSavePricing = document.getElementById('btn-save-pricing');
+
+            // Live Preview Elements
+            const calcStepCostUSD = document.getElementById('calc-step-cost-usd');
+            const calcStepCostCNY = document.getElementById('calc-step-cost-cny');
+            const calcStepStrategyLabel = document.getElementById('calc-step-strategy-label');
+            const calcStepRawPrice = document.getElementById('calc-step-raw-price');
+            const calcStepRoundDesc = document.getElementById('calc-step-round-desc');
+            const calcFinalPrice = document.getElementById('calc-final-price');
+
+            // Table & Refresh
             const btnRefreshCost = document.getElementById('btn-refresh-cost');
-
-            // Simulator
-            const simSourceTag = document.getElementById('sim-source-tag');
-            const simCostUsd = document.getElementById('sim-cost-usd');
-            const simCostCny = document.getElementById('sim-cost-cny');
-            const simRawVal = document.getElementById('sim-raw-val');
-            const simRuleDesc = document.getElementById('sim-rule-desc');
-            const simFinalPrice = document.getElementById('sim-final-price');
-            const simProfitDesc = document.getElementById('sim-profit-desc');
-            const simRowCny = document.getElementById('sim-row-cny');
-            const simRowRaw = document.getElementById('sim-row-raw');
-            const simRowRule = document.getElementById('sim-row-rule');
-
-            // Provider showcase
-            const providerCardsContainer = document.getElementById('provider-cards-container');
-            const costsTableBody = document.getElementById('costs-table-body');
-            const costLastUpdated = document.getElementById('cost-last-updated');
+            const suppliersTbody = document.getElementById('suppliers-tbody');
 
             let currentMode = 'ratio';
-            let liveCostsList = [];
-            let benchmarkCostUsd = 0.40;
-            let currentExchangeRate = 7.20;
-            let activeProviderKey = 'mock';
+            let liveStrategyCostUSD = 0.40;
+            let currentStrategyInfo = null;
 
-            function showToast(message, duration = 2200) {
-                toast.textContent = message;
-                toast.classList.remove('hidden');
-                setTimeout(() => {
-                    toast.classList.add('hidden');
-                }, duration);
-            }
-
-            // Mode switcher (支持 fixed, fixed_markup, ratio)
+            // Mode Switching
             function setPricingMode(mode) {
                 currentMode = mode;
-                btnModeFixed.classList.toggle('active', mode === 'fixed');
-                btnModeFixedMarkup.classList.toggle('active', mode === 'fixed_markup');
-                btnModeRatio.classList.toggle('active', mode === 'ratio');
+                tabFixed.classList.toggle('active', mode === 'fixed');
+                tabFixedMarkup.classList.toggle('active', mode === 'fixed_markup');
+                tabRatio.classList.toggle('active', mode === 'ratio');
 
-                if (mode === 'fixed') {
-                    sectionFixedMode.classList.remove('hidden');
-                    sectionRatioMode.classList.add('hidden');
+                groupFixedPrice.style.display = mode === 'fixed' ? 'block' : 'none';
+                groupFixedMarkup.style.display = mode === 'fixed_markup' ? 'block' : 'none';
+                groupRatio.style.display = mode === 'ratio' ? 'block' : 'none';
 
-                    simRowCny.style.display = 'none';
-                    simRowRaw.style.display = 'none';
-                    simRowRule.style.display = 'none';
-                } else {
-                    sectionFixedMode.classList.add('hidden');
-                    sectionRatioMode.classList.remove('hidden');
-
-                    if (mode === 'fixed_markup') {
-                        groupFixedMarkup.style.display = 'block';
-                        groupRatio.style.display = 'none';
-                    } else {
-                        groupFixedMarkup.style.display = 'none';
-                        groupRatio.style.display = 'block';
-                    }
-
-                    simRowCny.style.display = 'flex';
-                    simRowRaw.style.display = 'flex';
-                    simRowRule.style.display = 'flex';
-                }
-                recalculateSimulation();
+                recalculate();
             }
 
-            btnModeFixed.addEventListener('click', () => setPricingMode('fixed'));
-            btnModeFixedMarkup.addEventListener('click', () => setPricingMode('fixed_markup'));
-            btnModeRatio.addEventListener('click', () => setPricingMode('ratio'));
+            tabFixed.addEventListener('click', () => setPricingMode('fixed'));
+            tabFixedMarkup.addEventListener('click', () => setPricingMode('fixed_markup'));
+            tabRatio.addEventListener('click', () => setPricingMode('ratio'));
 
-            // Benchmark Source change
-            selectBenchmarkSource.addEventListener('change', () => {
-                if (selectBenchmarkSource.value === 'manual') {
-                    groupManualCost.classList.remove('hidden');
-                } else {
-                    groupManualCost.classList.add('hidden');
-                }
-                updateBenchmarkCostFromSelection();
-                recalculateSimulation();
-            });
+            // Live Calculation Function
+            function recalculate() {
+                const exchangeRate = parseFloat(inputExchangeRate.value) || 7.20;
+                const costUSD = liveStrategyCostUSD > 0 ? liveStrategyCostUSD : 0.40;
+                const costCNY = Math.round(costUSD * exchangeRate * 100) / 100;
 
-            function updateBenchmarkCostFromSelection() {
-                const source = selectBenchmarkSource.value;
-                if (source === 'manual') {
-                    benchmarkCostUsd = parseFloat(inputManualCost.value) || 0.40;
-                    simSourceTag.textContent = '基准: 自定义成本';
-                    metricBenchmarkBadge.textContent = '自定义输入';
-                } else if (source === 'lowest') {
-                    // Find lowest positive cost among providers
-                    let lowest = 999999;
-                    let lowestName = '';
-                    liveCostsList.forEach(c => {
-                        if (c.cost_price > 0 && c.cost_price < lowest) {
-                            lowest = c.cost_price;
-                            lowestName = c.provider_name || c.provider_key;
-                        }
-                    });
-                    if (lowest < 999999) {
-                        benchmarkCostUsd = lowest;
-                        simSourceTag.textContent = `基准: 全网最低 (${lowestName})`;
-                        metricBenchmarkBadge.textContent = '全网最低';
-                    } else {
-                        benchmarkCostUsd = 0.40;
-                        simSourceTag.textContent = '基准: 全网最低';
-                        metricBenchmarkBadge.textContent = '全网最低';
-                    }
-                } else if (source === 'vente') {
-                    const v = liveCostsList.find(c => c.provider_key === 'vente');
-                    benchmarkCostUsd = (v && v.cost_price > 0) ? v.cost_price : 0.40;
-                    simSourceTag.textContent = '基准: Vente 采购平台';
-                    metricBenchmarkBadge.textContent = 'Vente';
-                } else if (source === 'acczone') {
-                    const acc = liveCostsList.find(c => c.provider_key === 'acczone');
-                    benchmarkCostUsd = (acc && acc.cost_price > 0) ? acc.cost_price : 0.40;
-                    simSourceTag.textContent = '基准: Acczone 采购平台';
-                    metricBenchmarkBadge.textContent = 'Acczone';
-                } else {
-                    // "active": match system active provider
-                    const activeProv = liveCostsList.find(c => c.provider_key === activeProviderKey);
-                    if (activeProv && activeProv.cost_price > 0) {
-                        benchmarkCostUsd = activeProv.cost_price;
-                        simSourceTag.textContent = `基准: 当前启用 (${activeProv.provider_name})`;
-                        metricBenchmarkBadge.textContent = activeProv.provider_name || activeProviderKey;
-                    } else {
-                        // fallback to acczone or 0.40
-                        const acc = liveCostsList.find(c => c.provider_key === 'acczone');
-                        benchmarkCostUsd = (acc && acc.cost_price > 0) ? acc.cost_price : 0.40;
-                        simSourceTag.textContent = '基准: 当前系统渠道';
-                        metricBenchmarkBadge.textContent = '系统渠道';
-                    }
-                }
+                const roundMode = selectRoundMode.value;
+                const precision = parseInt(selectRoundPrecision.value, 10) || 0;
+                const factor = Math.pow(10, precision);
 
-                metricCostUsd.textContent = `$${benchmarkCostUsd.toFixed(2)}`;
-                const cny = benchmarkCostUsd * currentExchangeRate;
-                metricCostCny.textContent = `￥${cny.toFixed(2)} CNY`;
-            }
-
-            // Client-side Price calculation simulator
-            function recalculateSimulation() {
-                const costUsd = benchmarkCostUsd > 0 ? benchmarkCostUsd : 0.40;
-                simCostUsd.textContent = `$${costUsd.toFixed(2)}`;
+                let rawPrice = 0;
+                let strategyDescLabel = '';
 
                 if (currentMode === 'fixed') {
-                    const fixedPrice = parseFloat(inputFixedPrice.value) || 0;
-                    simFinalPrice.textContent = `￥${fixedPrice.toFixed(2)}`;
-                    
-                    const costCny = costUsd * currentExchangeRate;
-                    const profit = fixedPrice - costCny;
-                    const margin = fixedPrice > 0 ? ((profit / fixedPrice) * 100).toFixed(1) : '0';
-                    
-                    simProfitDesc.textContent = `折合成本 ￥${costCny.toFixed(2)} | 单张毛利 ￥${profit.toFixed(2)} (${margin}%)`;
+                    const fixedVal = parseFloat(inputFixedPrice.value) || 0;
+                    rawPrice = fixedVal;
+                    strategyDescLabel = '直接按固定价格结算:';
+                } else if (currentMode === 'fixed_markup') {
+                    const markupVal = parseFloat(inputFixedMarkup.value) || 0;
+                    rawPrice = costCNY + markupVal;
+                    strategyDescLabel = `成本 + 固定加价 ￥${markupVal.toFixed(2)}:`;
+                } else {
+                    const ratioVal = parseFloat(inputRatio.value) || 1.0;
+                    rawPrice = costCNY * ratioVal;
+                    strategyDescLabel = `成本 × 比例系数 ${ratioVal.toFixed(2)}x:`;
+                }
+
+                let roundedPrice = rawPrice;
+                if (currentMode !== 'fixed') {
+                    if (roundMode === 'ceil') {
+                        roundedPrice = Math.ceil(rawPrice * factor) / factor;
+                    } else if (roundMode === 'floor') {
+                        roundedPrice = Math.floor(rawPrice * factor) / factor;
+                    } else {
+                        roundedPrice = Math.round(rawPrice * factor) / factor;
+                    }
+                }
+                const finalSalePrice = Math.round(roundedPrice * 100) / 100;
+
+                // Update Preview Card
+                calcStepCostUSD.textContent = `$${costUSD.toFixed(2)} USD`;
+                calcStepCostCNY.textContent = `￥${costCNY.toFixed(2)} CNY`;
+                calcStepStrategyLabel.innerHTML = `<span>3. ${strategyDescLabel}</span>`;
+                calcStepRawPrice.textContent = `￥${rawPrice.toFixed(2)}`;
+
+                let roundDesc = '四舍五入';
+                if (roundMode === 'ceil') roundDesc = '向上进位';
+                if (roundMode === 'floor') roundDesc = '向下截断';
+                calcStepRoundDesc.textContent = `${roundDesc} (保留${precision}位)`;
+
+                calcFinalPrice.textContent = `￥${finalSalePrice.toFixed(2)}`;
+
+                // Update Top Metric Cards
+                metricCostUSD.textContent = `$${costUSD.toFixed(2)}`;
+                metricCostCNY.textContent = `￥${costCNY.toFixed(2)} CNY`;
+                metricSalePrice.textContent = `￥${finalSalePrice.toFixed(2)}`;
+                metricExchangeRate.textContent = exchangeRate.toFixed(4);
+
+                let modeTxt = '比例倍数加价模式';
+                if (currentMode === 'fixed') modeTxt = '固定销售单价模式';
+                if (currentMode === 'fixed_markup') modeTxt = '固定金额加价模式';
+                metricModeDesc.textContent = modeTxt;
+
+                const profit = finalSalePrice - costCNY;
+                metricProfitAmount.textContent = `${profit >= 0 ? '+' : ''}￥${profit.toFixed(2)}`;
+                if (profit < 0) {
+                    metricProfitAmount.style.color = '#ef4444';
+                } else {
+                    metricProfitAmount.style.color = '#059669';
+                }
+
+                let margin = 0;
+                if (finalSalePrice > 0) {
+                    margin = Math.round((profit / finalSalePrice) * 100);
+                }
+                metricProfitMargin.textContent = `毛利率 ${margin}%`;
+            }
+
+            // Input listeners for real-time recalculation
+            [inputFixedPrice, inputFixedMarkup, inputRatio, inputExchangeRate, selectRoundMode, selectRoundPrecision].forEach(el => {
+                if (el) {
+                    el.addEventListener('input', recalculate);
+                    el.addEventListener('change', recalculate);
+                }
+            });
+
+            // Render Suppliers Table (Excludes external_api completely)
+            function renderSuppliersTable(costsList, strategyInfo) {
+                if (!costsList || costsList.length === 0) {
+                    suppliersTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--slate-400); padding: 24px;">暂无可用的供应商成本数据</td></tr>`;
                     return;
                 }
 
-                const rate = parseFloat(inputExchangeRate.value) || 7.20;
-                currentExchangeRate = rate;
-                const roundMode = selectRoundMode.value;
-                const precision = parseInt(selectRoundPrecision.value, 10) || 0;
-                const costCny = costUsd * rate;
-                simCostCny.textContent = `￥${costCny.toFixed(2)}`;
+                const activeProvider = strategyInfo ? strategyInfo.active_provider : '';
 
-                let rawVal = 0;
-                let calculationTitle = '';
+                suppliersTbody.innerHTML = costsList.map(item => {
+                    const isStrategyHit = (item.provider_key === activeProvider) || item.is_system_active;
+                    const hitBadge = isStrategyHit
+                        ? `<span class="strategy-pill auto"><span class="status-dot active"></span>当前策略采用</span>`
+                        : `<span style="color: var(--slate-400); font-size: 12px;">备用待命</span>`;
 
-                if (currentMode === 'fixed_markup') {
-                    // 固定金额加价模式
-                    const markup = parseFloat(inputFixedMarkup.value) || 0;
-                    rawVal = costCny + markup;
-                    simRawVal.textContent = `￥${rawVal.toFixed(4)} (+￥${markup.toFixed(2)})`;
-                    calculationTitle = `固定加价 ￥${markup.toFixed(2)}`;
-                } else {
-                    // 比例加价模式
-                    const ratio = parseFloat(inputRatio.value) || 1.0;
-                    rawVal = costCny * ratio;
-                    simRawVal.textContent = `￥${rawVal.toFixed(4)} (×${ratio.toFixed(2)})`;
-                    calculationTitle = `比例加成 ×${ratio.toFixed(2)}`;
-                }
+                    const statusClass = (item.cost_price > 0 && item.status_text && item.status_text.indexOf('正常') !== -1) ? 'online' : 'offline';
 
-                let modeText = '四舍五入';
-                if (roundMode === 'ceil') modeText = '向上取整';
-                if (roundMode === 'floor') modeText = '向下舍去';
-                simRuleDesc.textContent = `${modeText} (保留${precision}位)`;
-
-                // Apply rounding
-                const factor = Math.pow(10, precision);
-                let finalVal = 0;
-                if (roundMode === 'ceil') {
-                    finalVal = Math.ceil(rawVal * factor) / factor;
-                } else if (roundMode === 'floor') {
-                    finalVal = Math.floor(rawVal * factor) / factor;
-                } else {
-                    finalVal = Math.round(rawVal * factor) / factor;
-                }
-
-                simFinalPrice.textContent = `￥${finalVal.toFixed(2)}`;
-
-                const profit = finalVal - costCny;
-                const margin = finalVal > 0 ? ((profit / finalVal) * 100).toFixed(1) : '0';
-                simProfitDesc.textContent = `${calculationTitle} | 单张毛利 ￥${profit.toFixed(2)} (${margin}%)`;
+                    return `
+                        <tr>
+                            <td>
+                                <div style="font-weight: 700; color: var(--slate-900); display: flex; align-items: center; gap: 6px;">
+                                    <span>${escapeHtml(item.provider_name)}</span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--slate-400); font-family: monospace;">${escapeHtml(item.provider_key)}</div>
+                            </td>
+                            <td>
+                                <span style="font-family: monospace; font-weight: 600; color: var(--slate-700);">${escapeHtml(item.service_key || 'gemini')}</span>
+                            </td>
+                            <td>
+                                <span style="font-family: monospace; font-weight: 700; color: #4338ca;">$${item.cost_price.toFixed(2)}</span>
+                            </td>
+                            <td>
+                                <span style="font-family: monospace; font-weight: 600; color: var(--slate-900);">￥${item.cost_cny.toFixed(2)}</span>
+                            </td>
+                            <td>
+                                <span style="font-size: 12px; color: ${item.latency_ms > 0 && item.latency_ms < 500 ? '#059669' : 'var(--slate-500)'}; font-family: monospace;">
+                                    ${item.latency_ms > 0 ? item.latency_ms + 'ms' : '-'}
+                                </span>
+                            </td>
+                            <td>
+                                <span style="display: inline-flex; align-items: center; font-size: 12px;">
+                                    <span class="status-dot ${statusClass}"></span>
+                                    <span>${escapeHtml(item.status_text || '在线')}</span>
+                                </span>
+                            </td>
+                            <td>
+                                ${hitBadge}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
-            // Bind change events
-            [inputFixedPrice, inputFixedMarkup, inputManualCost, inputExchangeRate, inputRatio, selectRoundMode, selectRoundPrecision].forEach(el => {
-                if (!el) return;
-                el.addEventListener('input', () => {
-                    updateBenchmarkCostFromSelection();
-                    recalculateSimulation();
-                });
-                el.addEventListener('change', () => {
-                    updateBenchmarkCostFromSelection();
-                    recalculateSimulation();
-                });
-            });
-
-            // Load Pricing configuration and costs from server
+            // Load Pricing and Strategy Data
             async function loadPricingData() {
                 try {
                     const res = await fetch('/api/admin/jio/pricing');
                     const data = await res.json();
-                    if (res.ok && data.success) {
-                        const cfg = data.config || {};
-                        liveCostsList = data.costs || [];
-                        activeProviderKey = data.active_provider || 'mock';
-
-                        currentExchangeRate = cfg.exchange_rate || 7.20;
-                        metricExchangeRate.textContent = currentExchangeRate.toFixed(4);
-
-                        // Populate form inputs
-                        setPricingMode(cfg.pricing_mode || 'ratio');
-                        inputFixedPrice.value = (cfg.fixed_price || 5.00).toFixed(2);
-                        inputFixedMarkup.value = (cfg.fixed_markup !== undefined ? cfg.fixed_markup : 2.00).toFixed(2);
-                        inputExchangeRate.value = (cfg.exchange_rate || 7.20).toFixed(4);
-                        inputRatio.value = (cfg.ratio || 1.50).toFixed(2);
-                        selectRoundMode.value = cfg.round_mode || 'round';
-                        selectRoundPrecision.value = (cfg.round_precision !== undefined) ? cfg.round_precision.toString() : '2';
-
-                        if (cfg.benchmark_source) {
-                            selectBenchmarkSource.value = cfg.benchmark_source;
-                        }
-                        if (selectBenchmarkSource.value === 'manual') {
-                            groupManualCost.classList.remove('hidden');
-                        }
-
-                        // Render multi-provider showcase cards and table
-                        renderProviderCards(liveCostsList);
-                        renderCostsTable(liveCostsList);
-
-                        updateBenchmarkCostFromSelection();
-
-                        // Update metrics
-                        const salePrice = data.current_sale_price || 0;
-                        metricSalePrice.textContent = `￥${salePrice.toFixed(2)}`;
-                        
-                        const costCny = benchmarkCostUsd * currentExchangeRate;
-                        const profit = salePrice - costCny;
-                        const margin = salePrice > 0 ? ((profit / salePrice) * 100).toFixed(1) : '0';
-                        metricProfitVal.textContent = `${profit >= 0 ? '+' : ''}￥${profit.toFixed(2)} (${margin}%)`;
-                        metricProfitVal.style.color = profit >= 0 ? '#15803d' : '#b91c1c';
-
-                        if (cfg.pricing_mode === 'fixed') {
-                            metricModeName.textContent = '固定销售价格';
-                            metricRoundRule.textContent = `固定 ￥${(cfg.fixed_price || 0).toFixed(2)} 元/张`;
-                        } else if (cfg.pricing_mode === 'fixed_markup') {
-                            metricModeName.textContent = '固定金额加价';
-                            metricRoundRule.textContent = `成本 + ￥${(cfg.fixed_markup || 2).toFixed(2)} 元/张`;
-                        } else {
-                            metricModeName.textContent = `成本比例加成 (×${(cfg.ratio || 1.5).toFixed(2)})`;
-                            let modeText = '四舍五入';
-                            if (cfg.round_mode === 'ceil') modeText = '向上取整';
-                            if (cfg.round_mode === 'floor') modeText = '向下舍去';
-                            metricRoundRule.textContent = `${modeText} (保留${cfg.round_precision || 2}位小数)`;
-                        }
-
-                        recalculateSimulation();
-                    } else {
-                        showToast(data.message || '获取价格配置失败');
+                    if (!res.ok || !data.success) {
+                        showToast(data.message || '加载 Jio 价格配置失败');
+                        return;
                     }
+
+                    const cfg = data.config || {};
+                    const strategy = data.strategy_info || {};
+                    currentStrategyInfo = strategy;
+
+                    // 1. Update Strategy Banner
+                    if (strategy.strategy_type === 'auto_lowest_cost') {
+                        bannerStrategyPill.className = 'strategy-pill auto';
+                        bannerStrategyPill.textContent = '🟢 全渠道自动最低价策略';
+                    } else {
+                        bannerStrategyPill.className = 'strategy-pill';
+                        bannerStrategyPill.textContent = `🔵 指定供应商策略 (${strategy.provider_name || strategy.active_provider})`;
+                    }
+                    bannerStrategyDesc.textContent = `${strategy.strategy_desc || '自动感知当前供应商策略'}，基准采购成本为 $${(strategy.cost_usd || 0.40).toFixed(2)} USD (折合 ￥${(strategy.cost_cny || 2.88).toFixed(2)} CNY)`;
+
+                    // 2. Set Benchmark Cost from Strategy
+                    liveStrategyCostUSD = strategy.cost_usd || cfg.cached_cost || 0.40;
+                    metricProviderName.textContent = strategy.provider_name || strategy.active_provider || '供应商策略';
+
+                    // 3. Populate Form Inputs
+                    inputFixedPrice.value = (cfg.fixed_price || 5.00).toFixed(2);
+                    inputFixedMarkup.value = (cfg.fixed_markup !== undefined ? cfg.fixed_markup : 2.00).toFixed(2);
+                    inputRatio.value = (cfg.ratio || 1.50).toFixed(2);
+                    inputExchangeRate.value = (cfg.exchange_rate || 7.20).toFixed(4);
+                    selectRoundMode.value = cfg.round_mode || 'round';
+                    selectRoundPrecision.value = cfg.round_precision !== undefined ? String(cfg.round_precision) : '2';
+
+                    // 4. Set Pricing Mode & Recalculate
+                    setPricingMode(cfg.pricing_mode || 'ratio');
+
+                    // 5. Render Real Suppliers Table
+                    renderSuppliersTable(data.costs || [], strategy);
+
                 } catch (e) {
                     console.error(e);
-                    showToast('网络错误，无法加载价格配置');
+                    showToast('网络错误，加载价格管理数据失败');
                 }
             }
 
-            // Render Multi-Provider Showcase Cards
-            function renderProviderCards(costs) {
-                if (!costs || costs.length === 0) {
-                    providerCardsContainer.innerHTML = '<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--slate-400);">暂无可用的第三方供应商</div>';
-                    return;
-                }
-
-                providerCardsContainer.innerHTML = '';
-                let onlineCount = 0;
-
-                costs.forEach(c => {
-                    if (c.is_active === 1) onlineCount++;
-                    const isSystemActive = c.is_system_active || (c.provider_key === activeProviderKey);
-                    const isBenchmark = (selectBenchmarkSource.value === 'acczone' && c.provider_key === 'acczone') ||
-                                        (selectBenchmarkSource.value === 'active' && isSystemActive);
-
-                    const card = document.createElement('div');
-                    card.className = `provider-card ${isBenchmark ? 'is-benchmark' : ''}`;
-
-                    const dotClass = c.is_active === 1 ? 'status-dot-green' : 'status-dot-gray';
-                    const latencyStr = c.latencyMs > 0 ? `${c.latencyMs}ms` : '本地直连';
-
-                    card.innerHTML = `
-                        <div class="provider-card-header">
-                            <div class="provider-name-group">
-                                <span class="provider-name">
-                                    ${escapeHtml(c.provider_name)}
-                                </span>
-                                <span class="provider-sub-key">${escapeHtml(c.service_name || c.service_key)}</span>
-                            </div>
-                            <div class="provider-badges-group">
-                                ${isSystemActive ? '<span class="badge-system-active">系统当前启用</span>' : ''}
-                                ${isBenchmark ? '<span class="badge-benchmark">当前定价基准</span>' : ''}
-                            </div>
-                        </div>
-
-                        <div class="provider-cost-display">
-                            <div>
-                                <span style="font-size: 11px; color: var(--slate-400); display: block;">实时成本</span>
-                                <span class="provider-cost-usd">$${parseFloat(c.cost_price || 0).toFixed(4)}</span>
-                            </div>
-                            <div style="text-align: right;">
-                                <span style="font-size: 11px; color: var(--slate-400); display: block;">折合人民币</span>
-                                <span class="provider-cost-cny">￥${parseFloat(c.cost_cny || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div class="provider-card-footer">
-                            <div class="provider-status-indicator">
-                                <span class="${dotClass}"></span>
-                                <span style="color: ${c.is_active === 1 ? '#0f172a' : '#94a3b8'};">${escapeHtml(c.status_text || '在线')}</span>
-                                <span style="color: var(--slate-400); margin-left: 4px;">(${latencyStr})</span>
-                            </div>
-                            <button type="button" class="btn-set-benchmark" data-key="${c.provider_key}" data-cost="${c.cost_price}">
-                                ${isBenchmark ? '当前基准' : '设为基准'}
-                            </button>
-                        </div>
-                    `;
-
-                    providerCardsContainer.appendChild(card);
-                });
-
-                metricOnlineProviders.textContent = `已连接 ${onlineCount} 个可用渠道`;
-
-                // Attach click to "设为基准"
-                providerCardsContainer.querySelectorAll('.btn-set-benchmark').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const key = btn.getAttribute('data-key');
-                        if (key === 'acczone') {
-                            selectBenchmarkSource.value = 'acczone';
-                        } else {
-                            selectBenchmarkSource.value = 'manual';
-                            inputManualCost.value = parseFloat(btn.getAttribute('data-cost') || 0.40).toFixed(2);
-                            groupManualCost.classList.remove('hidden');
-                        }
-                        updateBenchmarkCostFromSelection();
-                        renderProviderCards(liveCostsList);
-                        recalculateSimulation();
-                        showToast(`已将定价基准切换为对应渠道`);
-                    });
-                });
-            }
-
-            // Render Services Detail Table
-            function renderCostsTable(costs) {
-                if (!costs || costs.length === 0) {
-                    costsTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--slate-400);">暂无可用成本服务数据</td></tr>';
-                    return;
-                }
-
-                costsTableBody.innerHTML = '';
-                costs.forEach(c => {
-                    const tr = document.createElement('tr');
-                    const isGemini = c.service_key === 'gemini';
-                    if (isGemini) {
-                        tr.style.backgroundColor = '#fbfbfe';
-                    }
-
-                    const statusBadge = c.is_active === 1 
-                        ? '<span class="status-badge" style="background:#dcfce7; color:#15803d; font-weight:600;">● 正常在线</span>' 
-                        : '<span class="status-badge" style="background:#fee2e2; color:#b91c1c; font-weight:600;">● 不可用</span>';
-
-                    const latency = c.latencyMs > 0 ? `${c.latencyMs} ms` : '-';
-
-                    tr.innerHTML = `
-                        <td style="font-weight: 600; color: var(--slate-900);">
-                            ${escapeHtml(c.provider_name)}
-                            ${c.is_system_active ? '<span style="font-size: 10px; background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 4px; margin-left: 4px;">当前启用</span>' : ''}
-                        </td>
-                        <td style="font-family: var(--font-mono, monospace); color: var(--slate-600);">${escapeHtml(c.service_key)}</td>
-                        <td style="color: var(--slate-700);">${escapeHtml(c.service_name)}</td>
-                        <td style="text-align: right; font-family: var(--font-mono, monospace); font-weight: 700; color: #0f172a;">$${parseFloat(c.cost_price || 0).toFixed(4)}</td>
-                        <td style="text-align: right; font-family: var(--font-mono, monospace); font-weight: 700; color: #4f46e5;">￥${parseFloat(c.cost_cny || 0).toFixed(2)}</td>
-                        <td style="text-align: center; color: var(--slate-500); font-family: var(--font-mono, monospace);">${latency}</td>
-                        <td style="text-align: center;">${statusBadge}</td>
-                        <td style="text-align: right;">
-                            <button type="button" class="btn-set-benchmark" data-cost="${c.cost_price}" style="font-size: 11px;">
-                                试算此成本
-                            </button>
-                        </td>
-                    `;
-                    costsTableBody.appendChild(tr);
-
-                    if (c.fetched_at) {
-                        costLastUpdated.textContent = `最新同步时间: ${c.fetched_at}`;
-                    }
-                });
-
-                // Attach click
-                costsTableBody.querySelectorAll('.btn-set-benchmark').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const cost = parseFloat(btn.getAttribute('data-cost') || 0.40);
-                        selectBenchmarkSource.value = 'manual';
-                        inputManualCost.value = cost.toFixed(2);
-                        groupManualCost.classList.remove('hidden');
-                        updateBenchmarkCostFromSelection();
-                        recalculateSimulation();
-                        showToast(`已载入 $${cost.toFixed(2)} 进行实时试算`);
-                    });
-                });
-            }
-
-            // Refresh Cost Button
+            // Refresh Supplier Costs
             btnRefreshCost.addEventListener('click', async () => {
                 btnRefreshCost.classList.add('loading');
                 btnRefreshCost.disabled = true;
@@ -1339,12 +1170,15 @@
                     const res = await fetch('/api/admin/jio/costs');
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        showToast('已成功刷新所有第三方实时成本！');
-                        liveCostsList = data.costs || [];
-                        renderProviderCards(liveCostsList);
-                        renderCostsTable(liveCostsList);
-                        updateBenchmarkCostFromSelection();
-                        recalculateSimulation();
+                        showToast('供应商实时成本已刷新并同步');
+                        if (data.strategy_info) {
+                            currentStrategyInfo = data.strategy_info;
+                            liveStrategyCostUSD = data.strategy_info.cost_usd || liveStrategyCostUSD;
+                            metricProviderName.textContent = data.strategy_info.provider_name || data.strategy_info.active_provider;
+                            bannerStrategyDesc.textContent = `${data.strategy_info.strategy_desc}，基准采购成本为 $${liveStrategyCostUSD.toFixed(2)} USD`;
+                        }
+                        renderSuppliersTable(data.costs || [], currentStrategyInfo);
+                        recalculate();
                     } else {
                         showToast(data.message || '刷新成本失败');
                     }
@@ -1360,13 +1194,13 @@
             // Save Pricing Configuration
             btnSavePricing.addEventListener('click', async () => {
                 btnSavePricing.disabled = true;
-                btnSavePricing.textContent = '保存中...';
+                const originalText = btnSavePricing.innerHTML;
+                btnSavePricing.innerHTML = `<span>保存中...</span>`;
 
                 const payload = {
                     pricing_mode: currentMode,
                     fixed_price: parseFloat(inputFixedPrice.value) || 5.00,
                     fixed_markup: parseFloat(inputFixedMarkup.value) || 2.00,
-                    benchmark_source: selectBenchmarkSource.value,
                     exchange_rate: parseFloat(inputExchangeRate.value) || 7.20,
                     ratio: parseFloat(inputRatio.value) || 1.50,
                     round_mode: selectRoundMode.value,
@@ -1391,7 +1225,7 @@
                     showToast('网络错误，保存配置失败');
                 } finally {
                     btnSavePricing.disabled = false;
-                    btnSavePricing.textContent = '保存价格配置';
+                    btnSavePricing.innerHTML = originalText;
                 }
             });
 
