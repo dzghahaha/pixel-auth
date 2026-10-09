@@ -307,6 +307,11 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 			cand.PriceUSD = geminiProd.PriceUSD
 			cand.Stock = geminiProd.Stock
 			cand.ProductID = geminiProd.ID
+			if strings.EqualFold(prov.Name(), "acczone") && cand.Stock == nil {
+				cand.Reason = "Acczone 未返回库存数量"
+				candidates = append(candidates, cand)
+				return
+			}
 
 			hasStock := true
 			if geminiProd.Stock != nil && *geminiProd.Stock <= 0 {
@@ -837,6 +842,7 @@ func (a *AcczoneJioProvider) GetProducts(ctx context.Context) ([]SupplierProduct
 			ID:       s.Key,
 			Name:     s.Name,
 			PriceUSD: s.Price,
+			Stock:    s.Stock,
 			IsActive: s.IsActive == 1,
 			RawData:  s,
 		})

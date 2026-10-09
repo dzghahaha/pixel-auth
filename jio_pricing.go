@@ -22,6 +22,7 @@ type AcczoneServiceItem struct {
 	Name      string  `json:"name"`
 	Price     float64 `json:"price"`
 	IsActive  int     `json:"is_active"`
+	Stock     *int    `json:"stock"`
 	CreatedAt string  `json:"created_at"`
 }
 

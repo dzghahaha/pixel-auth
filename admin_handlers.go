@@ -2146,6 +2146,7 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 	type SupplierDTO struct {
 		Name           string                 `json:"name"`
 		DisplayName    string                 `json:"display_name"`
+		Note           string                 `json:"note"`
 		IsActive       bool                   `json:"is_active"`
 		Config         map[string]interface{} `json:"config"`
 		MaskedKey      string                 `json:"masked_key"`
@@ -2175,6 +2176,7 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 		list = append(list, SupplierDTO{
 			Name:           pName,
 			DisplayName:    p.DisplayName(),
+			Note:           getSetting("jio_supplier_note_"+pName, ""),
 			IsActive:       pName == activeProvider,
 			Config:         cfg,
 			MaskedKey:      maskSecret(keyVal),

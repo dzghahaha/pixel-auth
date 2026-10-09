@@ -383,6 +383,7 @@
         }
 
         .supplier-meta {
+			min-width: 0;
             display: flex;
             flex-direction: column;
             gap: 4px;
@@ -399,6 +400,29 @@
             font-weight: 700;
             color: var(--slate-900);
         }
+
+        .supplier-note {
+            padding: 3px 0;
+            border: 0;
+            background: transparent;
+            color: var(--slate-600);
+            font: inherit;
+            font-size: 12px;
+            text-align: left;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            cursor: pointer;
+        }
+        .supplier-note:hover { color: #4338ca; text-decoration: underline; }
+        .supplier-note:focus-visible { outline: 2px solid #4f46e5; outline-offset: 3px; }
+        .supplier-note-editor { display: grid; gap: 6px; margin: 4px 0; }
+        .supplier-note-editor textarea {
+            width: 100%; min-width: 0; box-sizing: border-box; resize: vertical;
+            border: 1px solid var(--slate-300); border-radius: 6px; padding: 8px;
+            font: inherit; font-size: 13px; color: var(--slate-900); background: white;
+        }
+        .supplier-note-editor textarea:focus { outline: 2px solid #4f46e5; outline-offset: 1px; }
+        .supplier-note-error { color: #b91c1c; font-size: 12px; }
 
         .supplier-badge {
             display: inline-flex;
@@ -1676,6 +1700,7 @@
                                     <div class="supplier-title-row">
                                         <span class="supplier-name">${s.display_name}</span>
                                     </div>
+                                    <button type="button" class="supplier-note"></button>
                                     <div class="supplier-key-id">唯一标识: ${s.name} ${s.has_key ? '· 已配置密钥 (' + s.masked_key + ')' : '· <span style="color:#ef4444;">未配置密钥</span>'}</div>
                                 </div>
                                 <div>${badgeHtml}</div>
@@ -1685,8 +1710,70 @@
                         </div>
                         ${actionsHtml}
                     `;
+                    const noteButton = card.querySelector('.supplier-note');
+                    noteButton.textContent = s.note || '点击添加备注';
+                    noteButton.setAttribute('aria-label', `编辑 ${s.display_name} 的备注`);
+                    noteButton.title = '点击修改备注';
+                    noteButton.addEventListener('click', () => editSupplierNote(s, noteButton));
                     container.appendChild(card);
                 });
+            }
+
+            function editSupplierNote(supplier, button) {
+                if (button.hidden) return;
+                button.hidden = true;
+                const editor = document.createElement('div');
+                editor.className = 'supplier-note-editor';
+                const input = document.createElement('textarea');
+                input.rows = 2;
+                input.maxLength = 500;
+                input.value = supplier.note || '';
+                input.setAttribute('aria-label', `${supplier.display_name} 的备注，最多500个字符`);
+                const actions = document.createElement('div');
+                actions.style.cssText = 'display:flex;gap:6px';
+                const save = document.createElement('button');
+                save.type = 'button';
+                save.className = 'btn-action btn-action-primary';
+                save.textContent = '保存';
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'btn-action btn-action-outline';
+                cancel.textContent = '取消';
+                const error = document.createElement('div');
+                error.className = 'supplier-note-error';
+                error.setAttribute('role', 'alert');
+                const close = () => { editor.remove(); button.hidden = false; button.focus(); };
+                cancel.addEventListener('click', close);
+                save.addEventListener('click', async () => {
+                    save.disabled = cancel.disabled = input.disabled = true;
+                    save.textContent = '保存中…';
+                    error.textContent = '';
+                    try {
+                        const response = await fetch('/api/admin/jio/suppliers/note', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ provider: supplier.name, note: input.value })
+                        });
+                        const result = await response.json();
+                        if (!response.ok || !result.success) throw new Error(result.message || '保存失败，请重试');
+                        supplier.note = result.note || '';
+                        button.textContent = supplier.note || '点击添加备注';
+                        close();
+                    } catch (err) {
+                        error.textContent = err.message || '网络异常，请重试';
+                    } finally {
+                        save.disabled = cancel.disabled = input.disabled = false;
+                        save.textContent = '保存';
+                        if (error.textContent) input.focus();
+                    }
+                });
+                input.addEventListener('keydown', event => {
+                    if (event.key === 'Escape' && !cancel.disabled) { event.preventDefault(); close(); }
+                    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); save.click(); }
+                });
+                actions.append(save, cancel);
+                editor.append(input, actions, error);
+                button.after(editor);
+                input.focus();
             }
 
             // 切换为指定模式并设为目标主力
@@ -1837,7 +1924,7 @@
                         if (geminiProd.stock !== null && geminiProd.stock !== undefined) {
                             stockEl.textContent = `当前库存: ${geminiProd.stock} 件`;
                         } else {
-                            stockEl.textContent = `供货状态: 现货就绪`;
+                            stockEl.textContent = pName === 'acczone' ? '库存未知' : '供货状态: 现货就绪';
                         }
 
                     } else {
@@ -2190,7 +2277,7 @@
                         tbody.innerHTML = '';
                         d.products.forEach(p => {
                             const tr = document.createElement('tr');
-                            const stockText = (p.stock !== null && p.stock !== undefined) ? `${p.stock} 件` : '充沛';
+                            const stockText = (p.stock !== null && p.stock !== undefined) ? `${p.stock} 件` : (pName === 'acczone' ? '未知' : '充沛');
                             const origPrice = p.standard_price ? `$${parseFloat(p.standard_price).toFixed(2)}` : '--';
 
                             tr.innerHTML = `
