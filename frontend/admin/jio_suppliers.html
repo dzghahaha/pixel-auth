@@ -865,11 +865,11 @@
                         <input type="radio" name="dispatch_strategy" value="auto_lowest_cost" id="radio-strategy-auto" checked>
                         <div class="strategy-option-content">
                             <div class="strategy-option-title">
-                                <span>2. 全渠道自动选择 (Auto: 优先价格低 - 库存足够)</span>
+                                <span>2. 全渠道自动选择 (余额足够 + 有库存 + 最低价)</span>
                                 <span class="badge-rec">智能推荐</span>
                             </div>
                             <div class="strategy-option-desc">
-                                系统实时拉取并筛选<strong>库存充足</strong>的渠道，按<strong>最低采购成本优先下单</strong>。仪表盘价格自动关联最低成本，售罄或故障时秒级自动容灾切换！
+                                系统筛选<strong>账户余额足够购买一份且有库存</strong>的渠道，再按<strong>最低采购成本优先下单</strong>。仪表盘价格关联当前优选渠道，购买失败时依次尝试其他合格渠道。
                             </div>
                         </div>
                     </label>
@@ -1343,7 +1343,7 @@
                     strategyStatusIndicator.className = 'strategy-status-tag tag-auto';
                     strategyStatusIndicator.textContent = '⚡ 自动优选策略生效中';
                     strategyLiveInfo.style.display = 'flex';
-                    overviewActiveDesc.textContent = '全渠道自动优选：优先最低成本且库存充沛渠道';
+                    overviewActiveDesc.textContent = '全渠道自动优选：余额足够且有库存，再按成本排序';
                 } else {
                     strategyStatusIndicator.className = 'strategy-status-tag tag-specific';
                     strategyStatusIndicator.textContent = '🎯 指定主力策略生效中';
@@ -1518,7 +1518,7 @@
 
                     const optimal = supplierCandidates.find(c => c.available && Number(c.price_usd) > 0);
                     overviewBestPrice.textContent = optimal ? `$${Number(optimal.price_usd).toFixed(2)}` : '暂无库存';
-                    overviewBestProvider.textContent = optimal ? `${optimal.name.toUpperCase()} 最低价有货` : '暂无可用供应商';
+                    overviewBestProvider.textContent = optimal ? `${optimal.name.toUpperCase()} 余额足、有货、最低价` : '暂无可用供应商';
 
                     renderSuppliersCards();
 
@@ -1547,7 +1547,7 @@
                     let badgeHtml = '';
                     if (isAuto) {
                         if (isAutoEffective) {
-                            badgeHtml = `<span class="supplier-badge badge-auto-active"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;"></span>⚡ 自动优选主力 (最低价+有货)</span>`;
+                            badgeHtml = `<span class="supplier-badge badge-auto-active"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;"></span>⚡ 自动优选主力 (余额足+有货+最低价)</span>`;
                         } else {
                             badgeHtml = `<span class="supplier-badge badge-standby">备用容灾渠道</span>`;
                         }

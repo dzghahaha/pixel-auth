@@ -11,16 +11,29 @@ import (
 
 type settlementTestProvider struct {
 	MockJioProvider
-	name   string
-	price  float64
-	amount float64
-	fail   bool
-	called func()
+	name       string
+	price      float64
+	amount     float64
+	fail       bool
+	called     func()
+	balance    *float64
+	balanceErr error
+	stock      *int
 }
 
 func (p *settlementTestProvider) Name() string { return p.name }
 func (p *settlementTestProvider) GetProducts(context.Context) ([]SupplierProduct, error) {
-	return []SupplierProduct{{ID: "jio", Name: "Jio", PriceUSD: p.price, IsActive: true}}, nil
+	return []SupplierProduct{{ID: "jio", Name: "Jio", PriceUSD: p.price, IsActive: true, Stock: p.stock}}, nil
+}
+func (p *settlementTestProvider) GetBalance(context.Context) (*SupplierBalance, error) {
+	if p.balanceErr != nil {
+		return nil, p.balanceErr
+	}
+	balance := 9999.0
+	if p.balance != nil {
+		balance = *p.balance
+	}
+	return &SupplierBalance{Supported: true, Balance: balance, Currency: "USD"}, nil
 }
 func (p *settlementTestProvider) GetOfferLink(ctx context.Context, _, _ string) (string, error) {
 	p.called()

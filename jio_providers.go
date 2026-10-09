@@ -186,6 +186,7 @@ type CandidateSupplier struct {
 	Name        string      `json:"name"`
 	DisplayName string      `json:"display_name"`
 	PriceUSD    float64     `json:"price_usd"`
+	BalanceUSD  *float64    `json:"balance_usd,omitempty"`
 	Stock       *int        `json:"stock"`
 	Available   bool        `json:"available"`
 	ProductID   string      `json:"product_id"`
@@ -208,7 +209,7 @@ var autoLowestCostCache struct {
 	candidates    []CandidateSupplier
 }
 
-// EvaluateEligibleSuppliers 并发评估所有供应商候选（筛选库存充足并按价格从小到大排序）
+// EvaluateEligibleSuppliers 筛选余额足够购买一份且有库存的供应商，再按采购价格排序。
 func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]CandidateSupplier, error) {
 	if !forceRefresh {
 		autoLowestCostCache.RLock()
@@ -233,7 +234,16 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 			subCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
+			var balance *SupplierBalance
+			var balanceErr error
+			var balanceWG sync.WaitGroup
+			balanceWG.Add(1)
+			go func() {
+				defer balanceWG.Done()
+				balance, balanceErr = prov.GetBalance(subCtx)
+			}()
 			prods, err := prov.GetProducts(subCtx)
+			balanceWG.Wait()
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -320,8 +330,24 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 				candidates = append(candidates, cand)
 				return
 			}
+			if balanceErr != nil || balance == nil || !balance.Supported {
+				cand.Reason = "无法确认供应商账户余额"
+				candidates = append(candidates, cand)
+				return
+			}
+			if !strings.EqualFold(strings.TrimSpace(balance.Currency), "USD") {
+				cand.Reason = "供应商余额币种与采购报价不一致"
+				candidates = append(candidates, cand)
+				return
+			}
+			cand.BalanceUSD = &balance.Balance
+			if balance.Balance < cand.PriceUSD {
+				cand.Reason = "供应商账户余额不足以购买一份"
+				candidates = append(candidates, cand)
+				return
+			}
 			cand.Available = true
-			cand.Reason = "库存充足就绪"
+			cand.Reason = "余额充足且有库存"
 			candidates = append(candidates, cand)
 		}(p)
 	}
@@ -394,7 +420,7 @@ func SelectJioProviderForOffer(ctx context.Context, cardSecret, vendorKey string
 	return link, name, err
 }
 
-// SelectJioProviderForOffer 按照当前系统调度策略（指定或自动最低价库存足）为 C 端兑换调度获取优惠链接
+// selectJioProviderForOfferWithCost 按指定或自动优选策略购买，并返回实际成功供应商成本。
 func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKey string) (link string, chosenName string, costUSD float64, err error) {
 	receipt := &jioPurchaseReceipt{}
 	ctx = context.WithValue(ctx, jioPurchaseReceiptKey{}, receipt)
@@ -413,10 +439,10 @@ func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKe
 		return l, chosenName, cost, e
 	}
 
-	// 2. 自动选择模式 (优先价格低-库存足够，容灾依次尝试所有已注册供应商)
+	// 2. 自动选择模式：仅在余额足够且有库存的供应商中按成本依次购买。
 	candidates, errEval := EvaluateEligibleSuppliers(ctx, true)
 
-	// 构建供应商尝试队列，确保所有供应商都有序且不重复地被尝试一遍
+	// 构建合格供应商尝试队列。
 	attempted := make(map[string]bool)
 	var queue []JioProvider
 
@@ -430,38 +456,6 @@ func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKe
 					attempted[key] = true
 				}
 			}
-		}
-		// 第二梯队：评估阶段被标记为不可用(如售罄/未就绪)的候选，作为容灾尝试
-		for _, cand := range candidates {
-			if !cand.Available && cand.Provider != nil {
-				key := strings.ToLower(cand.Provider.Name())
-				if !attempted[key] {
-					queue = append(queue, cand.Provider)
-					attempted[key] = true
-				}
-			}
-		}
-	}
-
-	// 第三梯队：系统中所有已注册的正式供应商（防止某些供应商未被评估覆盖）
-	allRegistered := GetAllJioProviders()
-	for _, p := range allRegistered {
-		if p != nil {
-			key := strings.ToLower(p.Name())
-			if !attempted[key] {
-				queue = append(queue, p)
-				attempted[key] = true
-			}
-		}
-	}
-
-	// 第四梯队：当前全局激活的供应商（兜底保障，如 mock 或特定 fallback）
-	activeProv := GetActiveJioProvider()
-	if activeProv != nil {
-		key := strings.ToLower(activeProv.Name())
-		if !attempted[key] {
-			queue = append(queue, activeProv)
-			attempted[key] = true
 		}
 	}
 
