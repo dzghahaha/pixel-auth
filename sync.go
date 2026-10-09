@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"strings"
@@ -178,6 +179,21 @@ func syncPendingAndInvalidate() {
 
 	// 4. Clean up orchestrator logs
 	cleanOrchestratorLogs()
+
+	// 5. Jio 供应商最优策略成本周期性巡检刷新 (保持最新库存与最低成本对齐)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Background Jio pricing sync panic recovered: %v\n", r)
+			}
+		}()
+		strategyCtx, strategyCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer strategyCancel()
+		info := GetJioSupplierStrategyCostInfo(strategyCtx, true)
+		if info.CostUSD > 0 {
+			log.Printf("[BackgroundSync] Jio 供应商策略成本巡检完成: %s, 成本: $%.4f (折合 ￥%.2f)\n", info.StrategyDesc, info.CostUSD, info.CostCNY)
+		}
+	}()
 }
 
 func cleanOrchestratorLogs() {

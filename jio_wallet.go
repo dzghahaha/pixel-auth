@@ -64,7 +64,7 @@ func AddJioWalletBalance(adminID int64, amount float64, txType string, remark st
 	}
 
 	balanceAfter := math.Round((balanceBefore+amount)*100) / 100
-	if balanceAfter < 0 {
+	if amount < 0 && balanceAfter < 0 {
 		return 0, 0, fmt.Errorf("扣减金额超限：当前可用余额为 ￥%.2f，扣减后不能小于 0", balanceBefore)
 	}
 
@@ -99,18 +99,12 @@ func AddJioWalletBalance(adminID int64, amount float64, txType string, remark st
 	return balanceAfter, txID, nil
 }
 
-// DeductJioWalletForCardRedeem 在 C 端兑换时根据卡密归属校验并扣减对应管理员的储值余额
-func DeductJioWalletForCardRedeem(cardSecret string, salePrice float64) (int64, int64, error) {
-	if salePrice <= 0 {
-		// 免消费或未设置价格
-		return 0, 0, nil
-	}
-
+func jioWalletOwner(cardSecret string) (int64, error) {
 	// 1. 查询卡密归属创建人 creator_id
 	var creatorID sql.NullInt64
 	errQueryKey := db.QueryRow("SELECT creator_id FROM system_keys WHERE system_key = ?", cardSecret).Scan(&creatorID)
 	if errQueryKey != nil {
-		log.Printf("[JioWallet] 查询卡密 %s 归属异常: %v", cardSecret, errQueryKey)
+		return 0, fmt.Errorf("查询卡密归属失败: %w", errQueryKey)
 	}
 
 	var targetAdminID int64 = 1 // 默认退化为首个管理员 (admin)
@@ -122,6 +116,37 @@ func DeductJioWalletForCardRedeem(cardSecret string, salePrice float64) (int64, 
 		if errAdmin := db.QueryRow("SELECT id FROM admins WHERE role = 'admin' ORDER BY id ASC LIMIT 1").Scan(&firstAdminID); errAdmin == nil {
 			targetAdminID = firstAdminID
 		}
+	}
+
+	return targetAdminID, nil
+}
+
+// CheckJioWalletForCardRedeem checks eligibility before any upstream purchase.
+func CheckJioWalletForCardRedeem(cardSecret string) (int64, error) {
+	adminID, err := jioWalletOwner(cardSecret)
+	if err != nil {
+		return 0, err
+	}
+	balance, err := GetAdminJioBalance(adminID)
+	if err != nil {
+		return adminID, err
+	}
+	if balance <= 0 {
+		return adminID, ErrInsufficientBalance
+	}
+	return adminID, nil
+}
+
+// DeductJioWalletForCardRedeem 在 C 端兑换时根据卡密归属校验并扣减对应管理员的储值余额
+func DeductJioWalletForCardRedeem(cardSecret string, salePrice float64) (int64, int64, error) {
+	if salePrice <= 0 {
+		// 免消费或未设置价格
+		return 0, 0, nil
+	}
+
+	targetAdminID, errOwner := jioWalletOwner(cardSecret)
+	if errOwner != nil {
+		return 0, 0, errOwner
 	}
 
 	// 2. 开启事务扣减并记录流水
@@ -139,13 +164,7 @@ func DeductJioWalletForCardRedeem(cardSecret string, salePrice float64) (int64, 
 		return 0, 0, fmt.Errorf("未找到卡密归属账户 (ID: %d): %w", targetAdminID, errBalance)
 	}
 
-	// 3. 校验余额是否足够本次消费
-	if balanceBefore < salePrice {
-		log.Printf("[JioWallet] 卡密 %s 归属用户 %s (ID: %d) 余额不足: 当前 ￥%.2f, 本次需要 ￥%.2f",
-			cardSecret, username, targetAdminID, balanceBefore, salePrice)
-		return targetAdminID, 0, ErrInsufficientBalance
-	}
-
+	// Upstream purchase has succeeded; settlement may make the balance negative.
 	balanceAfter := math.Round((balanceBefore-salePrice)*100) / 100
 
 	_, errUpdate := tx.Exec("UPDATE admins SET jio_balance = ?, updated_at = NOW() WHERE id = ?", balanceAfter, targetAdminID)

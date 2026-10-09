@@ -169,12 +169,42 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 			FetchedAt:      cfg.CachedAt,
 		})
 	} else {
+		accCfg := GetSupplierConfig("acczone")
+		var targetServiceKey string
+		if kVal, ok := accCfg["service_key"].(string); ok && kVal != "" {
+			targetServiceKey = strings.TrimSpace(kVal)
+		}
+
 		acczoneServices := acczoneRes.Services
 		var foundGemini *AcczoneServiceItem
-		for i := range acczoneServices {
-			if strings.EqualFold(acczoneServices[i].Key, "gemini") {
-				foundGemini = &acczoneServices[i]
-				break
+		if targetServiceKey != "" {
+			for i := range acczoneServices {
+				if strings.EqualFold(acczoneServices[i].Key, targetServiceKey) {
+					foundGemini = &acczoneServices[i]
+					break
+				}
+			}
+		}
+
+		if foundGemini == nil {
+			for i := range acczoneServices {
+				keyLower := strings.ToLower(acczoneServices[i].Key)
+				nameLower := strings.ToLower(acczoneServices[i].Name)
+				if strings.Contains(keyLower, "gemini") || strings.Contains(nameLower, "gemini") {
+					foundGemini = &acczoneServices[i]
+					break
+				}
+			}
+		}
+
+		if foundGemini == nil {
+			for i := range acczoneServices {
+				keyLower := strings.ToLower(acczoneServices[i].Key)
+				nameLower := strings.ToLower(acczoneServices[i].Name)
+				if strings.Contains(keyLower, "google") || strings.Contains(nameLower, "google") {
+					foundGemini = &acczoneServices[i]
+					break
+				}
 			}
 		}
 
@@ -199,16 +229,8 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 				FetchedAt:      nowStr,
 				RawServices:    acczoneServices,
 			})
-
-			// 自动更新系统最新缓存成本
-			if foundGemini.Price > 0 {
-				updateJioCachedCost(foundGemini.Price, nowStr)
-			}
 		} else {
 			fallbackCost := 0.40
-			if len(acczoneServices) > 0 {
-				fallbackCost = acczoneServices[0].Price
-			}
 			costCNY := math.Round(fallbackCost*exchangeRate*100) / 100
 			results = append(results, JioProviderCost{
 				ProviderKey:    "acczone",
@@ -217,11 +239,11 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 				ServiceName:    "Gemini Link",
 				CostPrice:      fallbackCost,
 				CostCNY:        costCNY,
-				IsActive:       1,
+				IsActive:       0,
 				IsSystemActive: activeProvider == "acczone",
 				LatencyMs:      acczoneRes.LatencyMs,
 				Currency:       "USD",
-				StatusText:     "在线 (未匹配key=gemini，使用首项)",
+				StatusText:     "未找到Gemini相关服务",
 				FetchedAt:      nowStr,
 				RawServices:    acczoneServices,
 			})
@@ -255,15 +277,30 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 				FetchedAt:      nowStr,
 			})
 		} else {
+			venteCfg := GetSupplierConfig("vente")
+			var targetProductID string
+			if idVal, ok := venteCfg["product_id"].(string); ok && idVal != "" {
+				targetProductID = strings.TrimSpace(idVal)
+			}
+
 			var foundGemini *SupplierProduct
-			for i := range venteProducts {
-				if strings.Contains(strings.ToLower(venteProducts[i].Name), "gemini") {
-					foundGemini = &venteProducts[i]
-					break
+			if targetProductID != "" {
+				for i := range venteProducts {
+					if strings.EqualFold(venteProducts[i].ID, targetProductID) {
+						foundGemini = &venteProducts[i]
+						break
+					}
 				}
 			}
-			if foundGemini == nil && len(venteProducts) > 0 {
-				foundGemini = &venteProducts[0]
+
+			if foundGemini == nil {
+				for i := range venteProducts {
+					nameLower := strings.ToLower(venteProducts[i].Name)
+					if strings.Contains(nameLower, "gemini") || strings.Contains(nameLower, "google") {
+						foundGemini = &venteProducts[i]
+						break
+					}
+				}
 			}
 
 			if foundGemini != nil {
@@ -283,10 +320,6 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 					StatusText:     "正常在线",
 					FetchedAt:      nowStr,
 				})
-
-				if activeProvider == "vente" && costUSD > 0 {
-					updateJioCachedCost(costUSD, nowStr)
-				}
 			}
 		}
 	}
@@ -318,15 +351,30 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 				FetchedAt:      nowStr,
 			})
 		} else {
+			aivaultCfg := GetSupplierConfig("aivault")
+			var targetServiceID string
+			if idVal, ok := aivaultCfg["service_id"].(string); ok && idVal != "" {
+				targetServiceID = strings.TrimSpace(idVal)
+			}
+
 			var foundGemini *SupplierProduct
-			for i := range aivaultProducts {
-				if strings.Contains(strings.ToLower(aivaultProducts[i].Name), "gemini") {
-					foundGemini = &aivaultProducts[i]
-					break
+			if targetServiceID != "" {
+				for i := range aivaultProducts {
+					if strings.EqualFold(aivaultProducts[i].ID, targetServiceID) {
+						foundGemini = &aivaultProducts[i]
+						break
+					}
 				}
 			}
-			if foundGemini == nil && len(aivaultProducts) > 0 {
-				foundGemini = &aivaultProducts[0]
+
+			if foundGemini == nil {
+				for i := range aivaultProducts {
+					nameLower := strings.ToLower(aivaultProducts[i].Name)
+					if strings.Contains(nameLower, "gemini") || strings.Contains(nameLower, "google") {
+						foundGemini = &aivaultProducts[i]
+						break
+					}
+				}
 			}
 
 			if foundGemini != nil {
@@ -346,10 +394,6 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 					StatusText:     "正常在线",
 					FetchedAt:      nowStr,
 				})
-
-				if activeProvider == "aivault" && costUSD > 0 {
-					updateJioCachedCost(costUSD, nowStr)
-				}
 			}
 		}
 	}
@@ -642,7 +686,23 @@ func GetCurrentJioSalePrice() float64 {
 		return math.Round(cfg.FixedPrice*100) / 100
 	}
 
+	strategy := GetJioDispatchStrategy()
 	effectiveCost := cfg.CachedCost
+
+	// 当处于全渠道自动最低价策略时，优先读取实时优选缓存中最低有效价格
+	if strategy == StrategyAutoLowestCost {
+		autoLowestCostCache.RLock()
+		if len(autoLowestCostCache.candidates) > 0 {
+			for _, c := range autoLowestCostCache.candidates {
+				if c.Available && c.PriceUSD > 0 {
+					effectiveCost = c.PriceUSD
+					break
+				}
+			}
+		}
+		autoLowestCostCache.RUnlock()
+	}
+
 	if effectiveCost <= 0 {
 		effectiveCost = 0.40
 	}

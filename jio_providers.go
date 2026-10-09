@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -245,11 +246,33 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 				return
 			}
 
+			cfg := GetSupplierConfig(strings.ToLower(prov.Name()))
+			var targetID string
+			if idVal, ok := cfg["product_id"].(string); ok && idVal != "" {
+				targetID = idVal
+			} else if idVal, ok := cfg["service_id"].(string); ok && idVal != "" {
+				targetID = idVal
+			} else if idVal, ok := cfg["service_key"].(string); ok && idVal != "" {
+				targetID = idVal
+			}
+
 			var geminiProd *SupplierProduct
-			for i := range prods {
-				if strings.Contains(strings.ToLower(prods[i].Name), "gemini") {
-					geminiProd = &prods[i]
-					break
+			if targetID != "" {
+				for i := range prods {
+					if strings.EqualFold(prods[i].ID, targetID) {
+						geminiProd = &prods[i]
+						break
+					}
+				}
+			}
+
+			if geminiProd == nil {
+				for i := range prods {
+					nameLower := strings.ToLower(prods[i].Name)
+					if strings.Contains(nameLower, "gemini") || strings.Contains(nameLower, "google") || strings.Contains(nameLower, "jio") {
+						geminiProd = &prods[i]
+						break
+					}
 				}
 			}
 			if geminiProd == nil {
@@ -290,6 +313,9 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 		if candidates[i].Available != candidates[j].Available {
 			return candidates[i].Available
 		}
+		if candidates[i].PriceUSD == candidates[j].PriceUSD {
+			return candidates[i].Name < candidates[j].Name
+		}
 		return candidates[i].PriceUSD < candidates[j].PriceUSD
 	})
 
@@ -302,54 +328,165 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 	return candidates, nil
 }
 
+// ErrAllSuppliersExhausted 表示所有供应商均已尝试但无法成功购买或暂无可用库存
+var ErrAllSuppliersExhausted = errors.New("所有供应商均无法获取兑换链接或暂无库存")
+
+// Each dispatch owns its receipt; concurrent purchases never share pricing state.
+type jioPurchaseReceiptKey struct{}
+type jioPurchaseReceipt struct{ CostUSD float64 }
+
+func jioProviderCost(ctx context.Context, p JioProvider) float64 {
+	products, err := p.GetProducts(ctx)
+	if err != nil {
+		return 0
+	}
+	cfg := GetSupplierConfig(p.Name())
+	for _, key := range []string{"product_id", "service_id", "service_key"} {
+		if id, ok := cfg[key].(string); ok && id != "" {
+			for _, product := range products {
+				if strings.EqualFold(product.ID, id) {
+					return product.PriceUSD
+				}
+			}
+			return 0
+		}
+	}
+	for _, product := range products {
+		name := strings.ToLower(product.Name)
+		if strings.Contains(name, "gemini") || strings.Contains(name, "google") || strings.Contains(name, "jio") {
+			return product.PriceUSD
+		}
+	}
+	if len(products) > 0 {
+		return products[0].PriceUSD
+	}
+	return 0
+}
+
+func recordJioPurchaseCost(ctx context.Context, result *SupplierPurchaseResult) {
+	if receipt, ok := ctx.Value(jioPurchaseReceiptKey{}).(*jioPurchaseReceipt); ok && result != nil && result.AmountUSD > 0 {
+		receipt.CostUSD = result.AmountUSD
+	}
+}
+
+func SelectJioProviderForOffer(ctx context.Context, cardSecret, vendorKey string) (string, string, error) {
+	link, name, _, err := selectJioProviderForOfferWithCost(ctx, cardSecret, vendorKey)
+	return link, name, err
+}
+
 // SelectJioProviderForOffer 按照当前系统调度策略（指定或自动最低价库存足）为 C 端兑换调度获取优惠链接
-func SelectJioProviderForOffer(ctx context.Context, cardSecret, vendorKey string) (link string, chosenName string, err error) {
+func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKey string) (link string, chosenName string, costUSD float64, err error) {
+	receipt := &jioPurchaseReceipt{}
+	ctx = context.WithValue(ctx, jioPurchaseReceiptKey{}, receipt)
 	strategy := GetJioDispatchStrategy()
 
 	// 1. 指定供应商模式
 	if strategy == StrategySpecific {
 		p := GetActiveJioProvider()
 		chosenName = p.Name()
+		receipt.CostUSD = jioProviderCost(ctx, p)
 		l, e := p.GetOfferLink(ctx, cardSecret, vendorKey)
-		return l, chosenName, e
+		if e == nil && strings.TrimSpace(l) == "" {
+			e = ErrAllSuppliersExhausted
+		}
+		cost := receipt.CostUSD
+		return l, chosenName, cost, e
 	}
 
-	// 2. 自动选择模式 (优先价格低-库存足够)
-	candidates, errEval := EvaluateEligibleSuppliers(ctx, false)
-	if errEval != nil || len(candidates) == 0 {
-		p := GetActiveJioProvider()
-		l, e := p.GetOfferLink(ctx, cardSecret, vendorKey)
-		return l, p.Name(), e
+	// 2. 自动选择模式 (优先价格低-库存足够，容灾依次尝试所有已注册供应商)
+	candidates, errEval := EvaluateEligibleSuppliers(ctx, true)
+
+	// 构建供应商尝试队列，确保所有供应商都有序且不重复地被尝试一遍
+	attempted := make(map[string]bool)
+	var queue []JioProvider
+
+	// 第一梯队：评估阶段库存充足(Available=true)的候选，已按价格从低到高升序排序
+	if errEval == nil {
+		for _, cand := range candidates {
+			if cand.Available && cand.Provider != nil {
+				key := strings.ToLower(cand.Provider.Name())
+				if !attempted[key] {
+					queue = append(queue, cand.Provider)
+					attempted[key] = true
+				}
+			}
+		}
+		// 第二梯队：评估阶段被标记为不可用(如售罄/未就绪)的候选，作为容灾尝试
+		for _, cand := range candidates {
+			if !cand.Available && cand.Provider != nil {
+				key := strings.ToLower(cand.Provider.Name())
+				if !attempted[key] {
+					queue = append(queue, cand.Provider)
+					attempted[key] = true
+				}
+			}
+		}
+	}
+
+	// 第三梯队：系统中所有已注册的正式供应商（防止某些供应商未被评估覆盖）
+	allRegistered := GetAllJioProviders()
+	for _, p := range allRegistered {
+		if p != nil {
+			key := strings.ToLower(p.Name())
+			if !attempted[key] {
+				queue = append(queue, p)
+				attempted[key] = true
+			}
+		}
+	}
+
+	// 第四梯队：当前全局激活的供应商（兜底保障，如 mock 或特定 fallback）
+	activeProv := GetActiveJioProvider()
+	if activeProv != nil {
+		key := strings.ToLower(activeProv.Name())
+		if !attempted[key] {
+			queue = append(queue, activeProv)
+			attempted[key] = true
+		}
 	}
 
 	var lastErr error
-	for _, cand := range candidates {
-		if !cand.Available {
+	var triedNames []string
+
+	for _, p := range queue {
+		provName := p.Name()
+		triedNames = append(triedNames, provName)
+
+		receipt.CostUSD = 0
+		for _, cand := range candidates {
+			if strings.EqualFold(cand.Name, provName) {
+				receipt.CostUSD = cand.PriceUSD
+				break
+			}
+		}
+		if receipt.CostUSD <= 0 {
+			receipt.CostUSD = jioProviderCost(ctx, p)
+		}
+		if receipt.CostUSD <= 0 {
+			lastErr = fmt.Errorf("供应商 %s 无有效采购成本", provName)
 			continue
 		}
-
-		link, err := cand.Provider.GetOfferLink(ctx, cardSecret, vendorKey)
-		if err == nil && link != "" {
-			if cand.PriceUSD > 0 {
-				updateJioCachedCost(cand.PriceUSD, time.Now().Format("2006-01-02 15:04:05"))
+		link, err := p.GetOfferLink(ctx, cardSecret, vendorKey)
+		if err == nil && strings.TrimSpace(link) != "" {
+			// 上游未返回扣费金额时，使用本次评估中该供应商的成本。
+			for _, cand := range candidates {
+				if strings.EqualFold(cand.Name, provName) && cand.PriceUSD > 0 {
+					if receipt.CostUSD <= 0 {
+						receipt.CostUSD = cand.PriceUSD
+					}
+					break
+				}
 			}
-			return link, cand.Name, nil
+			log.Printf("[JioDispatch] 供应商 %s 成功获取兑换链接 (卡密: %s)", provName, cardSecret)
+			return link, provName, receipt.CostUSD, nil
 		}
 
 		lastErr = err
-		fmt.Printf("[JioDispatch] 候选渠道 %s 下单失败，容灾尝试下一个候选: %v\n", cand.Name, err)
+		log.Printf("[JioDispatch] 候选渠道 %s 下单失败，容灾尝试下一个候选: %v", provName, err)
 	}
 
-	fallback := GetActiveJioProvider()
-	linkFallback, errFallback := fallback.GetOfferLink(ctx, cardSecret, vendorKey)
-	if errFallback == nil {
-		return linkFallback, fallback.Name(), nil
-	}
-
-	if lastErr != nil {
-		return "", fallback.Name(), lastErr
-	}
-	return "", fallback.Name(), errFallback
+	log.Printf("[JioDispatch] 所有供应商已全部尝试(%v)，均无法出货，最后错误: %v", triedNames, lastErr)
+	return "", "", 0, ErrAllSuppliersExhausted
 }
 
 // =========================================================================
@@ -755,11 +892,11 @@ func (a *AcczoneJioProvider) Purchase(ctx context.Context, req SupplierPurchaseR
 			return nil, errors.New("Acczone 返回的卡券内容为空")
 		}
 		return &SupplierPurchaseResult{
-			OrderID:   fmt.Sprintf("%d", items[0].ID),
-			Link:      links[0],
-			Items:     links,
-			Status:    "COMPLETED",
-			RawData:   items,
+			OrderID: fmt.Sprintf("%d", items[0].ID),
+			Link:    links[0],
+			Items:   links,
+			Status:  "COMPLETED",
+			RawData: items,
 		}, nil
 	}
 
@@ -795,6 +932,7 @@ func (a *AcczoneJioProvider) GetOfferLink(ctx context.Context, cardSecret, vendo
 	if err != nil {
 		return "", err
 	}
+	recordJioPurchaseCost(ctx, res)
 	return res.Link, nil
 }
 
@@ -900,13 +1038,13 @@ func (v *VenteJioProvider) GetBalance(ctx context.Context) (*SupplierBalance, er
 	}
 
 	var meResp struct {
-		Success       bool    `json:"success"`
+		Success        bool    `json:"success"`
 		UserTelegramID int64   `json:"user_telegram_id"`
-		Username      *string `json:"username"`
-		FirstName     *string `json:"first_name"`
-		WalletBalance float64 `json:"wallet_balance"`
-		KeyName       string  `json:"key_name"`
-		KeyPrefix     string  `json:"key_prefix"`
+		Username       *string `json:"username"`
+		FirstName      *string `json:"first_name"`
+		WalletBalance  float64 `json:"wallet_balance"`
+		KeyName        string  `json:"key_name"`
+		KeyPrefix      string  `json:"key_prefix"`
 	}
 	if errJSON := json.Unmarshal(bodyBytes, &meResp); errJSON != nil {
 		return nil, fmt.Errorf("解析 Vente 用户余额响应失败: %w", errJSON)
@@ -1230,6 +1368,7 @@ func (v *VenteJioProvider) GetOfferLink(ctx context.Context, cardSecret, vendorK
 	if strings.TrimSpace(res.Link) == "" {
 		return "", errors.New("Vente 订单已生成但尚未返回兑换链接，请稍后重试或查看订单状态")
 	}
+	recordJioPurchaseCost(ctx, res)
 	return res.Link, nil
 }
 
@@ -1542,10 +1681,10 @@ func (a *AIVaultJioProvider) GetProducts(ctx context.Context) ([]SupplierProduct
 	var catResp struct {
 		Currency string `json:"currency"`
 		Products []struct {
-			ServiceID     string  `json:"service_id"`
-			Name          string  `json:"name"`
-			Stock         int     `json:"stock"`
-			CustomPricing bool    `json:"custom_pricing"`
+			ServiceID     string `json:"service_id"`
+			Name          string `json:"name"`
+			Stock         int    `json:"stock"`
+			CustomPricing bool   `json:"custom_pricing"`
 			PricingTiers  []struct {
 				Min   int     `json:"min"`
 				Max   int     `json:"max"`
@@ -1813,6 +1952,7 @@ func (a *AIVaultJioProvider) GetOfferLink(ctx context.Context, cardSecret, vendo
 		return "", errors.New("AIVault 未返回有效的兑换链接或卡密内容")
 	}
 
+	recordJioPurchaseCost(ctx, res)
 	return res.Link, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -3062,13 +3063,13 @@ func TestDeardCardConversion(t *testing.T) {
 func Test2FAValidation(t *testing.T) {
 	// 1. Test isValid2FA helper function directly
 	validCases := []string{
-		"12345678901234567890123456789012", // 32 digits (alphanumeric, length 32)
-		"JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", // 32 letters/digits (length 32)
+		"12345678901234567890123456789012",        // 32 digits (alphanumeric, length 32)
+		"JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",        // 32 letters/digits (length 32)
 		"JBSW Y3DP EHPK 3PXP JBSW Y3DP EHPK 3PXP", // 32 chars with spaces
-		"12345678",                         // 8 digits (8 % 8 == 0)
-		"1234-5678",                        // 8 digits with dash
-		"12345678 87654321",                // 16 digits (16 % 8 == 0)
-		"12345678,87654321,11223344",       // 24 digits (24 % 8 == 0)
+		"12345678",                   // 8 digits (8 % 8 == 0)
+		"1234-5678",                  // 8 digits with dash
+		"12345678 87654321",          // 16 digits (16 % 8 == 0)
+		"12345678,87654321,11223344", // 24 digits (24 % 8 == 0)
 	}
 
 	for _, tc := range validCases {
@@ -3080,11 +3081,11 @@ func Test2FAValidation(t *testing.T) {
 	invalidCases := []string{
 		"",
 		"   ",
-		"1234567",                          // 7 digits
-		"123456789",                        // 9 digits
-		"JBSWY3DPEHPK3PXP",                 // 16 alphanumeric chars (neither 32 chars nor pure digits)
-		"12345678A",                        // contains letter 'A', length 9
-		"1234-5678-9",                      // 9 digits
+		"1234567",          // 7 digits
+		"123456789",        // 9 digits
+		"JBSWY3DPEHPK3PXP", // 16 alphanumeric chars (neither 32 chars nor pure digits)
+		"12345678A",        // contains letter 'A', length 9
+		"1234-5678-9",      // 9 digits
 	}
 
 	for _, tc := range invalidCases {
@@ -3432,7 +3433,7 @@ func TestXunhuPayFlow(t *testing.T) {
 		"status":         {"OD"},
 		"time":           {fmt.Sprintf("%d", time.Now().Unix())},
 	}
-	
+
 	// Create signature
 	xunhuPayHelper := NewXunhuPay("wx_test_appid", "wx_test_secret", mockServer.URL)
 	paramsSign := make(map[string]string)
@@ -4008,6 +4009,11 @@ func TestAdminSettingsJioProvider(t *testing.T) {
 
 func TestJioRedeemMaintenanceMode(t *testing.T) {
 	initTestDB(t)
+	RegisterJioProvider(&MockJioProvider{})
+	_, _ = db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_active_provider', 'mock', NOW()), ('jio_dispatch_strategy', 'specific', NOW())")
+	if _, err := db.Exec("INSERT INTO admins (id, username, password_hash, role, jio_balance, created_at, updated_at) VALUES (1, 'maintenance_admin', 'hash', 'admin', 100, NOW(), NOW()) ON DUPLICATE KEY UPDATE jio_balance = 100"); err != nil {
+		t.Fatal(err)
+	}
 
 	// 1. Set maintenance_mode_jio = 'on'
 	_, errSet := db.Exec("INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ('maintenance_mode_jio', 'on', NOW()) ON DUPLICATE KEY UPDATE setting_value = 'on'")
@@ -4305,6 +4311,9 @@ func (m *mockCountingProvider) GetOfferLink(ctx context.Context, cardSecret, ven
 
 func TestJioRedeemIdempotencyAndNoDuplicateCall(t *testing.T) {
 	initTestDB(t)
+	if _, err := db.Exec("INSERT INTO admins (id, username, password_hash, role, jio_balance, created_at, updated_at) VALUES (1, 'idempotency_admin', 'hash', 'admin', 100, NOW(), NOW()) ON DUPLICATE KEY UPDATE jio_balance = 100"); err != nil {
+		t.Fatal(err)
+	}
 
 	counterProv := &mockCountingProvider{
 		targetURL: "https://serviceactivation.google.com/subscription/new/MOCK_IDEMPOTENT_LINK_123",
@@ -5121,6 +5130,7 @@ func TestJioPricingStrategyAndDashboardConsistency(t *testing.T) {
 
 func TestJioWalletSystemAndRedeemDeduction(t *testing.T) {
 	initTestDB(t)
+	RegisterJioProvider(&MockJioProvider{})
 	if db == nil {
 		t.Skip("MySQL not available")
 	}
@@ -6117,9 +6127,119 @@ func TestAIVaultJioProvider(t *testing.T) {
 	}
 }
 
+func TestSelectJioProviderAllSuppliersExhausted(t *testing.T) {
+	initTestDB(t)
 
+	// 1. 设置调度策略为 auto_lowest_cost
+	origStrategy := GetJioDispatchStrategy()
+	_, _ = db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_dispatch_strategy', 'auto_lowest_cost', NOW())")
+	defer func() {
+		_, _ = db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_dispatch_strategy', ?, NOW())", origStrategy)
+	}()
 
+	// 2. 预置调度候选，模拟所有候选均未成功出货
+	autoLowestCostCache.Lock()
+	autoLowestCostCache.lastEvaluated = time.Now()
+	autoLowestCostCache.candidates = []CandidateSupplier{
+		{Name: "vente", DisplayName: "Vente", Available: false, Provider: &VenteJioProvider{}},
+		{Name: "acczone", DisplayName: "Acczone", Available: false, Provider: &AcczoneJioProvider{}},
+		{Name: "aivault", DisplayName: "AIVault", Available: false, Provider: &AIVaultJioProvider{}},
+	}
+	autoLowestCostCache.Unlock()
 
+	// 3. 执行调度，断言所有供应商尝试失败后，准确返回 ErrAllSuppliersExhausted
+	ctx := context.Background()
+	link, chosen, err := SelectJioProviderForOffer(ctx, "ANY-CARD-001", "")
+	if link != "" {
+		t.Fatalf("expected empty link, got: %s", link)
+	}
+	if chosen != "" {
+		t.Fatalf("expected empty chosen provider when all failed, got: %s", chosen)
+	}
+	if !errors.Is(err, ErrAllSuppliersExhausted) {
+		t.Fatalf("expected ErrAllSuppliersExhausted, got: %v", err)
+	}
+}
 
+func TestDashboardAutoLowestCostOptimalRefresh(t *testing.T) {
+	initTestDB(t)
+	if db == nil {
+		t.Skip("MySQL not available")
+	}
 
+	// 1. 设置调度策略为 auto_lowest_cost
+	_, _ = db.Exec("REPLACE INTO system_settings (setting_key, setting_value, updated_at) VALUES ('jio_dispatch_strategy', 'auto_lowest_cost', NOW())")
 
+	// 2. 模拟供应商有最优候选 $0.35 (折合汇率 7.00 => ￥2.45，固定加价 ￥2.00 => ￥4.45)
+	autoLowestCostCache.Lock()
+	autoLowestCostCache.lastEvaluated = time.Now()
+	autoLowestCostCache.candidates = []CandidateSupplier{
+		{
+			Name:        "aivault",
+			DisplayName: "AIVault 批发中心",
+			PriceUSD:    0.35,
+			Available:   true,
+			Provider:    &MockJioProvider{},
+		},
+		{
+			Name:        "vente",
+			DisplayName: "Vente 采购平台",
+			PriceUSD:    0.45,
+			Available:   true,
+			Provider:    &MockJioProvider{},
+		},
+	}
+	autoLowestCostCache.Unlock()
+
+	// 3. 配置加价模式：固定加价 ￥2.00，汇率 7.00
+	adminCookie := createTestAdminSession(t, "admin_dash_optimal", "admin", []string{"orders", "jio_pricing", "settings", "dashboard"})
+	pricingPayload := map[string]interface{}{
+		"pricing_mode":    "fixed_markup",
+		"fixed_markup":    2.00,
+		"exchange_rate":   7.00,
+		"round_mode":      "round",
+		"round_precision": 2,
+	}
+	pBytes, _ := json.Marshal(pricingPayload)
+	reqPricing := httptest.NewRequest(http.MethodPost, "/api/admin/jio/pricing", bytes.NewBuffer(pBytes))
+	reqPricing.AddCookie(adminCookie)
+	rrPricing := httptest.NewRecorder()
+	handleAdminJioPricing(rrPricing, reqPricing)
+	if rrPricing.Code != http.StatusOK {
+		t.Fatalf("failed to update pricing: %d", rrPricing.Code)
+	}
+
+	// 4. 调用仪表盘接口，验证自动获取到了最新最优候选 AIVault ($0.35 => ￥4.45)
+	reqDash := httptest.NewRequest(http.MethodGet, "/api/admin/dashboard/stats", nil)
+	reqDash.AddCookie(adminCookie)
+	rrDash := httptest.NewRecorder()
+	requireAdmin(handleAdminDashboardStats)(rrDash, reqDash)
+	if rrDash.Code != http.StatusOK {
+		t.Fatalf("expected 200 from dashboard stats, got %d", rrDash.Code)
+	}
+
+	var resp struct {
+		Success    bool `json:"success"`
+		JioPricing struct {
+			SalePrice      float64 `json:"sale_price"`
+			PricingMode    string  `json:"pricing_mode"`
+			StrategyType   string  `json:"strategy_type"`
+			ProviderName   string  `json:"provider_name"`
+			ActiveProvider string  `json:"active_provider"`
+			CostUSD        float64 `json:"cost_usd"`
+		} `json:"jio_pricing"`
+	}
+	if err := json.Unmarshal(rrDash.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal dashboard response: %v", err)
+	}
+
+	if resp.JioPricing.SalePrice != 4.45 {
+		t.Errorf("expected dashboard sale_price 4.45, got %.2f", resp.JioPricing.SalePrice)
+	}
+	if resp.JioPricing.ActiveProvider != "aivault" {
+		t.Errorf("expected active provider 'aivault', got '%s'", resp.JioPricing.ActiveProvider)
+	}
+	if resp.JioPricing.CostUSD != 0.35 {
+		t.Errorf("expected optimal cost USD 0.35, got %.2f", resp.JioPricing.CostUSD)
+	}
+}

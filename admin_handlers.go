@@ -367,16 +367,52 @@ func handleAdminOrdersResumePaused(w http.ResponseWriter, r *http.Request) {
 		rowsJio.Close()
 	}
 
-	provider := GetActiveJioProvider()
 	var jioFulfilledCount int64
 	for _, item := range jioPausedItems {
 		offerURL := item.DiscountURL
 		var errOffer error
+		var paidCount int
+		if err := db.QueryRow("SELECT COUNT(*) FROM jio_wallet_transactions WHERE card_secret = ? AND type = 'consume'", item.CardSecret).Scan(&paidCount); err != nil {
+			continue
+		}
+		pricingConfig := GetJioPricingConfig()
+		var actualCostUSD float64
+		var salePrice float64
 		if offerURL == "" {
-			offerURL, errOffer = provider.GetOfferLink(r.Context(), item.CardSecret, item.VendorKey)
+			if paidCount == 0 {
+				if _, err := CheckJioWalletForCardRedeem(item.CardSecret); err != nil {
+					continue
+				}
+			}
+			offerURL, _, actualCostUSD, errOffer = selectJioProviderForOfferWithCost(r.Context(), item.CardSecret, item.VendorKey)
+			if errOffer == nil {
+				salePrice = CalculateJioSalePrice(actualCostUSD, pricingConfig)
+			}
+		} else if paidCount == 0 {
+			if err := db.QueryRow("SELECT sale_price FROM orders WHERE card_secret = ?", item.CardSecret).Scan(&salePrice); err != nil {
+				continue
+			}
 		}
 		now := time.Now()
 		if errOffer == nil && offerURL != "" {
+			if paidCount == 0 {
+				if _, err := db.Exec("UPDATE orders SET sale_price = ?, updated_at = ? WHERE card_secret = ?", salePrice, now, item.CardSecret); err != nil {
+					continue
+				}
+			}
+			// Persist delivery before settlement so retrying cannot buy the same key again.
+			if _, err := db.Exec("UPDATE system_keys SET discount_url = ?, updated_at = ? WHERE system_key = ?", offerURL, now, item.CardSecret); err != nil {
+				continue
+			}
+			if paidCount == 0 {
+				_, txID, err := DeductJioWalletForCardRedeem(item.CardSecret, salePrice)
+				if err != nil {
+					log.Printf("Jio paused order settlement failed for %s: %v", item.CardSecret, err)
+					continue
+				}
+				_, _ = db.Exec("UPDATE orders SET sale_price = ?, updated_at = ? WHERE card_secret = ?", salePrice, now, item.CardSecret)
+				_, _ = db.Exec("UPDATE jio_wallet_transactions SET order_id = (SELECT id FROM orders WHERE card_secret = ?) WHERE id = ?", item.CardSecret, txID)
+			}
 			_, _ = db.Exec(`
 				UPDATE account_records 
 				SET status = 'success', message = '兑换链接获取成功', discount_url = ?, completed_at = ?, updated_at = ? 
@@ -393,7 +429,7 @@ func handleAdminOrdersResumePaused(w http.ResponseWriter, r *http.Request) {
 	res, err := db.Exec(`
 		UPDATE account_records 
 		SET status = 'pending', message = '恢复排队处理', updated_at = NOW() 
-		WHERE status = 'paused'`)
+		WHERE status = 'paused' AND order_id IN (SELECT id FROM orders WHERE service_type <> 'jio')`)
 	if err != nil {
 		log.Printf("Error resuming paused orders: %v\n", err)
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -1668,6 +1704,11 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 		thirtyDaysTotal += count
 	}
 
+	// 动态感知与自动刷新 Jio 当前优选供应商成本（设置 8 秒保护超时，防止海外外部接口卡顿拖慢统计加载）
+	costCtx, costCancel := context.WithTimeout(r.Context(), 8*time.Second)
+	strategyInfo := GetJioSupplierStrategyCostInfo(costCtx, false)
+	costCancel()
+
 	jioCfg := GetJioPricingConfig()
 	jioSalePrice := GetCurrentJioSalePrice()
 
@@ -1681,12 +1722,19 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 			"success_rate": todaySuccessRate,
 		},
 		"jio_pricing": map[string]interface{}{
-			"sale_price":   jioSalePrice,
-			"pricing_mode": jioCfg.PricingMode,
-			"fixed_price":  jioCfg.FixedPrice,
-			"fixed_markup": jioCfg.FixedMarkup,
-			"ratio":        jioCfg.Ratio,
-			"cached_cost":  jioCfg.CachedCost,
+			"sale_price":      jioSalePrice,
+			"pricing_mode":    jioCfg.PricingMode,
+			"fixed_price":     jioCfg.FixedPrice,
+			"fixed_markup":    jioCfg.FixedMarkup,
+			"ratio":           jioCfg.Ratio,
+			"cached_cost":     jioCfg.CachedCost,
+			"strategy_type":   strategyInfo.StrategyType,
+			"strategy_desc":   strategyInfo.StrategyDesc,
+			"active_provider": strategyInfo.ActiveProvider,
+			"provider_name":   strategyInfo.ProviderName,
+			"cost_usd":        strategyInfo.CostUSD,
+			"cost_cny":        strategyInfo.CostCNY,
+			"updated_at":      strategyInfo.UpdatedAt,
 		},
 		"summary_30d": map[string]interface{}{
 			"total":   thirtyDaysTotal,
@@ -2800,7 +2848,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u.Permissions = []string{}
-		
+
 		permRows, err := db.Query("SELECT permission FROM admin_permissions WHERE admin_id = ?", u.ID)
 		if err == nil {
 			for permRows.Next() {
@@ -4065,4 +4113,3 @@ func handleAdminDevicesDelete(w http.ResponseWriter, r *http.Request) {
 		"message": "设备已删除",
 	})
 }
-

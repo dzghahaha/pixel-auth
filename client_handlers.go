@@ -739,7 +739,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 				SELECT solution FROM faqs 
 				WHERE (error_code != '' AND (? LIKE CONCAT('%', error_code, '%') OR error_code LIKE CONCAT('%', ?, '%'))) 
 				   OR (error_desc != '' AND (? LIKE CONCAT('%', error_desc, '%') OR error_desc LIKE CONCAT('%', ?, '%'))) 
-				LIMIT 1`, 
+				LIMIT 1`,
 				rec.Message, rec.Message, rec.Message, rec.Message).Scan(&solution)
 			if errSol == nil {
 				rec.Solution = solution
@@ -1455,14 +1455,16 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. 校验卡密归属账户储值钱包余额，并执行扣减 (如果余额不足直接拦截报错)
-	jioSalePrice := GetCurrentJioSalePrice()
-	deductedAdminID, txLogID, errDeduct := DeductJioWalletForCardRedeem(req.CardSecret, jioSalePrice)
+	// 4. 兑换前仅校验余额大于零，成功购买后再结算。
+	pricingConfig := GetJioPricingConfig()
+	var jioSalePrice float64
+	var txLogID int64
+	_, errDeduct := CheckJioWalletForCardRedeem(req.CardSecret)
 	if errDeduct != nil {
 		if errors.Is(errDeduct, ErrInsufficientBalance) {
 			respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 				"success": false,
-				"message": "该卡密归属账户储值余额不足，无法完成兑换，请联系卡密提供方充值后重试",
+				"message": "该卡密归属账户储值余额不足，请联系管理员充值后重试",
 			})
 			return
 		}
@@ -1486,7 +1488,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		tx, errTx := db.Begin()
 		if errTx != nil {
 			log.Printf("Database error beginning transaction for jio maintenance paused order: %v\n", errTx)
-			_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "系统维护事务启动失败")
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "数据库服务故障，请稍后重试",
@@ -1502,7 +1503,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 			WHERE system_key = ? AND status = 'active'`, now, req.CardSecret)
 		if errUpdateKey != nil {
 			log.Printf("Failed to update system_key status for maintenance paused jio order: %v\n", errUpdateKey)
-			_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "更新卡密状态失败")
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "更新卡密状态失败",
@@ -1520,7 +1520,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 				req.CardSecret, vendor, creatorID, jioSalePrice, now, now)
 			if errInsertOrder != nil {
 				log.Printf("Failed to insert jio paused order: %v\n", errInsertOrder)
-				_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "创建订单记录失败")
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 					"success": false,
 					"message": "创建订单记录失败",
@@ -1530,7 +1529,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 			orderID, _ = resOrder.LastInsertId()
 		} else if errQueryOrder != nil {
 			log.Printf("Error querying jio order: %v\n", errQueryOrder)
-			_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "查询订单记录失败")
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "查询订单记录失败",
@@ -1546,7 +1544,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 			orderID, req.CardSecret, now, now)
 		if errInsertRecord != nil {
 			log.Printf("Failed to insert jio paused account record: %v\n", errInsertRecord)
-			_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "创建兑换记录失败")
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "创建兑换记录失败",
@@ -1556,7 +1553,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 		if errCommit := tx.Commit(); errCommit != nil {
 			log.Printf("Failed to commit jio paused order transaction: %v\n", errCommit)
-			_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "提交事务失败")
 			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"message": "提交事务失败",
@@ -1590,7 +1586,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		WHERE system_key = ? AND status = 'active'`, now, req.CardSecret)
 	if errLock != nil {
 		log.Printf("Failed to lock system key to processing: %v\n", errLock)
-		_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "系统繁忙锁定失败")
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
 			"message": "系统繁忙，请稍后重试",
@@ -1599,7 +1594,6 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 	}
 	rowsAff, _ := resLock.RowsAffected()
 	if rowsAff == 0 {
-		_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, "并发提交冲突")
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "该卡密正在处理中或已被使用，请勿重复提交",
@@ -1608,16 +1602,20 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 6. 按照调度策略（指定或自动选择最优最低成本）调用第三方获取兑换链接
-	offerURL, chosenProviderName, errProvider := SelectJioProviderForOffer(r.Context(), req.CardSecret, vendorKey)
+	offerURL, chosenProviderName, actualCostUSD, errProvider := selectJioProviderForOfferWithCost(r.Context(), req.CardSecret, vendorKey)
 	if errProvider != nil {
 		log.Printf("Jio provider dispatch error for key %s (attempted: %s): %v\n", req.CardSecret, chosenProviderName, errProvider)
 		// 调用第三方失败（如上游余额不足、网络异常），将状态安全回滚为 active，允许排查后重试
 		_, _ = db.Exec(`UPDATE system_keys SET status = 'active', updated_at = ? WHERE system_key = ? AND status = 'processing'`, time.Now(), req.CardSecret)
-		// 自动退回已扣除的钱包金额
-		_ = RefundJioWalletForCardRedeem(deductedAdminID, jioSalePrice, req.CardSecret, errProvider.Error())
+
+		userMsg := fmt.Sprintf("获取兑换链接失败: %v", errProvider)
+		if errors.Is(errProvider, ErrAllSuppliersExhausted) {
+			userMsg = "库存不足，请联系管理员补货后再试"
+		}
+
 		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
-			"message": fmt.Sprintf("获取兑换链接失败: %v", errProvider),
+			"message": userMsg,
 		})
 		return
 	}
@@ -1629,6 +1627,14 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		WHERE system_key = ?`, offerURL, now, req.CardSecret)
 	if errSaveKey != nil {
 		log.Printf("CRITICAL: Failed to update system_key status to inactive: %v, URL: %s\n", errSaveKey, offerURL)
+	}
+
+	jioSalePrice = CalculateJioSalePrice(actualCostUSD, pricingConfig)
+	_, txLogID, errDeduct = DeductJioWalletForCardRedeem(req.CardSecret, jioSalePrice)
+	if errDeduct != nil {
+		log.Printf("CRITICAL: Jio purchase succeeded but wallet settlement failed for %s: %v", req.CardSecret, errDeduct)
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "message": "购买已成功，扣款处理异常，请联系管理员，切勿重复下单"})
+		return
 	}
 
 	// 8. 创建或复用订单记录
@@ -1646,6 +1652,9 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if orderID > 0 {
+		_, _ = db.Exec("UPDATE orders SET sale_price = ?, updated_at = ? WHERE id = ?", jioSalePrice, now, orderID)
+	}
 	// 关联流水订单号
 	if orderID > 0 && txLogID > 0 {
 		_, _ = db.Exec("UPDATE jio_wallet_transactions SET order_id = ? WHERE id = ?", orderID, txLogID)
