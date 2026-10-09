@@ -420,7 +420,7 @@
                             const jioPrice = parseFloat(data.jio_pricing.sale_price || 0);
                             const jioPriceEl = document.getElementById('stat-jio-price');
                             if (jioPriceEl) {
-                                jioPriceEl.textContent = `￥${jioPrice.toFixed(2)}`;
+                                jioPriceEl.textContent = data.jio_pricing.price_available === false ? '暂无库存' : `￥${jioPrice.toFixed(2)}`;
                             }
                         }
                         

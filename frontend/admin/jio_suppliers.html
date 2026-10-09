@@ -1244,6 +1244,7 @@
             }
 
             let suppliersList = [];
+            let supplierCandidates = [];
             let activeProviderKey = 'vente';
             let currentDispatchStrategy = 'auto_lowest_cost';
             let currentEffectiveProvider = 'vente';
@@ -1481,10 +1482,7 @@
             async function loadSuppliers(forceRefresh = false) {
                 container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--slate-400);">正在加载供应商数据...</div>`;
                 try {
-                    const [suppRes, priceRes] = await Promise.all([
-                        fetch('/api/admin/jio/suppliers').then(r => r.json()),
-                        fetch('/api/admin/jio/pricing').then(r => r.json())
-                    ]);
+                    const suppRes = await fetch('/api/admin/jio/suppliers?refresh=1').then(r => r.json());
 
                     if (!suppRes.success) {
                         container.innerHTML = `<div style="grid-column: 1 / -1; color: #ef4444; padding: 20px;">获取供应商列表失败: ${suppRes.message}</div>`;
@@ -1492,12 +1490,14 @@
                     }
 
                     suppliersList = suppRes.suppliers || [];
+                    supplierCandidates = suppRes.candidates || [];
                     activeProviderKey = suppRes.active_provider || 'mock';
                     currentDispatchStrategy = suppRes.dispatch_strategy || 'auto_lowest_cost';
-                    currentEffectiveProvider = suppRes.current_effective_provider || activeProviderKey;
+                    currentEffectiveProvider = suppRes.current_effective_provider || '';
+                    if (currentDispatchStrategy !== 'auto_lowest_cost') currentEffectiveProvider = activeProviderKey;
 
-                    if (priceRes && priceRes.success && priceRes.config) {
-                        exchangeRate = parseFloat(priceRes.config.exchange_rate) || 7.20;
+                    if (suppRes.pricing_config) {
+                        exchangeRate = parseFloat(suppRes.pricing_config.exchange_rate) || 7.20;
                     }
 
                     // 更新调度策略 UI
@@ -1511,10 +1511,14 @@
                     // 更新概览卡
                     const isAuto = (currentDispatchStrategy === 'auto_lowest_cost');
                     const effectiveProv = suppliersList.find(s => s.name === currentEffectiveProvider);
-                    const dispName = effectiveProv ? effectiveProv.display_name.split('(')[0] : currentEffectiveProvider;
+                    const dispName = effectiveProv ? effectiveProv.display_name.split('(')[0] : (currentEffectiveProvider || '暂无库存');
 
-                    overviewActiveName.textContent = isAuto ? `${dispName} (自动选优)` : dispName;
+                    overviewActiveName.textContent = isAuto && currentEffectiveProvider ? `${dispName} (自动选优)` : dispName;
                     strategyEffectiveBadge.textContent = `${dispName.trim().toUpperCase()}`;
+
+                    const optimal = supplierCandidates.find(c => c.available && Number(c.price_usd) > 0);
+                    overviewBestPrice.textContent = optimal ? `$${Number(optimal.price_usd).toFixed(2)}` : '暂无库存';
+                    overviewBestProvider.textContent = optimal ? `${optimal.name.toUpperCase()} 最低价有货` : '暂无可用供应商';
 
                     renderSuppliersCards();
 
@@ -1800,8 +1804,6 @@
             };
 
             // 单个查商品与价格
-            let bestPriceFound = 9999;
-            let bestProviderFound = '';
 
             window.fetchSingleProducts = async function(pName) {
                 const usdEl = document.getElementById(`product-usd-${pName}`);
@@ -1814,7 +1816,15 @@
                     const res = await fetch(`/api/admin/jio/suppliers/products?provider=${pName}`);
                     const d = await res.json();
                     if (d.success && d.products && d.products.length > 0) {
-                        let geminiProd = d.products.find(p => p.name.toLowerCase().includes('gemini'));
+                        const candidate = supplierCandidates.find(c => c.name === pName);
+                        const supplier = suppliersList.find(s => s.name === pName);
+                        const config = supplier ? supplier.config || {} : {};
+                        const productID = candidate && candidate.product_id || config.product_id || config.service_id || config.service_key;
+                        let geminiProd = productID ? d.products.find(p => String(p.id).toLowerCase() === String(productID).toLowerCase()) : null;
+                        if (!geminiProd && !productID) geminiProd = d.products.find(p => /gemini|google|jio/i.test(p.name));
+                        if (!geminiProd && productID) {
+                            usdEl.textContent = '暂无报价'; cnyEl.textContent = ''; titleEl.textContent = '未找到配置商品'; stockEl.textContent = ''; return;
+                        }
                         if (!geminiProd) geminiProd = d.products[0];
 
                         const priceUSD = parseFloat(geminiProd.price_usd || 0);
@@ -1830,12 +1840,6 @@
                             stockEl.textContent = `供货状态: 现货就绪`;
                         }
 
-                        if (priceUSD > 0 && priceUSD < bestPriceFound) {
-                            bestPriceFound = priceUSD;
-                            bestProviderFound = pName.toUpperCase();
-                            overviewBestPrice.textContent = `$${priceUSD.toFixed(2)}`;
-                            overviewBestProvider.textContent = `${bestProviderFound} 采购渠道最低`;
-                        }
                     } else {
                         usdEl.textContent = '暂无报价';
                         cnyEl.textContent = '';

@@ -44,16 +44,16 @@ type JioProviderCost struct {
 
 // JioPricingConfig Jio 销售价格配置结构体
 type JioPricingConfig struct {
-	PricingMode     string  `json:"pricing_mode"`      // "fixed" (固定售价), "ratio" (比例加价), "fixed_markup" (固定金额加价)
-	FixedPrice      float64 `json:"fixed_price"`       // 固定销售单价 (元)
-	FixedMarkup     float64 `json:"fixed_markup"`      // 每单固定加价金额 (元，如 2.00)
-	BenchmarkSource string  `json:"benchmark_source"`  // 基准成本来源: "active" (当前系统启用渠道), "lowest" (全渠道最低成本), "acczone", "vente", "manual"
-	ExchangeRate    float64 `json:"exchange_rate"`     // 美元汇率 (如 7.20)
-	Ratio           float64 `json:"ratio"`             // 加价倍数 (如 1.50)
-	RoundMode       string  `json:"round_mode"`        // 小数取整规则: "ceil" (向上进位), "floor" (向下舍去), "round" (四舍五入)
-	RoundPrecision  int     `json:"round_precision"`   // 小数保留位数: 0 (取整到元), 1 (保留1位小数), 2 (保留2位小数)
-	CachedCost      float64 `json:"cached_cost"`       // 最新缓存的成本 (USD)
-	CachedAt        string  `json:"cached_at"`         // 成本缓存时间
+	PricingMode     string  `json:"pricing_mode"`     // "fixed" (固定售价), "ratio" (比例加价), "fixed_markup" (固定金额加价)
+	FixedPrice      float64 `json:"fixed_price"`      // 固定销售单价 (元)
+	FixedMarkup     float64 `json:"fixed_markup"`     // 每单固定加价金额 (元，如 2.00)
+	BenchmarkSource string  `json:"benchmark_source"` // 基准成本来源: "active" (当前系统启用渠道), "lowest" (全渠道最低成本), "acczone", "vente", "manual"
+	ExchangeRate    float64 `json:"exchange_rate"`    // 美元汇率 (如 7.20)
+	Ratio           float64 `json:"ratio"`            // 加价倍数 (如 1.50)
+	RoundMode       string  `json:"round_mode"`       // 小数取整规则: "ceil" (向上进位), "floor" (向下舍去), "round" (四舍五入)
+	RoundPrecision  int     `json:"round_precision"`  // 小数保留位数: 0 (取整到元), 1 (保留1位小数), 2 (保留2位小数)
+	CachedCost      float64 `json:"cached_cost"`      // 最新缓存的成本 (USD)
+	CachedAt        string  `json:"cached_at"`        // 成本缓存时间
 }
 
 // FetchAcczoneServicesResult 携带耗时与服务项列表
@@ -452,13 +452,8 @@ func GetJioSupplierStrategyCostInfo(ctx context.Context, forceRefresh bool) JioS
 		// 1. 自动选择策略 (优先价格低-库存足够)
 		candidates, err := EvaluateEligibleSuppliers(ctx, forceRefresh)
 		var chosen *CandidateSupplier
-		if err == nil && len(candidates) > 0 {
-			for i := range candidates {
-				if candidates[i].Available && candidates[i].PriceUSD > 0 {
-					chosen = &candidates[i]
-					break
-				}
-			}
+		if err == nil {
+			chosen = optimalJioSupplier(candidates)
 		}
 
 		if chosen != nil {
@@ -468,20 +463,8 @@ func GetJioSupplierStrategyCostInfo(ctx context.Context, forceRefresh bool) JioS
 			info.StrategyDesc = fmt.Sprintf("全渠道自动最低价 (当前优选: %s)", chosen.DisplayName)
 			info.UpdatedAt = nowStr
 		} else {
-			// 若尚未评估成功或无库存就绪，回退至当前激活渠道或系统缓存成本
-			activeProv := GetActiveJioProvider()
-			cost := cfg.CachedCost
-			if cost <= 0 {
-				cost = 0.40
-			}
-			info.CostUSD = cost
-			info.ActiveProvider = strings.ToLower(activeProv.Name())
-			info.ProviderName = activeProv.DisplayName()
-			info.StrategyDesc = fmt.Sprintf("全渠道自动最低价 (当前基准: %s)", activeProv.DisplayName())
-			info.UpdatedAt = cfg.CachedAt
-			if info.UpdatedAt == "" {
-				info.UpdatedAt = nowStr
-			}
+			info.StrategyDesc = "全渠道自动最低价 (暂无库存)"
+			info.UpdatedAt = nowStr
 		}
 	} else {
 		// 2. 指定供应商策略 (Specific)
@@ -678,35 +661,21 @@ func CalculateJioSalePrice(costPrice float64, cfg JioPricingConfig) float64 {
 	return math.Round(calculated*100) / 100
 }
 
+// CalculateJioStrategySalePrice uses the same supplier snapshot as the displayed provider.
+func CalculateJioStrategySalePrice(info JioSupplierStrategyCostInfo, cfg JioPricingConfig) float64 {
+	if info.StrategyType == StrategyAutoLowestCost && info.ActiveProvider == "" {
+		return 0
+	}
+	return CalculateJioSalePrice(info.CostUSD, cfg)
+}
+
 // GetCurrentJioSalePrice 获取系统当前应使用的 Jio 最终销售价格 (元)
-// 保证仪表盘 (Dashboard)、用户下单扣除管理员储值余额以及后台各处核算价格 100% 绝对一致
+// 展示价格使用当前优选供应商；兑换扣款使用实际购买成功的供应商成本。
 func GetCurrentJioSalePrice() float64 {
-	cfg := GetJioPricingConfig()
-	if cfg.PricingMode == "fixed" {
-		return math.Round(cfg.FixedPrice*100) / 100
-	}
-
-	strategy := GetJioDispatchStrategy()
-	effectiveCost := cfg.CachedCost
-
-	// 当处于全渠道自动最低价策略时，优先读取实时优选缓存中最低有效价格
-	if strategy == StrategyAutoLowestCost {
-		autoLowestCostCache.RLock()
-		if len(autoLowestCostCache.candidates) > 0 {
-			for _, c := range autoLowestCostCache.candidates {
-				if c.Available && c.PriceUSD > 0 {
-					effectiveCost = c.PriceUSD
-					break
-				}
-			}
-		}
-		autoLowestCostCache.RUnlock()
-	}
-
-	if effectiveCost <= 0 {
-		effectiveCost = 0.40
-	}
-	return CalculateJioSalePrice(effectiveCost, cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	info := GetJioSupplierStrategyCostInfo(ctx, false)
+	return CalculateJioStrategySalePrice(info, GetJioPricingConfig())
 }
 
 // handleAdminJioCosts 获取各供应商实时成本并同步最新策略基准成本
@@ -730,7 +699,7 @@ func handleAdminJioCosts(w http.ResponseWriter, r *http.Request) {
 
 	strategyInfo := GetJioSupplierStrategyCostInfo(r.Context(), true)
 	cfg := GetJioPricingConfig()
-	currentSalePrice := GetCurrentJioSalePrice()
+	currentSalePrice := CalculateJioStrategySalePrice(strategyInfo, cfg)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success":            true,
@@ -749,7 +718,7 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 		cfg := GetJioPricingConfig()
 		costs, _ := GetAllJioProviderCosts(r.Context())
 		strategyInfo := GetJioSupplierStrategyCostInfo(r.Context(), false)
-		currentSalePrice := GetCurrentJioSalePrice()
+		currentSalePrice := CalculateJioStrategySalePrice(strategyInfo, cfg)
 
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success":            true,
@@ -824,13 +793,13 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 		// 保存到 system_settings
 		settingsMap := map[string]string{
 			"jio_pricing_mode":             mode,
-			"jio_pricing_fixed_price":       fmt.Sprintf("%.2f", req.FixedPrice),
-			"jio_pricing_fixed_markup":      fmt.Sprintf("%.2f", req.FixedMarkup),
+			"jio_pricing_fixed_price":      fmt.Sprintf("%.2f", req.FixedPrice),
+			"jio_pricing_fixed_markup":     fmt.Sprintf("%.2f", req.FixedMarkup),
 			"jio_pricing_benchmark_source": benchmarkSource,
-			"jio_pricing_exchange_rate":     fmt.Sprintf("%.4f", req.ExchangeRate),
-			"jio_pricing_ratio":             fmt.Sprintf("%.4f", req.Ratio),
-			"jio_pricing_round_mode":        roundMode,
-			"jio_pricing_round_precision":   strconv.Itoa(precision),
+			"jio_pricing_exchange_rate":    fmt.Sprintf("%.4f", req.ExchangeRate),
+			"jio_pricing_ratio":            fmt.Sprintf("%.4f", req.Ratio),
+			"jio_pricing_round_mode":       roundMode,
+			"jio_pricing_round_precision":  strconv.Itoa(precision),
 		}
 
 		for k, v := range settingsMap {
@@ -846,7 +815,7 @@ func handleAdminJioPricing(w http.ResponseWriter, r *http.Request) {
 
 		newCfg := GetJioPricingConfig()
 		strategyInfo := GetJioSupplierStrategyCostInfo(r.Context(), false)
-		currentSalePrice := GetCurrentJioSalePrice()
+		currentSalePrice := CalculateJioStrategySalePrice(strategyInfo, newCfg)
 
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success":            true,

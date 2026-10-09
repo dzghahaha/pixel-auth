@@ -192,6 +192,16 @@ type CandidateSupplier struct {
 	Reason      string      `json:"reason"`
 }
 
+// optimalJioSupplier returns the first purchasable supplier in the evaluated priority order.
+func optimalJioSupplier(candidates []CandidateSupplier) *CandidateSupplier {
+	for i := range candidates {
+		if candidates[i].Available && candidates[i].PriceUSD > 0 {
+			return &candidates[i]
+		}
+	}
+	return nil
+}
+
 var autoLowestCostCache struct {
 	sync.RWMutex
 	lastEvaluated time.Time
@@ -267,6 +277,11 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 			}
 
 			if geminiProd == nil {
+				if targetID != "" {
+					cand.Reason = "未找到配置商品"
+					candidates = append(candidates, cand)
+					return
+				}
 				for i := range prods {
 					nameLower := strings.ToLower(prods[i].Name)
 					if strings.Contains(nameLower, "gemini") || strings.Contains(nameLower, "google") || strings.Contains(nameLower, "jio") {
@@ -300,6 +315,11 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 				return
 			}
 
+			if cand.PriceUSD <= 0 {
+				cand.Reason = "暂无有效采购报价"
+				candidates = append(candidates, cand)
+				return
+			}
 			cand.Available = true
 			cand.Reason = "库存充足就绪"
 			candidates = append(candidates, cand)

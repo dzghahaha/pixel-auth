@@ -1710,7 +1710,7 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 	costCancel()
 
 	jioCfg := GetJioPricingConfig()
-	jioSalePrice := GetCurrentJioSalePrice()
+	jioSalePrice := CalculateJioStrategySalePrice(strategyInfo, jioCfg)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -1723,6 +1723,7 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 		},
 		"jio_pricing": map[string]interface{}{
 			"sale_price":      jioSalePrice,
+			"price_available": strategyInfo.StrategyType != StrategyAutoLowestCost || strategyInfo.ActiveProvider != "",
 			"pricing_mode":    jioCfg.PricingMode,
 			"fixed_price":     jioCfg.FixedPrice,
 			"fixed_markup":    jioCfg.FixedMarkup,
@@ -2193,15 +2194,32 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	strategy := GetJioDispatchStrategy()
-	candidates, _ := EvaluateEligibleSuppliers(r.Context(), false)
+	candidates, _ := EvaluateEligibleSuppliers(r.Context(), r.URL.Query().Get("refresh") == "1")
+	pricingConfig := GetJioPricingConfig()
 	effectiveProvider := activeProvider
-	if strategy == StrategyAutoLowestCost && len(candidates) > 0 {
-		for _, c := range candidates {
-			if c.Available {
-				effectiveProvider = c.Name
-				break
-			}
+	var optimalCost float64
+	chosen := optimalJioSupplier(candidates)
+	if strategy == StrategyAutoLowestCost {
+		effectiveProvider = ""
+		if chosen != nil {
+			effectiveProvider = chosen.Name
+			optimalCost = chosen.PriceUSD
 		}
+		priority := make(map[string]int)
+		for i, candidate := range candidates {
+			priority[candidate.Name] = i
+		}
+		sort.SliceStable(list, func(i, j int) bool {
+			a, okA := priority[list[i].Name]
+			b, okB := priority[list[j].Name]
+			if okA != okB {
+				return okA
+			}
+			return okA && a < b
+		})
+	}
+	for i := range list {
+		list[i].IsActive = list[i].Name == effectiveProvider
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -2209,6 +2227,8 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 		"active_provider":            activeProvider,
 		"dispatch_strategy":          strategy,
 		"current_effective_provider": effectiveProvider,
+		"optimal_cost_usd":           optimalCost,
+		"pricing_config":             pricingConfig,
 		"candidates":                 candidates,
 		"suppliers":                  list,
 		"proxy":                      proxyCfg,
