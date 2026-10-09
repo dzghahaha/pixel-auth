@@ -1704,8 +1704,8 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 		thirtyDaysTotal += count
 	}
 
-	// 动态感知与自动刷新 Jio 当前优选供应商成本（设置 8 秒保护超时，防止海外外部接口卡顿拖慢统计加载）
-	costCtx, costCancel := context.WithTimeout(r.Context(), 8*time.Second)
+	// 保护超时覆盖供应商评估的 10 秒查询窗口。
+	costCtx, costCancel := context.WithTimeout(r.Context(), 15*time.Second)
 	strategyInfo := GetJioSupplierStrategyCostInfo(costCtx, false)
 	costCancel()
 
@@ -1724,6 +1724,8 @@ func handleAdminDashboardStats(w http.ResponseWriter, r *http.Request) {
 		"jio_pricing": map[string]interface{}{
 			"sale_price":      jioSalePrice,
 			"price_available": strategyInfo.StrategyType != StrategyAutoLowestCost || strategyInfo.ActiveProvider != "",
+			"quote_pending":   strategyInfo.EvaluationPending,
+			"quote_stale":     strategyInfo.QuoteStale,
 			"pricing_mode":    jioCfg.PricingMode,
 			"fixed_price":     jioCfg.FixedPrice,
 			"fixed_markup":    jioCfg.FixedMarkup,

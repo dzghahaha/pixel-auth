@@ -182,15 +182,22 @@ func GetJioDispatchStrategy() string {
 
 // CandidateSupplier 评估后的候选供应商
 type CandidateSupplier struct {
-	Provider    JioProvider `json:"-"`
-	Name        string      `json:"name"`
-	DisplayName string      `json:"display_name"`
-	PriceUSD    float64     `json:"price_usd"`
-	BalanceUSD  *float64    `json:"balance_usd,omitempty"`
-	Stock       *int        `json:"stock"`
-	Available   bool        `json:"available"`
-	ProductID   string      `json:"product_id"`
-	Reason      string      `json:"reason"`
+	Provider         JioProvider `json:"-"`
+	Name             string      `json:"name"`
+	DisplayName      string      `json:"display_name"`
+	PriceUSD         float64     `json:"price_usd"`
+	BalanceUSD       *float64    `json:"balance_usd,omitempty"`
+	Stock            *int        `json:"stock"`
+	Available        bool        `json:"available"`
+	ProductID        string      `json:"product_id"`
+	Reason           string      `json:"reason"`
+	EvaluationFailed bool        `json:"evaluation_failed"`
+	QuoteStale       bool        `json:"quote_stale"`
+}
+
+type confirmedJioSupplier struct {
+	Candidate CandidateSupplier
+	CheckedAt time.Time
 }
 
 // optimalJioSupplier returns the first purchasable supplier in the evaluated priority order.
@@ -207,6 +214,28 @@ var autoLowestCostCache struct {
 	sync.RWMutex
 	lastEvaluated time.Time
 	candidates    []CandidateSupplier
+	confirmed     map[string]confirmedJioSupplier
+}
+
+// Display may reuse a recent confirmed quote after a failed query. Purchases never use this fallback.
+func displayJioCandidatesLocked(candidates []CandidateSupplier, now time.Time) []CandidateSupplier {
+	result := append([]CandidateSupplier(nil), candidates...)
+	for i := range result {
+		if previous, ok := autoLowestCostCache.confirmed[result[i].Name]; result[i].EvaluationFailed && ok && now.Sub(previous.CheckedAt) < 5*time.Minute {
+			result[i] = previous.Candidate
+			result[i].QuoteStale = true
+		}
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Available != result[j].Available {
+			return result[i].Available
+		}
+		if result[i].PriceUSD == result[j].PriceUSD {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].PriceUSD < result[j].PriceUSD
+	})
+	return result
 }
 
 // EvaluateEligibleSuppliers 筛选余额足够购买一份且有库存的供应商，再按采购价格排序。
@@ -214,8 +243,7 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 	if !forceRefresh {
 		autoLowestCostCache.RLock()
 		if time.Since(autoLowestCostCache.lastEvaluated) < 25*time.Second && len(autoLowestCostCache.candidates) > 0 {
-			cached := make([]CandidateSupplier, len(autoLowestCostCache.candidates))
-			copy(cached, autoLowestCostCache.candidates)
+			cached := displayJioCandidatesLocked(autoLowestCostCache.candidates, time.Now())
 			autoLowestCostCache.RUnlock()
 			return cached, nil
 		}
@@ -255,6 +283,7 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 			}
 
 			if err != nil {
+				cand.EvaluationFailed = true
 				cand.Reason = fmt.Sprintf("获取商品异常: %v", err)
 				candidates = append(candidates, cand)
 				return
@@ -308,6 +337,7 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 			cand.Stock = geminiProd.Stock
 			cand.ProductID = geminiProd.ID
 			if strings.EqualFold(prov.Name(), "acczone") && cand.Stock == nil {
+				cand.EvaluationFailed = true
 				cand.Reason = "Acczone 未返回库存数量"
 				candidates = append(candidates, cand)
 				return
@@ -336,6 +366,7 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 				return
 			}
 			if balanceErr != nil || balance == nil || !balance.Supported {
+				cand.EvaluationFailed = balanceErr != nil || balance == nil
 				cand.Reason = "无法确认供应商账户余额"
 				candidates = append(candidates, cand)
 				return
@@ -374,6 +405,17 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 	autoLowestCostCache.lastEvaluated = time.Now()
 	autoLowestCostCache.candidates = make([]CandidateSupplier, len(candidates))
 	copy(autoLowestCostCache.candidates, candidates)
+	if autoLowestCostCache.confirmed == nil {
+		autoLowestCostCache.confirmed = make(map[string]confirmedJioSupplier)
+	}
+	for _, candidate := range candidates {
+		if !candidate.EvaluationFailed {
+			autoLowestCostCache.confirmed[candidate.Name] = confirmedJioSupplier{Candidate: candidate, CheckedAt: time.Now()}
+		}
+	}
+	if !forceRefresh {
+		candidates = displayJioCandidatesLocked(candidates, time.Now())
+	}
 	autoLowestCostCache.Unlock()
 
 	return candidates, nil

@@ -424,14 +424,16 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 
 // JioSupplierStrategyCostInfo 表示当前 Jio 供应商调度策略及其推导出的基准成本信息
 type JioSupplierStrategyCostInfo struct {
-	StrategyType   string  `json:"strategy_type"`   // "auto_lowest_cost" 或 "specific"
-	StrategyDesc   string  `json:"strategy_desc"`   // 策略名称描述，如 "全渠道自动最低价 (当前优选: Vente 采购平台)"
-	ActiveProvider string  `json:"active_provider"` // 当前命中的供应商 Key，如 "vente" / "acczone" / "mock"
-	ProviderName   string  `json:"provider_name"`   // 供应商中文名
-	CostUSD        float64 `json:"cost_usd"`        // 采购成本 (USD)
-	CostCNY        float64 `json:"cost_cny"`        // 采购成本折合人民币 (CNY)
-	ExchangeRate   float64 `json:"exchange_rate"`   // 使用的汇率
-	UpdatedAt      string  `json:"updated_at"`      // 获取/评估时间
+	StrategyType      string  `json:"strategy_type"`   // "auto_lowest_cost" 或 "specific"
+	StrategyDesc      string  `json:"strategy_desc"`   // 策略名称描述，如 "全渠道自动最低价 (当前优选: Vente 采购平台)"
+	ActiveProvider    string  `json:"active_provider"` // 当前命中的供应商 Key，如 "vente" / "acczone" / "mock"
+	ProviderName      string  `json:"provider_name"`   // 供应商中文名
+	CostUSD           float64 `json:"cost_usd"`        // 采购成本 (USD)
+	CostCNY           float64 `json:"cost_cny"`        // 采购成本折合人民币 (CNY)
+	ExchangeRate      float64 `json:"exchange_rate"`   // 使用的汇率
+	UpdatedAt         string  `json:"updated_at"`      // 获取/评估时间
+	EvaluationPending bool    `json:"evaluation_pending"`
+	QuoteStale        bool    `json:"quote_stale"`
 }
 
 // GetJioSupplierStrategyCostInfo 从 Jio 供应商当前配置的调度策略中，实时/准确获取基准成本
@@ -458,13 +460,26 @@ func GetJioSupplierStrategyCostInfo(ctx context.Context, forceRefresh bool) JioS
 		}
 
 		if chosen != nil {
+			info.QuoteStale = chosen.QuoteStale
 			info.CostUSD = chosen.PriceUSD
 			info.ActiveProvider = chosen.Name
 			info.ProviderName = chosen.DisplayName
 			info.StrategyDesc = fmt.Sprintf("全渠道自动最低价 (当前优选: %s)", chosen.DisplayName)
 			info.UpdatedAt = nowStr
+			if chosen.QuoteStale {
+				autoLowestCostCache.RLock()
+				info.UpdatedAt = autoLowestCostCache.confirmed[chosen.Name].CheckedAt.Format("2006-01-02 15:04:05")
+				autoLowestCostCache.RUnlock()
+			}
 		} else {
 			info.StrategyDesc = "全渠道自动最低价 (暂无库存)"
+			for _, candidate := range candidates {
+				if candidate.EvaluationFailed {
+					info.EvaluationPending = true
+					info.StrategyDesc = "供应商报价查询暂不可用"
+					break
+				}
+			}
 			info.UpdatedAt = nowStr
 		}
 	} else {
@@ -510,7 +525,9 @@ func GetJioSupplierStrategyCostInfo(ctx context.Context, forceRefresh bool) JioS
 
 	if info.CostUSD > 0 {
 		info.CostCNY = math.Round(info.CostUSD*exchangeRate*100) / 100
-		updateJioCachedCost(info.CostUSD, info.UpdatedAt)
+		if !info.QuoteStale {
+			updateJioCachedCost(info.CostUSD, info.UpdatedAt)
+		}
 	}
 
 	return info
@@ -673,7 +690,7 @@ func CalculateJioStrategySalePrice(info JioSupplierStrategyCostInfo, cfg JioPric
 // GetCurrentJioSalePrice 获取系统当前应使用的 Jio 最终销售价格 (元)
 // 展示价格使用当前优选供应商；兑换扣款使用实际购买成功的供应商成本。
 func GetCurrentJioSalePrice() float64 {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	info := GetJioSupplierStrategyCostInfo(ctx, false)
 	return CalculateJioStrategySalePrice(info, GetJioPricingConfig())

@@ -369,6 +369,9 @@
             const adminUserDisplay = document.getElementById('admin-user-display');
             const btnLogout = document.getElementById('btn-logout');
             const toast = document.getElementById('toast');
+            let quoteRetryTimer = null;
+            let quoteRetryAttempts = 0;
+            window.addEventListener('pagehide', () => clearTimeout(quoteRetryTimer));
 
             // Toast helper
             function showToast(message, duration = 2000) {
@@ -420,7 +423,21 @@
                             const jioPrice = parseFloat(data.jio_pricing.sale_price || 0);
                             const jioPriceEl = document.getElementById('stat-jio-price');
                             if (jioPriceEl) {
-                                jioPriceEl.textContent = data.jio_pricing.price_available === false ? '暂无库存' : `￥${jioPrice.toFixed(2)}`;
+                                jioPriceEl.textContent = data.jio_pricing.quote_pending ? '报价暂不可用' : (data.jio_pricing.price_available === false ? '暂无库存' : `￥${jioPrice.toFixed(2)}`);
+                                jioPriceEl.title = data.jio_pricing.quote_stale ? '供应商查询失败，暂显示最近确认的价格' : '';
+                            }
+                            if (data.jio_pricing.quote_pending || data.jio_pricing.quote_stale) {
+                                if (!quoteRetryTimer && quoteRetryAttempts < 2) {
+                                    quoteRetryTimer = setTimeout(() => {
+                                        quoteRetryTimer = null;
+                                        quoteRetryAttempts++;
+                                        loadStats();
+                                    }, 30000);
+                                }
+                            } else {
+                                clearTimeout(quoteRetryTimer);
+                                quoteRetryTimer = null;
+                                quoteRetryAttempts = 0;
                             }
                         }
                         

@@ -1535,13 +1535,14 @@
                     // 更新概览卡
                     const isAuto = (currentDispatchStrategy === 'auto_lowest_cost');
                     const effectiveProv = suppliersList.find(s => s.name === currentEffectiveProvider);
-                    const dispName = effectiveProv ? effectiveProv.display_name.split('(')[0] : (currentEffectiveProvider || '暂无库存');
+                    const unavailableLabel = supplierCandidates.some(c => c.evaluation_failed) ? '报价暂不可用' : '暂无库存';
+                    const dispName = effectiveProv ? effectiveProv.display_name.split('(')[0] : (currentEffectiveProvider || unavailableLabel);
 
                     overviewActiveName.textContent = isAuto && currentEffectiveProvider ? `${dispName} (自动选优)` : dispName;
                     strategyEffectiveBadge.textContent = `${dispName.trim().toUpperCase()}`;
 
                     const optimal = supplierCandidates.find(c => c.available && Number(c.price_usd) > 0);
-                    overviewBestPrice.textContent = optimal ? `$${Number(optimal.price_usd).toFixed(2)}` : '暂无库存';
+                    overviewBestPrice.textContent = optimal ? `$${Number(optimal.price_usd).toFixed(2)}` : unavailableLabel;
                     overviewBestProvider.textContent = optimal ? `${optimal.name.toUpperCase()} 余额足、有货、最低价` : '暂无可用供应商';
 
                     renderSuppliersCards();
