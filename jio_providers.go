@@ -33,15 +33,16 @@ type SupplierBalance struct {
 
 // SupplierProduct 供应商提供的商品/激活服务项 (Gemini 兑换链接等)
 type SupplierProduct struct {
-	ID            string  `json:"id"`                       // 商品/服务唯一标识
-	Name          string  `json:"name"`                     // 商品名称
-	PriceUSD      float64 `json:"price_usd"`                // 采购成本 (USD)
-	StandardPrice float64 `json:"standard_price,omitempty"` // 原价/标准价
-	PricingType   string  `json:"pricing_type,omitempty"`   // standard, reseller_special
-	DeliveryType  string  `json:"delivery_type,omitempty"`  // activation, stock, supplier_api
-	Stock         *int    `json:"stock,omitempty"`          // 当前库存数 (为 nil 表示无限或未知)
-	IsActive      bool    `json:"is_active"`                // 是否在线可用
-	RawData       any     `json:"raw_data,omitempty"`
+	ID             string  `json:"id"`                       // 商品/服务唯一标识
+	Name           string  `json:"name"`                     // 商品名称
+	PriceUSD       float64 `json:"price_usd"`                // 采购成本 (USD)
+	StandardPrice  float64 `json:"standard_price,omitempty"` // 原价/标准价
+	PricingType    string  `json:"pricing_type,omitempty"`   // standard, reseller_special
+	DeliveryType   string  `json:"delivery_type,omitempty"`  // activation, stock, supplier_api
+	Stock          *int    `json:"stock,omitempty"`          // 当前库存数 (为 nil 表示无限或未知)
+	UnlimitedStock bool    `json:"unlimited_stock"`
+	IsActive       bool    `json:"is_active"` // 是否在线可用
+	RawData        any     `json:"raw_data,omitempty"`
 }
 
 // SupplierPurchaseRequest 购买下单请求参数
@@ -126,7 +127,7 @@ func GetAllJioProviders() []JioProvider {
 	jioProvidersMu.RLock()
 	defer jioProvidersMu.RUnlock()
 	// 按照正式商用顺序返回: vente, acczone, aivault, 其他真实提供商
-	order := []string{"vente", "acczone", "aivault"}
+	order := []string{"local", "vente", "acczone", "aivault", "grizzly"}
 	seen := make(map[string]bool)
 	var list []JioProvider
 
@@ -188,6 +189,7 @@ type CandidateSupplier struct {
 	PriceUSD         float64     `json:"price_usd"`
 	BalanceUSD       *float64    `json:"balance_usd,omitempty"`
 	Stock            *int        `json:"stock"`
+	UnlimitedStock   bool        `json:"unlimited_stock"`
 	Available        bool        `json:"available"`
 	ProductID        string      `json:"product_id"`
 	Reason           string      `json:"reason"`
@@ -221,6 +223,13 @@ var autoLowestCostCache struct {
 func displayJioCandidatesLocked(candidates []CandidateSupplier, now time.Time) []CandidateSupplier {
 	result := append([]CandidateSupplier(nil), candidates...)
 	for i := range result {
+		if !isJioSupplierEnabled(result[i].Name) {
+			result[i].Available = false
+			result[i].EvaluationFailed = false
+			result[i].QuoteStale = false
+			result[i].Reason = "供应商已禁用"
+			continue
+		}
 		if previous, ok := autoLowestCostCache.confirmed[result[i].Name]; result[i].EvaluationFailed && ok && now.Sub(previous.CheckedAt) < 5*time.Minute {
 			result[i] = previous.Candidate
 			result[i].QuoteStale = true
@@ -259,6 +268,12 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 		wg.Add(1)
 		go func(prov JioProvider) {
 			defer wg.Done()
+			if !isJioSupplierEnabled(prov.Name()) {
+				mu.Lock()
+				candidates = append(candidates, CandidateSupplier{Provider: prov, Name: prov.Name(), DisplayName: prov.DisplayName(), Reason: "供应商已禁用"})
+				mu.Unlock()
+				return
+			}
 			subCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
@@ -335,6 +350,7 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 
 			cand.PriceUSD = geminiProd.PriceUSD
 			cand.Stock = geminiProd.Stock
+			cand.UnlimitedStock = geminiProd.UnlimitedStock
 			cand.ProductID = geminiProd.ID
 			if strings.EqualFold(prov.Name(), "acczone") && cand.Stock == nil {
 				cand.EvaluationFailed = true
@@ -362,6 +378,12 @@ func EvaluateEligibleSuppliers(ctx context.Context, forceRefresh bool) ([]Candid
 
 			if cand.PriceUSD <= 0 {
 				cand.Reason = "暂无有效采购报价"
+				candidates = append(candidates, cand)
+				return
+			}
+			if _, local := prov.(*LocalJioProvider); local {
+				cand.Available = true
+				cand.Reason = "自有链接库存充足"
 				candidates = append(candidates, cand)
 				return
 			}
@@ -469,6 +491,18 @@ func SelectJioProviderForOffer(ctx context.Context, cardSecret, vendorKey string
 
 // selectJioProviderForOfferWithCost 按指定或自动优选策略购买，并返回实际成功供应商成本。
 func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKey string) (link string, chosenName string, costUSD float64, err error) {
+	// Restore a committed local delivery even after its last stock item was
+	// consumed or the configured supplier changed between retries.
+	localProvider, _ := GetJioProvider("local")
+	if _, registered := localProvider.(*LocalJioProvider); registered {
+		previous, lookupErr := localJioReceipt(ctx, "redeem:"+cardSecret)
+		if lookupErr != nil {
+			return "", "local", 0, lookupErr
+		}
+		if previous != nil {
+			return previous.Link, "local", previous.AmountUSD, nil
+		}
+	}
 	receipt := &jioPurchaseReceipt{}
 	ctx = context.WithValue(ctx, jioPurchaseReceiptKey{}, receipt)
 	strategy := GetJioDispatchStrategy()
@@ -477,7 +511,13 @@ func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKe
 	if strategy == StrategySpecific {
 		p := GetActiveJioProvider()
 		chosenName = p.Name()
+		if !isJioSupplierEnabled(chosenName) {
+			return "", chosenName, 0, fmt.Errorf("供应商 %s 已禁用", p.DisplayName())
+		}
 		receipt.CostUSD = jioProviderCost(ctx, p)
+		if !isJioSupplierEnabled(chosenName) {
+			return "", chosenName, 0, fmt.Errorf("供应商 %s 已禁用", p.DisplayName())
+		}
 		l, e := p.GetOfferLink(ctx, cardSecret, vendorKey)
 		if e == nil && strings.TrimSpace(l) == "" {
 			e = ErrAllSuppliersExhausted
@@ -511,6 +551,12 @@ func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKe
 
 	for _, p := range queue {
 		provName := p.Name()
+		if ctx.Err() != nil {
+			return "", "", 0, ctx.Err()
+		}
+		if !isJioSupplierEnabled(provName) {
+			continue
+		}
 		triedNames = append(triedNames, provName)
 
 		receipt.CostUSD = 0
@@ -527,7 +573,13 @@ func selectJioProviderForOfferWithCost(ctx context.Context, cardSecret, vendorKe
 			lastErr = fmt.Errorf("供应商 %s 无有效采购成本", provName)
 			continue
 		}
+		if !isJioSupplierEnabled(provName) {
+			continue
+		}
 		link, err := p.GetOfferLink(ctx, cardSecret, vendorKey)
+		if errors.Is(err, errLocalJioCommitUnknown) {
+			return "", provName, 0, err
+		}
 		if err == nil && strings.TrimSpace(link) != "" {
 			// 上游未返回扣费金额时，使用本次评估中该供应商的成本。
 			for _, cand := range candidates {
@@ -612,6 +664,7 @@ func SaveSupplierConfig(providerName string, config map[string]interface{}) erro
 	if errDB != nil {
 		return fmt.Errorf("保存供应商配置至数据库失败: %w", errDB)
 	}
+	invalidateJioSupplierQuotes()
 
 	// 兼容处理：如果是当前激活的 Provider，同时同步一份到 jio_provider_config
 	active := strings.ToLower(strings.TrimSpace(getSetting("jio_active_provider", "mock")))
@@ -2041,6 +2094,8 @@ func extractURLFromText(s string) string {
 }
 
 func init() {
+	RegisterJioProvider(&LocalJioProvider{})
+	RegisterJioProvider(&GrizzlyJioProvider{})
 	RegisterJioProvider(&VenteJioProvider{})
 	RegisterJioProvider(&AcczoneJioProvider{})
 	RegisterJioProvider(&AIVaultJioProvider{})

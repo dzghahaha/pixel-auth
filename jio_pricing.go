@@ -399,6 +399,38 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 		}
 	}
 
+	if local, err := GetJioProvider("local"); err == nil {
+		cost := JioProviderCost{ProviderKey: "local", ProviderName: local.DisplayName(), ServiceKey: "jio", ServiceName: "Jio 链接", Currency: "USD", FetchedAt: nowStr, IsSystemActive: activeProvider == "local"}
+		products, err := local.GetProducts(ctx)
+		if err != nil {
+			cost.StatusText = err.Error()
+		} else if len(products) > 0 {
+			product := products[0]
+			cost.CostPrice = product.PriceUSD
+			cost.CostCNY = math.Round(product.PriceUSD*exchangeRate*100) / 100
+			cost.StatusText = "请配置自有链接价格"
+			if product.IsActive && product.Stock != nil {
+				cost.StatusText = fmt.Sprintf("自有链接 · 剩余 %d 条", *product.Stock)
+				if *product.Stock > 0 {
+					cost.IsActive = 1
+				}
+			}
+		}
+		results = append(results, cost)
+	}
+	if grizzly, err := GetJioProvider("grizzly"); err == nil {
+		cost := JioProviderCost{ProviderKey: "grizzly", ProviderName: grizzly.DisplayName(), ServiceKey: grizzlyProductID, ServiceName: "Jio Gemini 自动获取链接", Currency: "USD", FetchedAt: nowStr, IsSystemActive: activeProvider == "grizzly"}
+		products, err := grizzly.GetProducts(ctx)
+		if err != nil {
+			cost.StatusText = err.Error()
+		} else if len(products) > 0 {
+			cost.CostPrice = products[0].PriceUSD
+			cost.CostCNY = math.Round(cost.CostPrice*exchangeRate*100) / 100
+			cost.IsActive = 1
+			cost.StatusText = "无限库存 · 号码采购成本上限"
+		}
+		results = append(results, cost)
+	}
 	// 4. 若当前启用了 Mock 模拟渠道，加入 Mock 项
 	if activeProvider == "mock" {
 		mockCostUSD := 0.40
@@ -419,6 +451,13 @@ func GetAllJioProviderCosts(ctx context.Context) ([]JioProviderCost, error) {
 		})
 	}
 
+	for i := range results {
+		if !isJioSupplierEnabled(results[i].ProviderKey) {
+			results[i].IsActive = 0
+			results[i].IsSystemActive = false
+			results[i].StatusText = "供应商已禁用"
+		}
+	}
 	return results, nil
 }
 
@@ -486,13 +525,18 @@ func GetJioSupplierStrategyCostInfo(ctx context.Context, forceRefresh bool) JioS
 		// 2. 指定供应商策略 (Specific)
 		activeProv := GetActiveJioProvider()
 		provKey := strings.ToLower(activeProv.Name())
+		if !isJioSupplierEnabled(provKey) {
+			info.StrategyDesc = "指定供应商已禁用"
+			info.UpdatedAt = nowStr
+			return info
+		}
 		info.ActiveProvider = provKey
 		info.ProviderName = activeProv.DisplayName()
 		info.StrategyDesc = fmt.Sprintf("指定供应商: %s", activeProv.DisplayName())
 
 		// 尝试从该供应商拉取产品价格
 		var foundPrice float64
-		if forceRefresh {
+		if forceRefresh || provKey == "local" {
 			prods, err := activeProv.GetProducts(ctx)
 			if err == nil && len(prods) > 0 {
 				for i := range prods {

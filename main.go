@@ -29,6 +29,7 @@ func main() {
 
 	// API - Jio Subscription Redeem
 	http.HandleFunc("/api/jio/redeem", limit(handleJioRedeem))
+	http.HandleFunc("/api/jio/redeem/status", limit(handleJioRedemptionStatus))
 
 	// 4. API - Query status of a card secret
 	http.HandleFunc("/api/query", limit(handleQuery))
@@ -86,9 +87,11 @@ func main() {
 
 	// Jio Suppliers APIs (多供应商管理：余额查询、Gemini价格查询、购买下单、USDT充值、专网代理)
 	http.HandleFunc("/api/admin/jio/suppliers", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersList)))
+	http.HandleFunc("/api/admin/jio/suppliers/local/links", limit(requirePermission("jio_suppliers", handleAdminJioLocalLinks)))
 	http.HandleFunc("/api/admin/jio/suppliers/switch_active", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersSwitchActive)))
 	http.HandleFunc("/api/admin/jio/suppliers/save_config", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersSaveConfig)))
 	http.HandleFunc("/api/admin/jio/suppliers/note", limit(requirePermission("jio_suppliers", handleAdminJioSupplierNote)))
+	http.HandleFunc("/api/admin/jio/suppliers/enabled", limit(requirePermission("jio_suppliers", handleAdminJioSupplierEnabled)))
 	http.HandleFunc("/api/admin/jio/suppliers/balance", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersBalance)))
 	http.HandleFunc("/api/admin/jio/suppliers/products", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersProducts)))
 	http.HandleFunc("/api/admin/jio/suppliers/purchase", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersPurchase)))

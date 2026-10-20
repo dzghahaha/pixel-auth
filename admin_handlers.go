@@ -2146,6 +2146,7 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 	allConfigs := GetAllSuppliersConfig()
 
 	type SupplierDTO struct {
+		Enabled        bool                   `json:"enabled"`
 		Name           string                 `json:"name"`
 		DisplayName    string                 `json:"display_name"`
 		Note           string                 `json:"note"`
@@ -2172,10 +2173,11 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 			keyVal = k
 		}
 
-		suppBalance := pName == "vente" || pName == "acczone" || pName == "aivault"
+		suppBalance := pName == "vente" || pName == "acczone" || pName == "aivault" || pName == "grizzly"
 		suppDeposit := pName == "vente"
 
 		list = append(list, SupplierDTO{
+			Enabled:        isJioSupplierEnabled(pName),
 			Name:           pName,
 			DisplayName:    p.DisplayName(),
 			Note:           getSetting("jio_supplier_note_"+pName, ""),
@@ -2201,6 +2203,9 @@ func handleAdminJioSuppliersList(w http.ResponseWriter, r *http.Request) {
 	candidates, _ := EvaluateEligibleSuppliers(r.Context(), r.URL.Query().Get("refresh") == "1")
 	pricingConfig := GetJioPricingConfig()
 	effectiveProvider := activeProvider
+	if !isJioSupplierEnabled(effectiveProvider) {
+		effectiveProvider = ""
+	}
 	var optimalCost float64
 	chosen := optimalJioSupplier(candidates)
 	if strategy == StrategyAutoLowestCost {
@@ -2264,6 +2269,16 @@ func handleAdminJioSuppliersStrategy(w http.ResponseWriter, r *http.Request) {
 	strategy := strings.ToLower(strings.TrimSpace(req.Strategy))
 	if strategy != StrategyAutoLowestCost {
 		strategy = StrategySpecific
+	}
+	if strategy == StrategySpecific {
+		target := strings.ToLower(strings.TrimSpace(req.Provider))
+		if target == "" {
+			target = getSetting("jio_active_provider", "vente")
+		}
+		if _, err := GetJioProvider(target); err != nil || !isJioSupplierEnabled(target) {
+			respondJSON(w, 400, map[string]any{"success": false, "message": "请先启用有效的供应商"})
+			return
+		}
 	}
 
 	_, errDB := db.Exec(`
@@ -2419,6 +2434,10 @@ func handleAdminJioSuppliersSwitchActive(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if !isJioSupplierEnabled(target) {
+		respondJSON(w, 400, map[string]any{"success": false, "message": "请先启用该供应商"})
+		return
+	}
 	_, errDB := db.Exec(`
 		INSERT INTO system_settings (setting_key, setting_value, updated_at) 
 		VALUES ('jio_active_provider', ?, NOW()) 
@@ -2476,6 +2495,20 @@ func handleAdminJioSuppliersSaveConfig(w http.ResponseWriter, r *http.Request) {
 
 	if req.Config == nil {
 		req.Config = make(map[string]interface{})
+	}
+	if providerName == "local" {
+		price, err := localJioPrice(req.Config)
+		if err != nil {
+			respondJSON(w, 400, map[string]any{"success": false, "message": err.Error()})
+			return
+		}
+		req.Config = map[string]interface{}{"price_usd": price}
+	}
+	if providerName == "grizzly" {
+		if _, err := loadGrizzlyConfig(req.Config); err != nil {
+			respondJSON(w, 400, map[string]any{"success": false, "message": err.Error()})
+			return
+		}
 	}
 
 	if err := SaveSupplierConfig(providerName, req.Config); err != nil {
@@ -2671,13 +2704,25 @@ func handleAdminJioSuppliersPurchase(w http.ResponseWriter, r *http.Request) {
 	if req.Quantity <= 0 {
 		req.Quantity = 1
 	}
+	if !isJioSupplierEnabled(providerName) {
+		respondJSON(w, 400, map[string]any{"success": false, "message": "供应商已禁用"})
+		return
+	}
 
 	adminUser := getAdminUsername(r)
 	if req.CustomerReference == "" {
+		if providerName == "local" {
+			respondJSON(w, 400, map[string]any{"success": false, "message": "自有链接试买必须提供唯一订单标识，重试时请保持相同标识"})
+			return
+		}
 		req.CustomerReference = fmt.Sprintf("admin-manual-%s-%d", adminUser, time.Now().Unix())
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	purchaseTimeout := 30 * time.Second
+	if providerName == "grizzly" {
+		purchaseTimeout = jioTaskTimeout
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), purchaseTimeout)
 	defer cancel()
 
 	result, errPurchase := p.Purchase(ctx, SupplierPurchaseRequest{

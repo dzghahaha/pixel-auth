@@ -113,6 +113,10 @@ func initDB() {
 }
 
 func createTables() {
+	createJioRedemptionTaskTable()
+	if err := createJioLocalTables(); err != nil {
+		log.Fatalf("Create local Jio inventory tables: %v", err)
+	}
 	ordersDDL := `
 	CREATE TABLE IF NOT EXISTS orders (
 		id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -453,13 +457,13 @@ func createTables() {
 		"jio_proxy_username":          "",
 		"jio_proxy_password":          "",
 		"jio_pricing_mode":            "ratio",
-		"jio_pricing_fixed_price":      "5.00",
-		"jio_pricing_exchange_rate":    "7.20",
-		"jio_pricing_ratio":            "1.50",
-		"jio_pricing_round_mode":       "round",
-		"jio_pricing_round_precision":  "2",
-		"jio_pricing_cached_cost":      "0.40",
-		"jio_pricing_cached_at":        "",
+		"jio_pricing_fixed_price":     "5.00",
+		"jio_pricing_exchange_rate":   "7.20",
+		"jio_pricing_ratio":           "1.50",
+		"jio_pricing_round_mode":      "round",
+		"jio_pricing_round_precision": "2",
+		"jio_pricing_cached_cost":     "0.40",
+		"jio_pricing_cached_at":       "",
 		"proxy_enabled":               "off",
 		"proxy_url":                   "",
 		"maintenance_mode":            "off",

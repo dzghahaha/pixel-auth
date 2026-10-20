@@ -214,6 +214,14 @@
             color: #94a3b8;
             font-size: 11px;
         }
+        .jio-progress { margin-top: 16px; color: #065f46; }
+        .jio-progress[hidden] { display: none; }
+        .jio-progress-track { height: 8px; overflow: hidden; border-radius: 4px; background: #e2e8f0; }
+        .jio-progress-fill { height: 100%; background: #047857; transform: scaleX(0); transform-origin: left; transition: transform 200ms ease-out; }
+        .jio-progress-value { display: block; margin-top: 6px; text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
+        .jio-progress.failed { color: #b91c1c; }
+        .jio-progress.failed .jio-progress-fill { background: #b91c1c; }
+        @media (prefers-reduced-motion: reduce) { .jio-progress-fill { transition: none; } }
     </style>
 </head>
 <body>
@@ -311,6 +319,13 @@
                 <span id="btn-jio-text">获取兑换链接</span>
             </button>
 
+            <div id="jio-progress" class="jio-progress" hidden>
+                <div id="jio-progress-bar" class="jio-progress-track" role="progressbar" aria-label="兑换进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div id="jio-progress-fill" class="jio-progress-fill"></div>
+                </div>
+                <span id="jio-progress-value" class="jio-progress-value">0%</span>
+            </div>
+
             <!-- 兑换链接展示结果区 (动态展示) -->
             <div id="jio-result-area" class="jio-result-card" style="display: none;">
                 <div class="jio-result-header">
@@ -400,31 +415,97 @@
                 });
             }
 
-            // 获取兑换链接
+            const progressArea = document.getElementById('jio-progress');
+            const progressBar = document.getElementById('jio-progress-bar');
+            const progressFill = document.getElementById('jio-progress-fill');
+            const progressValue = document.getElementById('jio-progress-value');
+            const taskStorageKey = 'jio-redemption-task';
+            let pendingTask = '';
+            let busy = false;
+            let visibleProgress = 0;
+            try { pendingTask = sessionStorage.getItem(taskStorageKey) || ''; } catch (_) {}
+            function rememberTask(id) {
+                pendingTask = id;
+                try { if (id) sessionStorage.setItem(taskStorageKey, id); else sessionStorage.removeItem(taskStorageKey); } catch (_) {}
+            }
+            function updateProgress(percent) {
+                visibleProgress = Math.max(visibleProgress, Math.min(100, Math.max(0, Number(percent) || 0)));
+                progressArea.hidden = false;
+                progressBar.setAttribute('aria-valuenow', String(visibleProgress));
+                progressFill.style.transform = `scaleX(${visibleProgress / 100})`;
+                progressValue.textContent = `${visibleProgress}%`;
+            }
+            async function pollRedemption(id) {
+                let failures = 0;
+                for (;;) {
+                    let response, data;
+                    try {
+                        response = await fetch('/api/jio/redeem/status', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ task_id: id }), signal: AbortSignal.timeout(20000)
+                        });
+                        data = await response.json();
+                        if (!response.ok || !data.success) throw new Error(data.message || '进度查询失败');
+                        failures = 0;
+                    } catch (err) {
+                        if (response && (response.status === 404 || response.status === 400)) { rememberTask(''); throw err; }
+                        if (++failures >= 6) throw new Error('连接暂时中断，请点击继续查询；兑换任务仍在处理中');
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        continue;
+                    }
+                    const task = data.data || {};
+                    updateProgress(task.progress);
+                    if (task.status !== 'processing') {
+                        rememberTask('');
+                        return task.result || { success: false, message: '兑换结果异常，请联系管理员核查' };
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            }
+
+            // 获取兑换链接，刷新后只恢复查询，不重复发起采购。
             async function handleRedeem() {
+                if (busy) return;
                 const cardSecret = inputSecret.value.trim();
-                if (!cardSecret) {
+                if (!cardSecret && !pendingTask) {
                     showToast('请输入 Jio 卡密');
                     inputSecret.focus();
                     return;
                 }
 
+                busy = true;
                 btnRedeem.disabled = true;
+                inputSecret.disabled = true;
                 btnText.textContent = '正在获取链接...';
+                resultArea.style.display = 'none';
+                progressArea.classList.remove('failed');
+                visibleProgress = 0;
+                updateProgress(0);
 
                 try {
-                    const res = await fetch('/api/jio/redeem', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ card_secret: cardSecret })
-                    });
-                    const data = await res.json();
+                    let data;
+                    if (pendingTask) {
+                        data = await pollRedemption(pendingTask);
+                    } else {
+                        const res = await fetch('/api/jio/redeem', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ card_secret: cardSecret, async: true }),
+                            signal: AbortSignal.timeout(30000)
+                        });
+                        data = await res.json();
+                        if (res.ok && data.success && data.data?.task_id) {
+                            rememberTask(data.data.task_id);
+                            data = await pollRedemption(pendingTask);
+                        }
+                    }
 
-                    if (res.ok && data.success) {
+                    if (data.success) {
                         const info = data.data || {};
                         resultArea.style.display = 'flex';
 
                         if (info.status === 'paused') {
+                            progressArea.hidden = true;
                             resultTitle.textContent = '订单已挂起暂存：';
                             resultBadge.textContent = '● 系统维护中';
                             resultBadge.className = 'jio-status-tag paused';
@@ -434,6 +515,7 @@
                             resultTip.textContent = info.message || '维护结束后将自动恢复并生成兑换链接';
                             showToast(data.message || 'Jio系统维护中，订单已暂存挂起');
                         } else {
+                            updateProgress(100);
                             resultTitle.textContent = '下方兑换链接：';
                             resultBadge.textContent = '● 兑换成功';
                             resultBadge.className = 'jio-status-tag';
@@ -448,18 +530,23 @@
                         // 平滑滚动至结果区域
                         resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     } else {
+                        progressArea.classList.add('failed');
                         showToast(data.message || '获取失败，请核对卡密');
                     }
                 } catch (e) {
                     console.error(e);
-                    showToast('网络请求失败，请稍后重试');
+                    if (!pendingTask) progressArea.classList.add('failed');
+                    showToast(pendingTask ? (e.message || '连接中断，请继续查询') : '网络请求失败，请使用同一卡密重新查询');
                 } finally {
+                    busy = false;
                     btnRedeem.disabled = false;
-                    btnText.textContent = '获取兑换链接';
+                    inputSecret.disabled = Boolean(pendingTask);
+                    btnText.textContent = pendingTask ? '继续查询' : '获取兑换链接';
                 }
             }
 
             btnRedeem.addEventListener('click', handleRedeem);
+            if (pendingTask) handleRedeem();
             inputSecret.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') handleRedeem();
             });

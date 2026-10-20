@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -1268,6 +1269,7 @@ func isPersonalGoogleEmail(email string) bool {
 // JioRedeemRequest represents the JSON request for Jio redemption
 type JioRedeemRequest struct {
 	CardSecret string `json:"card_secret"`
+	Async      bool   `json:"async"`
 }
 
 // handleJioRedeem processes the Jio card secret redemption and returns an offer URL
@@ -1320,6 +1322,12 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 	// Lock the card secret to prevent concurrent duplicate submissions
 	if _, loaded := activeSubmissions.LoadOrStore(req.CardSecret, struct{}{}); loaded {
+		if req.Async {
+			if id := existingJioRedemptionTask(req.CardSecret); id != "" {
+				respondJioTaskAccepted(w, id)
+				return
+			}
+		}
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "该卡密正在处理中，请勿重复提交",
@@ -1360,6 +1368,14 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Join the task even after its link is saved; wallet settlement may still be
+	// running. Do not report completion or start a retry during this window.
+	if req.Async {
+		if id := existingJioRedemptionTask(req.CardSecret); id != "" {
+			respondJioTaskAccepted(w, id)
+			return
+		}
+	}
 	// 1. 终极幂等优先拦截：无论卡密当前状态是什么，只要已经生成过有效链接，直接返回历史链接，绝对不重复调用第三方！
 	if existingDiscountURL != "" {
 		if keyStatus == "cancelled" {
@@ -1441,6 +1457,12 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 
 	// 3. 校验卡密可用状态
 	if keyStatus == "processing" {
+		if req.Async {
+			if id := existingJioRedemptionTask(req.CardSecret); id != "" {
+				respondJioTaskAccepted(w, id)
+				return
+			}
+		}
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "该卡密正在兑换处理中，请稍候刷新重试，切勿重复提交",
@@ -1601,8 +1623,28 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Async {
+		id, err := startJioRedemptionTask(req.CardSecret, func(output http.ResponseWriter, ctx context.Context) {
+			finishJioRedeem(output, ctx, req, vendor, vendorKey, creatorID, pricingConfig, now)
+		})
+		if err != nil {
+			_, _ = db.Exec(`UPDATE system_keys SET status='active',updated_at=NOW() WHERE system_key=? AND status='processing'`, req.CardSecret)
+			respondJSON(w, 500, map[string]any{"success": false, "message": "创建兑换任务失败，请重试"})
+			return
+		}
+		respondJioTaskAccepted(w, id)
+		return
+	}
+	finishJioRedeem(w, r.Context(), req, vendor, vendorKey, creatorID, pricingConfig, now)
+}
+
+func finishJioRedeem(w http.ResponseWriter, ctx context.Context, req JioRedeemRequest, vendor, vendorKey string, creatorID sql.NullInt64, pricingConfig JioPricingConfig, now time.Time) {
+	var jioSalePrice float64
+	var txLogID int64
+	var errDeduct error
+	reportJioProgress(ctx, 1)
 	// 6. 按照调度策略（指定或自动选择最优最低成本）调用第三方获取兑换链接
-	offerURL, chosenProviderName, actualCostUSD, errProvider := selectJioProviderForOfferWithCost(r.Context(), req.CardSecret, vendorKey)
+	offerURL, chosenProviderName, actualCostUSD, errProvider := selectJioProviderForOfferWithCost(ctx, req.CardSecret, vendorKey)
 	if errProvider != nil {
 		log.Printf("Jio provider dispatch error for key %s (attempted: %s): %v\n", req.CardSecret, chosenProviderName, errProvider)
 		// 调用第三方失败（如上游余额不足、网络异常），将状态安全回滚为 active，允许排查后重试
@@ -1626,7 +1668,9 @@ func handleJioRedeem(w http.ResponseWriter, r *http.Request) {
 		SET status = 'inactive', discount_url = ?, updated_at = ? 
 		WHERE system_key = ?`, offerURL, now, req.CardSecret)
 	if errSaveKey != nil {
-		log.Printf("CRITICAL: Failed to update system_key status to inactive: %v, URL: %s\n", errSaveKey, offerURL)
+		log.Printf("CRITICAL: Failed to update system_key status to inactive: %v\n", errSaveKey)
+		respondJSON(w, 500, map[string]any{"success": false, "message": "链接已生成但保存失败，请联系管理员，切勿重复下单"})
+		return
 	}
 
 	jioSalePrice = CalculateJioSalePrice(actualCostUSD, pricingConfig)

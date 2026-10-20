@@ -1518,7 +1518,6 @@
                     activeProviderKey = suppRes.active_provider || 'mock';
                     currentDispatchStrategy = suppRes.dispatch_strategy || 'auto_lowest_cost';
                     currentEffectiveProvider = suppRes.current_effective_provider || '';
-                    if (currentDispatchStrategy !== 'auto_lowest_cost') currentEffectiveProvider = activeProviderKey;
 
                     if (suppRes.pricing_config) {
                         exchangeRate = parseFloat(suppRes.pricing_config.exchange_rate) || 7.20;
@@ -1543,7 +1542,7 @@
 
                     const optimal = supplierCandidates.find(c => c.available && Number(c.price_usd) > 0);
                     overviewBestPrice.textContent = optimal ? `$${Number(optimal.price_usd).toFixed(2)}` : unavailableLabel;
-                    overviewBestProvider.textContent = optimal ? `${optimal.name.toUpperCase()} 余额足、有货、最低价` : '暂无可用供应商';
+                    overviewBestProvider.textContent = optimal ? (optimal.name === 'local' ? 'Jio 自有库存 · 有货、最低价' : `${optimal.name.toUpperCase()} 余额足、有货、最低价`) : '暂无可用供应商';
 
                     renderSuppliersCards();
 
@@ -1560,8 +1559,9 @@
                 const isAuto = (currentDispatchStrategy === 'auto_lowest_cost');
 
                 suppliersList.forEach(s => {
-                    const isManualActive = (s.name === activeProviderKey);
-                    const isAutoEffective = isAuto && (s.name === currentEffectiveProvider);
+                    const enabled = s.enabled !== false;
+                    const isManualActive = enabled && (s.name === activeProviderKey);
+                    const isAutoEffective = enabled && isAuto && (s.name === currentEffectiveProvider);
                     const isHighlighted = isAuto ? isAutoEffective : isManualActive;
 
                     const card = document.createElement('div');
@@ -1570,7 +1570,9 @@
 
                     // 卡片标题徽章
                     let badgeHtml = '';
-                    if (isAuto) {
+                    if (!enabled) {
+                        badgeHtml = `<span class="supplier-badge badge-standby">已禁用</span>`;
+                    } else if (isAuto) {
                         if (isAutoEffective) {
                             badgeHtml = `<span class="supplier-badge badge-auto-active"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;"></span>⚡ 自动优选主力 (余额足+有货+最低价)</span>`;
                         } else {
@@ -1586,7 +1588,9 @@
 
                     // 余额区域 HTML
                     let balanceHtml = '';
-                    if (s.name === 'vente') {
+                    if (s.name === 'local') {
+                        balanceHtml = `<div class="supplier-balance-box"><div><div class="balance-label">平台自有库存</div><div class="balance-amount" style="font-size:15px;">无需上游余额</div><div class="balance-extra">每条链接仅发放一次</div></div></div>`;
+                    } else if (s.name === 'vente') {
                         balanceHtml = `
                             <div class="supplier-balance-box">
                                 <div>
@@ -1620,13 +1624,13 @@
                                 </div>
                             </div>
                         `;
-                    } else if (s.name === 'aivault') {
+                    } else if (s.name === 'aivault' || s.name === 'grizzly') {
                         balanceHtml = `
                             <div class="supplier-balance-box">
                                 <div>
-                                    <div class="balance-label">AIVault 官方账户储值余额</div>
+                                    <div class="balance-label">${s.display_name} 官方账户储值余额</div>
                                     <div class="balance-amount text-supported" id="balance-val-${s.name}">查询中...</div>
-                                    <div class="balance-extra" id="balance-sub-${s.name}">正在拉取 /api/v1/me...</div>
+                                    <div class="balance-extra" id="balance-sub-${s.name}">正在查询余额...</div>
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <button type="button" class="btn-action btn-action-outline" onclick="fetchSingleBalance('${s.name}')" style="padding: 6px 12px; font-size: 11px;">
@@ -1668,7 +1672,9 @@
 
                     // 底部操作栏
                     let switchBtnHtml = '';
-                    if (isAuto) {
+                    if (!enabled) {
+                        switchBtnHtml = `<button type="button" class="btn-action btn-action-outline" disabled>已禁用</button>`;
+                    } else if (isAuto) {
                         switchBtnHtml = `<button type="button" class="btn-action btn-action-outline" onclick="switchToSpecificAndActive('${s.name}')" title="将调度模式切换为手动指定，并立即激活该供应商">切为指定主力</button>`;
                     } else {
                         switchBtnHtml = isManualActive 
@@ -1678,8 +1684,10 @@
 
                     const actionsHtml = `
                         <div class="supplier-actions-grid">
+                            ${s.name === 'local' ? '<button type="button" class="btn-action btn-action-primary" onclick="openLocalJioLinks()">管理链接库存</button>' : ''}
                             ${switchBtnHtml}
-                            <button type="button" class="btn-action btn-action-success" onclick="openPurchaseModal('${s.name}')">
+                            <button type="button" class="btn-action btn-action-outline" role="switch" aria-checked="${enabled}" aria-label="启用 ${s.display_name}" onclick="toggleSupplierEnabled('${s.name}', ${!enabled}, this)">${enabled ? '禁用供应商' : '启用供应商'}</button>
+                            <button type="button" class="btn-action btn-action-success" ${!enabled ? 'disabled' : ''} onclick="openPurchaseModal('${s.name}')">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
                                 在线试买测试
                             </button>
@@ -1702,7 +1710,7 @@
                                         <span class="supplier-name">${s.display_name}</span>
                                     </div>
                                     <button type="button" class="supplier-note"></button>
-                                    <div class="supplier-key-id">唯一标识: ${s.name} ${s.has_key ? '· 已配置密钥 (' + s.masked_key + ')' : '· <span style="color:#ef4444;">未配置密钥</span>'}</div>
+                                    <div class="supplier-key-id">唯一标识: ${s.name} ${s.name === 'local' ? '· 平台自有，无需密钥' : s.has_key ? '· 已配置密钥 (' + s.masked_key + ')' : '· <span style="color:#ef4444;">未配置密钥</span>'}</div>
                                 </div>
                                 <div>${badgeHtml}</div>
                             </div>
@@ -1777,6 +1785,22 @@
                 input.focus();
             }
 
+            window.toggleSupplierEnabled = async function(name, enabled, button) {
+                button.disabled = true;
+                try {
+                    const response = await fetch('/api/admin/jio/suppliers/enabled', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ provider: name, enabled })
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) throw new Error(result.message || '状态保存失败');
+                    await loadSuppliers(true);
+                } catch (err) {
+                    alert(err.message || '网络异常，请重试');
+                    button.disabled = false;
+                }
+            };
+
             // 切换为指定模式并设为目标主力
             window.switchToSpecificAndActive = async function(providerKey) {
                 if (!confirm(`确定要切换为【指定供应商】模式，并将主力渠道指定为 [${providerKey.toUpperCase()}] 吗？`)) {
@@ -1804,6 +1828,7 @@
             };
 
             // 异步刷新所有供应商余额与价格
+            document.addEventListener('local-jio-updated', () => loadSuppliers(true));
             async function refreshAllSuppliersMetrics() {
                 // 1. 批量一次性拉取全渠道余额
                 fetchAllBalancesAtOnce();
@@ -1918,11 +1943,13 @@
                         const priceUSD = parseFloat(geminiProd.price_usd || 0);
                         const priceCNY = (priceUSD * exchangeRate).toFixed(2);
 
-                        usdEl.textContent = `$${priceUSD.toFixed(2)}`;
+                        usdEl.textContent = `$${priceUSD.toFixed(pName === 'local' ? 4 : 2)}`;
                         cnyEl.textContent = `约 ￥${priceCNY}`;
                         titleEl.textContent = geminiProd.name;
 
-                        if (geminiProd.stock !== null && geminiProd.stock !== undefined) {
+                        if (geminiProd.unlimited_stock) {
+                            stockEl.textContent = '库存: 无限';
+                        } else if (geminiProd.stock !== null && geminiProd.stock !== undefined) {
                             stockEl.textContent = `当前库存: ${geminiProd.stock} 件`;
                         } else {
                             stockEl.textContent = pName === 'acczone' ? '库存未知' : '供货状态: 现货就绪';
@@ -1975,7 +2002,30 @@
 
                 const cfg = s.config || {};
 
-                if (pName === 'vente') {
+                if (pName === 'local') {
+                    body.innerHTML = `<input type="hidden" id="cfg-provider-key" value="local">
+                        <div class="field-group"><label class="field-label" for="cfg-local-price">Jio 链接采购价格 (USD)</label>
+                        <input type="number" class="field-input" id="cfg-local-price" min="0.0001" max="1000000" step="0.0001" required>
+                        <p class="field-hint">仅一个 Jio 链接商品。此价格用于成本核算和自动优选；销售价沿用 Jio 价格管理。</p></div>`;
+                    document.getElementById('cfg-local-price').value = cfg.price_usd ?? '';
+                } else if (pName === 'grizzly') {
+                    body.innerHTML = `
+                        <input type="hidden" id="cfg-provider-key" value="grizzly">
+                        <div class="field-group"><label class="field-label" for="cfg-grizzly-key">Grizzly API Key</label>
+                            <input type="password" class="field-input" id="cfg-grizzly-key" autocomplete="new-password"></div>
+                        <div class="field-group"><label class="field-label" for="cfg-grizzly-price">号码最高采购价 (USD)</label>
+                            <input type="number" class="field-input" id="cfg-grizzly-price" min="0.001" max="100" step="0.001">
+                            <span class="field-hint">自动优选按此上限评估；上游返回实际费用时按实际费用结算。</span></div>
+                        <div class="field-group"><label class="field-label" for="cfg-grizzly-timeout">单次兑换最长等待 (秒)</label>
+                            <input type="number" class="field-input" id="cfg-grizzly-timeout" min="60" max="480" step="1"></div>
+                        <div class="field-group"><label class="field-label" for="cfg-grizzly-attempts">最多尝试号码数</label>
+                            <input type="number" class="field-input" id="cfg-grizzly-attempts" min="1" max="20" step="1"></div>
+                        <p class="field-hint">MyJio · 印度 · 无限库存。号码缺货时会在超时内等待；失败号码会尝试取消，退款以上游处理结果为准。保存配置后可启用供应商。</p>`;
+                    document.getElementById('cfg-grizzly-key').value = cfg.api_key || '';
+                    document.getElementById('cfg-grizzly-price').value = cfg.max_price ?? 0.208;
+                    document.getElementById('cfg-grizzly-timeout').value = cfg.timeout_seconds ?? 300;
+                    document.getElementById('cfg-grizzly-attempts').value = cfg.max_attempts ?? 5;
+                } else if (pName === 'vente') {
                     body.innerHTML = `
                         <input type="hidden" id="cfg-provider-key" value="vente">
                         <div class="field-group">
@@ -2055,7 +2105,21 @@
                 const pName = document.getElementById('cfg-provider-key').value;
                 let payload = {};
 
-                if (pName === 'vente') {
+                if (pName === 'local') {
+                    const field = document.getElementById('cfg-local-price');
+                    if (!field.reportValidity()) return;
+                    payload = {price_usd: Number(field.value)};
+                } else if (pName === 'grizzly') {
+                    const fields = ['price', 'timeout', 'attempts'].map(key => document.getElementById(`cfg-grizzly-${key}`));
+                    if (fields.some(field => !field.reportValidity() || field.value === '')) return;
+                    payload = {
+                        ...(suppliersList.find(s => s.name === pName)?.config || {}),
+                        api_key: document.getElementById('cfg-grizzly-key').value.trim(),
+                        max_price: Number(fields[0].value),
+                        timeout_seconds: Number(fields[1].value),
+                        max_attempts: Number(fields[2].value)
+                    };
+                } else if (pName === 'vente') {
                     payload = {
                         api_key: document.getElementById('cfg-vente-key').value.trim(),
                         base_url: document.getElementById('cfg-vente-url').value.trim(),
@@ -2115,10 +2179,16 @@
                     defaultPid = cfg.service_key || 'gemini';
                 } else if (pName === 'aivault') {
                     defaultPid = cfg.service_id || 'service_1';
+                } else if (pName === 'grizzly' || pName === 'local') {
+                    defaultPid = 'jio';
                 } else {
                     defaultPid = '12';
                 }
                 document.getElementById('purchase-product-id').value = defaultPid;
+                document.getElementById('purchase-product-id').readOnly = pName === 'local';
+                document.getElementById('btn-do-purchase').dataset.localRequest = pName === 'local' ? newLocalJioReference() : '';
+                document.getElementById('purchase-quantity').max = pName === 'grizzly' ? '1' : '10';
+                document.getElementById('purchase-quantity').value = '1';
                 document.getElementById('purchase-result-box').style.display = 'none';
 
                 openModal('modal-purchase');
@@ -2148,7 +2218,8 @@
                             provider: pKey,
                             product_id: pId,
                             quantity: qty,
-                            activation_identifier: ident
+                            activation_identifier: ident,
+                            customer_reference: pKey === 'local' ? btn.dataset.localRequest : ''
                         })
                     });
                     const d = await res.json();
@@ -2165,6 +2236,10 @@
                         document.getElementById('purchase-result-box').style.display = 'block';
 
                         fetchSingleBalance(pKey);
+                        if (pKey === 'local') {
+                            btn.dataset.localRequest = newLocalJioReference();
+                            document.dispatchEvent(new Event('local-jio-updated'));
+                        }
                     } else {
                         alert(`购买下单失败: ${d.message || '上游返回异常'}`);
                     }
@@ -2278,7 +2353,7 @@
                         tbody.innerHTML = '';
                         d.products.forEach(p => {
                             const tr = document.createElement('tr');
-                            const stockText = (p.stock !== null && p.stock !== undefined) ? `${p.stock} 件` : (pName === 'acczone' ? '未知' : '充沛');
+                            const stockText = p.unlimited_stock ? '无限' : ((p.stock !== null && p.stock !== undefined) ? `${p.stock} 件` : (pName === 'acczone' ? '未知' : '充沛'));
                             const origPrice = p.standard_price ? `$${parseFloat(p.standard_price).toFixed(2)}` : '--';
 
                             tr.innerHTML = `
@@ -2336,5 +2411,6 @@
             };
         });
     </script>
+    <script src="/admin/jio_local.js"></script>
 </body>
 </html>
