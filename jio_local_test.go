@@ -45,7 +45,7 @@ func setupLocalJioTest(t *testing.T) *LocalJioProvider {
 	if err := SaveSupplierConfig("local", map[string]interface{}{"price_usd": 0.25}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO system_settings (setting_key,setting_value,updated_at) VALUES ('jio_supplier_enabled_local','on',NOW())`); err != nil {
+	if _, err := db.Exec(`INSERT INTO system_settings (setting_key,setting_value,updated_at) VALUES ('jio_supplier_enabled_local','on',NOW()) ON DUPLICATE KEY UPDATE setting_value='on',updated_at=NOW()`); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(invalidateJioSupplierQuotes)
@@ -200,7 +200,7 @@ func TestLocalJioAdminValidation(t *testing.T) {
 		t.Fatal(rr.Body.String())
 	}
 	rr = httptest.NewRecorder()
-	requirePermission("jio_suppliers", handleAdminJioLocalLinks)(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	requireSuperAdmin(handleAdminJioLocalLinks)(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rr.Code == 200 {
 		t.Fatal("unauthenticated inventory access")
 	}

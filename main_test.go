@@ -111,6 +111,12 @@ func initTestDB(t *testing.T) {
 	if _, err := db.Exec("DELETE FROM admins"); err != nil {
 		t.Logf("Failed to clear admins: %v", err)
 	}
+	if _, err := db.Exec("DELETE FROM jio_links"); err != nil {
+		t.Logf("Failed to clear jio_links: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM jio_wallet_transactions"); err != nil {
+		t.Logf("Failed to clear jio_wallet_transactions: %v", err)
+	}
 }
 
 func TestMySQLStorage(t *testing.T) {

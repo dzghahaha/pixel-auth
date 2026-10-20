@@ -246,6 +246,11 @@ window.applyNavPermissions = function(role, permissions) {
         }
     }
 
+    const adminOnlyMenus = [
+        '/admin/users.html',
+        '/admin/jio_links.html'
+    ];
+
     const menuMap = {
         '/admin/dashboard.html': 'dashboard',
         '/admin/orders.html': 'orders',
@@ -262,6 +267,7 @@ window.applyNavPermissions = function(role, permissions) {
         '/admin/jio_pricing.html': 'jio_pricing',
         '/admin/jio_wallet.html': 'jio_wallet',
         '/admin/jio_suppliers.html': 'jio_suppliers',
+        '/admin/jio_links.html': 'jio_links',
         '/admin/users.html': 'users',
         '/admin/faqs.html': 'faqs'
     };
@@ -279,6 +285,15 @@ window.applyNavPermissions = function(role, permissions) {
                 }
             }
         } catch (e) {}
+
+        if (adminOnlyMenus.includes(href)) {
+            if (currentRole !== 'admin') {
+                link.style.display = 'none';
+            } else {
+                link.style.display = '';
+            }
+            return;
+        }
 
         if (menuMap[href]) {
             const key = menuMap[href];

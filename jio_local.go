@@ -157,7 +157,7 @@ func (*LocalJioProvider) Purchase(ctx context.Context, req SupplierPurchaseReque
 	if priceErr != nil {
 		return nil, priceErr
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,link FROM jio_links WHERE status='available' ORDER BY id LIMIT ? FOR UPDATE`, req.Quantity)
+	rows, err := tx.QueryContext(ctx, `SELECT id,link FROM jio_links WHERE status='available' ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED`, req.Quantity)
 	if err != nil {
 		return nil, errors.New("锁定自有 Jio 库存失败")
 	}

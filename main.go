@@ -87,7 +87,7 @@ func main() {
 
 	// Jio Suppliers APIs (多供应商管理：余额查询、Gemini价格查询、购买下单、USDT充值、专网代理)
 	http.HandleFunc("/api/admin/jio/suppliers", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersList)))
-	http.HandleFunc("/api/admin/jio/suppliers/local/links", limit(requirePermission("jio_suppliers", handleAdminJioLocalLinks)))
+	http.HandleFunc("/api/admin/jio/suppliers/local/links", limit(requireSuperAdmin(handleAdminJioLocalLinks)))
 	http.HandleFunc("/api/admin/jio/suppliers/switch_active", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersSwitchActive)))
 	http.HandleFunc("/api/admin/jio/suppliers/save_config", limit(requirePermission("jio_suppliers", handleAdminJioSuppliersSaveConfig)))
 	http.HandleFunc("/api/admin/jio/suppliers/note", limit(requirePermission("jio_suppliers", handleAdminJioSupplierNote)))

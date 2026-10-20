@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jio 库存链接管理 - Pixel 订阅</title>
+    <link rel="stylesheet" href="./admin.css?v=1.1.4">
+    <script src="./admin.js?v=1.2.0"></script>
+    <style>
+        /* Base Button Standard */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+            line-height: 1.4;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed !important;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: #ffffff;
+            border-color: #4338ca;
+            box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #4338ca;
+            border-color: #3730a3;
+        }
+
+        .btn-secondary {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: var(--slate-700);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #94a3b8;
+            color: var(--slate-900);
+        }
+
+        /* Overview Stat Cards Grid */
+        .links-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+            position: relative;
+        }
+
+        .stat-card-title {
+            font-size: 13px;
+            color: var(--slate-500);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-card-val {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--slate-900);
+            line-height: 1.2;
+            font-family: var(--font-mono, "JetBrains Mono", monospace);
+        }
+
+        .stat-card-sub {
+            font-size: 12px;
+            color: var(--slate-500);
+        }
+
+        .indicator-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-green { background: #10b981; }
+        .dot-slate { background: #94a3b8; }
+        .dot-indigo { background: #6366f1; }
+
+        /* Panel Cards */
+        .content-panel {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            background: #ffffff;
+        }
+
+        .panel-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-icon-wrap {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #e0e7ff;
+            color: #4338ca;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--slate-900);
+        }
+
+        .panel-subtitle {
+            font-size: 12px;
+            color: var(--slate-500);
+            margin-top: 2px;
+        }
+
+        .panel-body {
+            padding: 20px 22px;
+        }
+
+        /* Batch Import Area */
+        .batch-import-textarea {
+            width: 100%;
+            min-height: 140px;
+            box-sizing: border-box;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-family: var(--font-mono, "JetBrains Mono", monospace);
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: var(--slate-900);
+            background: #f8fafc;
+            resize: vertical;
+            outline: none;
+            transition: all 0.15s ease;
+        }
+
+        .batch-import-textarea:focus {
+            background: #ffffff;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .notice-banner {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: var(--slate-600);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .feedback-banner {
+            display: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 14px;
+        }
+
+        .feedback-banner.success {
+            display: block;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .feedback-banner.error {
+            display: block;
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        /* Filter Controls */
+        .filter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .select-filter {
+            padding: 7px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--slate-700);
+            background: #ffffff;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .select-filter:focus {
+            border-color: #4f46e5;
+        }
+
+        /* Links Table */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: #f8fafc;
+            padding: 10px 14px;
+            font-weight: 600;
+            color: var(--slate-600);
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--slate-800);
+            vertical-align: middle;
+        }
+
+        .data-table tr:hover td {
+            background: #fcfdff;
+        }
+
+        .link-text-cell {
+            font-family: var(--font-mono, monospace);
+            font-size: 12px;
+            color: var(--slate-800);
+            word-break: break-all;
+            max-width: 480px;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .badge-status-available {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .badge-status-issued {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Pagination */
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #f1f5f9;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--slate-500);
+        }
+
+        .pagination-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-page {
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: var(--slate-700);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-page:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #94a3b8;
+            color: var(--slate-900);
+        }
+
+        .btn-page:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-copy-sm {
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: var(--slate-700);
+            cursor: pointer;
+        }
+
+        .btn-copy-sm:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        .empty-state {
+            padding: 48px 20px;
+            text-align: center;
+            color: var(--slate-400);
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body class="admin-body">
+    <div class="app-container">
+        <!-- 侧边导航栏 -->
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="nav-item">仪表盘</a>
+            <a href="/admin/orders.html" class="nav-item">订单管理</a>
+            <a href="/admin/keys.html" class="nav-item">密钥管理</a>
+            <a href="/admin/convert.html" class="nav-item">密钥转换</a>
+            <a href="/admin/reset.html" class="nav-item">卡密重置</a>
+            <a href="/admin/generate.html" class="nav-item">生成卡密</a>
+            <a href="/admin/buy.html" class="nav-item">购买卡密</a>
+            <a href="/admin/buy_records.html" class="nav-item">购买记录</a>
+            <a href="/admin/vendors.html" class="nav-item">合作厂商</a>
+            <a href="/admin/devices.html" class="nav-item">设备列表</a>
+            <a href="/admin/logs.html" class="nav-item">系统日志</a>
+            <a href="/admin/faqs.html" class="nav-item">常见问题</a>
+            <a href="/admin/jio_pricing.html" class="nav-item">Jio 价格管理</a>
+            <a href="/admin/jio_wallet.html" class="nav-item">Jio 储值钱包</a>
+            <a href="/admin/jio_suppliers.html" class="nav-item">Jio 供应商</a>
+            <a href="/admin/jio_links.html" class="nav-item active">Jio 库存链接</a>
+            <a href="/admin/settings.html" class="nav-item">系统设置</a>
+            <a href="/admin/users.html" class="nav-item">用户管理</a>
+            <a href="#" id="btn-logout" class="nav-item logout">退出登录</a>
+        </nav>
+
+        <!-- 页面主容器 -->
+        <main class="main-content">
+            <!-- 头部 -->
+            <header class="app-header">
+                <div class="header-left">
+                    <svg class="diamond-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    <div>
+                        <h1 class="header-title" id="page-title">Jio 库存链接管理</h1>
+                        <p class="header-subtitle">管理平台自有 Jio 兑换链接库存，支持批量录入、状态检索与自动幂等发放（仅超级管理员可操作）</p>
+                    </div>
+                </div>
+                <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 12px; font-weight: 700; background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 9999px;">
+                        超级管理员专属
+                    </span>
+                    <button type="button" class="btn btn-secondary" id="btn-refresh-all">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        <span>刷新库存</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 1. 指标概览卡片 -->
+            <div class="links-overview-grid">
+                <div class="stat-card">
+                    <div class="stat-card-title">
+                        <span>未使用库存链接 (Available)</span>
+                        <span class="indicator-dot dot-green"></span>
+                    </div>
+                    <div class="stat-card-val" id="stat-available" style="color: #059669;">--</div>
+                    <div class="stat-card-sub" id="stat-available-desc">可直接用于 C 端卡密兑换交付</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-title">
+                        <span>已发放链接 (Issued)</span>
+                        <span class="indicator-dot dot-slate"></span>
+                    </div>
+                    <div class="stat-card-val" id="stat-issued">--</div>
+                    <div class="stat-card-sub">已绑定订单并交付给客户</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-title">
+                        <span>录入库存总量 (Total)</span>
+                        <span class="indicator-dot dot-indigo"></span>
+                    </div>
+                    <div class="stat-card-val" id="stat-total">--</div>
+                    <div class="stat-card-sub" id="stat-summary">正在统计...</div>
+                </div>
+            </div>
+
+            <!-- 2. 批量录入卡片 -->
+            <div class="content-panel">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <div class="panel-icon-wrap">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+                        </div>
+                        <div>
+                            <div class="panel-title">批量录入兑换链接</div>
+                            <div class="panel-subtitle">录入平台自持的 Google One / Gemini 优惠兑换链接，自动去重防重入</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-body">
+                    <div class="notice-banner">
+                        • <strong>录入规范</strong>：每行一条有效的 HTTP 或 HTTPS 兑换链接，单次最多支持提交 1000 条。<br>
+                        • <strong>去重保护</strong>：系统中已存在的链接将自动跳过，不重复记入；若有任意一行链接格式非法，整批将拒绝录入以防脏数据。
+                    </div>
+
+                    <textarea id="import-links-input" class="batch-import-textarea" placeholder="https://one.google.com/offer/redeem/...
+https://one.google.com/offer/redeem/..."></textarea>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px;">
+                        <span id="import-counter-tip" style="font-size: 12px; color: var(--slate-400);">已输入 0 行</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-secondary" id="btn-clear-input">清空文本</button>
+                            <button type="button" class="btn btn-primary" id="btn-submit-links">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span>立即录入链接</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="import-feedback-box" class="feedback-banner"></div>
+                </div>
+            </div>
+
+            <!-- 3. 库存链接明细卡片 -->
+            <div class="content-panel">
+                <div class="panel-header">
+                    <div class="panel-title-group">
+                        <div class="panel-icon-wrap" style="background: #ecfdf5; color: #047857;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        </div>
+                        <div>
+                            <div class="panel-title">库存链接明细</div>
+                            <div class="panel-subtitle">按状态筛选并查看具体链接的发放流转明细</div>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <select id="filter-status-select" class="select-filter">
+                            <option value="">全部状态</option>
+                            <option value="available" selected>仅看未使用 (Available)</option>
+                            <option value="issued">仅看已发放 (Issued)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel-body">
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">ID</th>
+                                    <th>兑换链接 (Link)</th>
+                                    <th style="width: 100px;">状态</th>
+                                    <th style="width: 130px;">发放订单号</th>
+                                    <th style="width: 150px;">录入时间</th>
+                                    <th style="width: 150px;">发放时间</th>
+                                    <th style="width: 80px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="links-table-body">
+                                <tr>
+                                    <td colspan="7" class="empty-state">正在查询库存数据...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页组件 -->
+                    <div class="pagination-bar">
+                        <div class="pagination-info" id="pagination-info-text">
+                            正在统计页数...
+                        </div>
+                        <div class="pagination-actions">
+                            <button type="button" class="btn-page" id="btn-page-prev" disabled>上一页</button>
+                            <button type="button" class="btn-page" id="btn-page-next" disabled>下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let currentPage = 1;
+            let currentStatus = 'available';
+            let totalPages = 1;
+            let totalRecords = 0;
+
+            // DOM elements
+            const statAvailable = document.getElementById('stat-available');
+            const statIssued = document.getElementById('stat-issued');
+            const statTotal = document.getElementById('stat-total');
+            const statSummary = document.getElementById('stat-summary');
+
+            const importInput = document.getElementById('import-links-input');
+            const importCounterTip = document.getElementById('import-counter-tip');
+            const btnClearInput = document.getElementById('btn-clear-input');
+            const btnSubmitLinks = document.getElementById('btn-submit-links');
+            const importFeedbackBox = document.getElementById('import-feedback-box');
+
+            const filterStatusSelect = document.getElementById('filter-status-select');
+            const btnRefreshAll = document.getElementById('btn-refresh-all');
+            const linksTableBody = document.getElementById('links-table-body');
+            const paginationInfoText = document.getElementById('pagination-info-text');
+            const btnPagePrev = document.getElementById('btn-page-prev');
+            const btnPageNext = document.getElementById('btn-page-next');
+            const btnLogout = document.getElementById('btn-logout');
+
+            // 1. 严格权限认证：仅 super admin (role === 'admin') 允许访问该页面
+            async function checkAdminAuth() {
+                try {
+                    const res = await fetch('/api/admin/check');
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                        return;
+                    }
+
+                    // 仅 admin 拥有这个菜单和页面
+                    if (data.role !== 'admin') {
+                        window.location.href = '/admin/dashboard.html';
+                        return;
+                    }
+
+                    window.applyNavPermissions(data.role, data.permissions);
+                    loadLinks(1);
+                } catch (e) {
+                    window.clearAuthCache();
+                    window.location.href = '/admin/login.html';
+                }
+            }
+
+            // 退出登录
+            if (btnLogout) {
+                btnLogout.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await fetch('/api/admin/logout', { method: 'POST' });
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    } catch (e) {
+                        window.clearAuthCache();
+                        window.location.href = '/admin/login.html';
+                    }
+                });
+            }
+
+            // 2. 统计输入行数
+            importInput.addEventListener('input', () => {
+                const lines = importInput.value.split('\n').filter(line => line.trim() !== '');
+                importCounterTip.textContent = `已输入 ${lines.length} 行链接`;
+            });
+
+            // 清空输入
+            btnClearInput.addEventListener('click', () => {
+                importInput.value = '';
+                importCounterTip.textContent = '已输入 0 行';
+                importFeedbackBox.className = 'feedback-banner';
+                importFeedbackBox.style.display = 'none';
+            });
+
+            // 3. 提交批量录入
+            btnSubmitLinks.addEventListener('click', async () => {
+                const raw = importInput.value;
+                const lines = raw.split('\n').map(l => l.trim()).filter(l => l !== '');
+                if (lines.length === 0) {
+                    showFeedback('请先输入至少一条兑换链接', true);
+                    return;
+                }
+
+                btnSubmitLinks.disabled = true;
+                const origHtml = btnSubmitLinks.innerHTML;
+                btnSubmitLinks.innerHTML = `<span>⏳ 录入校验中...</span>`;
+                showFeedback('', false);
+
+                try {
+                    const res = await fetch('/api/admin/jio/suppliers/local/links', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ links: lines })
+                    });
+                    const d = await res.json();
+                    if (!res.ok || !d.success) {
+                        throw new Error(d.message || '录入失败');
+                    }
+
+                    showFeedback(`✔ 成功录入 ${d.added} 条新链接，跳过重复 ${d.duplicate} 条`, false);
+                    importInput.value = '';
+                    importCounterTip.textContent = '已输入 0 行';
+                    loadLinks(1);
+                } catch (e) {
+                    showFeedback(`✖ ${e.message}`, true);
+                } finally {
+                    btnSubmitLinks.disabled = false;
+                    btnSubmitLinks.innerHTML = origHtml;
+                }
+            });
+
+            function showFeedback(msg, isError) {
+                if (!msg) {
+                    importFeedbackBox.style.display = 'none';
+                    return;
+                }
+                importFeedbackBox.textContent = msg;
+                importFeedbackBox.className = isError ? 'feedback-banner error' : 'feedback-banner success';
+                importFeedbackBox.style.display = 'block';
+            }
+
+            // 4. 加载库存列表
+            async function loadLinks(page = 1) {
+                currentPage = page;
+                linksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state">正在查询数据...</td></tr>`;
+
+                const status = filterStatusSelect.value;
+                let url = `/api/admin/jio/suppliers/local/links?page=${page}`;
+                if (status) {
+                    url += `&status=${encodeURIComponent(status)}`;
+                }
+
+                try {
+                    const res = await fetch(url);
+                    const d = await res.json();
+                    if (!res.ok || !d.success) {
+                        throw new Error(d.message || '加载库存失败');
+                    }
+
+                    // 更新概览卡
+                    statAvailable.textContent = (d.available || 0).toLocaleString();
+                    statIssued.textContent = (d.issued || 0).toLocaleString();
+                    statTotal.textContent = (d.total || 0).toLocaleString();
+                    statSummary.textContent = `未使用 ${d.available || 0} 条 · 已发放 ${d.issued || 0} 条`;
+
+                    totalPages = Math.max(1, d.total_pages || 1);
+                    totalRecords = d.filtered_total !== undefined ? d.filtered_total : (d.total || 0);
+
+                    // 渲染表格
+                    const items = d.items || [];
+                    if (items.length === 0) {
+                        linksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state">暂无符合条件的库存链接。请在上方批量录入。</td></tr>`;
+                    } else {
+                        linksTableBody.innerHTML = items.map(item => {
+                            const isAvail = item.status === 'available';
+                            const badge = isAvail
+                                ? `<span class="badge-status badge-status-available"><span class="indicator-dot dot-green"></span> 未使用</span>`
+                                : `<span class="badge-status badge-status-issued"><span class="indicator-dot dot-slate"></span> 已发放</span>`;
+
+                            const order = item.order_id ? `<span style="font-family:monospace; font-weight:700;">${escapeHtml(item.order_id)}</span>` : '<span style="color:#94a3b8;">—</span>';
+                            const issued = item.issued_at ? escapeHtml(item.issued_at) : '<span style="color:#94a3b8;">—</span>';
+
+                            return `
+                                <tr>
+                                    <td style="font-family:monospace; color:#64748b; font-size:12px;">#${item.id}</td>
+                                    <td class="link-text-cell" title="${escapeHtml(item.link)}">${escapeHtml(item.link)}</td>
+                                    <td>${badge}</td>
+                                    <td>${order}</td>
+                                    <td style="font-size:12px; color:#64748b;">${escapeHtml(item.created_at || '—')}</td>
+                                    <td style="font-size:12px; color:#64748b;">${issued}</td>
+                                    <td>
+                                        <button type="button" class="btn-copy-sm" onclick="copyLinkText('${escapeAttr(item.link)}')">复制</button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    }
+
+                    // 分页状态
+                    paginationInfoText.textContent = `第 ${currentPage} / ${totalPages} 页 · 当前筛选共 ${totalRecords} 条记录`;
+                    btnPagePrev.disabled = (currentPage <= 1);
+                    btnPageNext.disabled = (currentPage >= totalPages);
+
+                } catch (e) {
+                    linksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#ef4444;">加载失败: ${escapeHtml(e.message)}</td></tr>`;
+                }
+            }
+
+            // 筛选切换与刷新
+            filterStatusSelect.addEventListener('change', () => loadLinks(1));
+            btnRefreshAll.addEventListener('click', () => loadLinks(currentPage));
+
+            // 分页事件
+            btnPagePrev.addEventListener('click', () => {
+                if (currentPage > 1) loadLinks(currentPage - 1);
+            });
+            btnPageNext.addEventListener('click', () => {
+                if (currentPage < totalPages) loadLinks(currentPage + 1);
+            });
+
+            // 复制工具
+            window.copyLinkText = function(txt) {
+                if (!txt) return;
+                navigator.clipboard.writeText(txt).then(() => {
+                    alert('链接已复制到剪贴板！');
+                }).catch(() => {
+                    const input = document.createElement('textarea');
+                    input.value = txt;
+                    document.body.appendChild(input);
+                    input.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(input);
+                    alert('链接已复制到剪贴板！');
+                });
+            };
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function escapeAttr(str) {
+                if (!str) return '';
+                return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            }
+
+            // 启动验证与初始化
+            checkAdminAuth();
+        });
+    </script>
+</body>
+</html>
